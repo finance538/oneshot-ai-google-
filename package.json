@@ -5,9 +5,10 @@
   "type": "module",
   "scripts": {
     "test": "node --experimental-vm-modules --test tests/*.test.mjs",
-    "dev": "vite",
+    "dev": "vite --host 0.0.0.0 --port 3000",
     "build": "vite build",
-    "preview": "vite preview",
+    "preview": "vite preview --host 0.0.0.0 --port 3000",
+    "lint": "tsc --noEmit",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.server.json"
   },
   "dependencies": {
