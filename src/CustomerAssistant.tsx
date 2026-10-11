@@ -5,6 +5,7 @@ import {
   ShoppingBag, CreditCard, ChevronDown, RefreshCw, MessageSquare
 } from 'lucide-react';
 import { categories } from './storefront/catalog';
+import { api } from './platform';
 import './CustomerAssistant.css';
 
 interface CustomerMessage {
@@ -169,10 +170,20 @@ export default function CustomerAssistant() {
   };
 
   // Intelligent Response Generation
-  const generateCustomerReply = (userPrompt: string, attachedImg?: string | null) => {
-    setTimeout(() => {
+  const generateCustomerReply = async (userPrompt: string, attachedImg?: string | null) => {
+    let reply = '';
+    try {
+      const res = await api<{ reply?: string }>('customer-assist', { prompt: userPrompt, image: attachedImg });
+      if (res.reply && res.reply.trim()) {
+        reply = res.reply;
+      }
+    } catch {
+      // Fallback to local rule-based answers
+    }
+
+    if (!reply) {
       const lower = userPrompt.toLowerCase();
-      let reply = 'يسعدنا خدمتك! فريق OneShot متاح لتنفيذ طلبك بأعلى معايير الإتقان، من استوديو التصوير الاحترافي إلى هندسة بوابات الدفع الإلكتروني.';
+      reply = 'يسعدنا خدمتك! فريق OneShot متاح لتنفيذ طلبك بأعلى معايير الإتقان، من استوديو التصوير الاحترافي إلى هندسة بوابات الدفع الإلكتروني.';
 
       if (attachedImg) {
         reply = 'استلمت الصورة المرفقة بوضوح! 📸 تم فحص الأبعاد والتفاصيل. يمكننا تقديم جلسة تصوير مماثلة في استوديو ونشوت، أو تطبيق معالجة وتلوين إعلاني احترافي مع الهوية البصرية. هل تحب نحدد موعد جلسة التصوير أو نزودك برابط دفع العرض؟';
@@ -187,18 +198,18 @@ export default function CustomerAssistant() {
       } else if (lower.includes('سعر') || lower.includes('تكلفة') || lower.includes('كم')) {
         reply = 'أسعارنا مدروسة وموثقة بالريال السعودي (SAR). يمكنك استخدام "حاسبة الأسعار" في شريط الأدوات أعلاه لحساب التكلفة التقديرية بدقة أو طلب رابط دفع مخصص فوراً.';
       }
+    }
 
-      const now = new Date().toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' });
-      setMessages(prev => [
-        ...prev,
-        {
-          id: `assistant-${Date.now()}`,
-          sender: 'assistant',
-          text: reply,
-          time: now,
-        },
-      ]);
-    }, 600);
+    const now = new Date().toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' });
+    setMessages(prev => [
+      ...prev,
+      {
+        id: `assistant-${Date.now()}`,
+        sender: 'assistant',
+        text: reply,
+        time: now,
+      },
+    ]);
   };
 
   const handleSend = (e: FormEvent) => {
