@@ -382,3 +382,33 @@
   color: #ef4444;
 }
 
+/* 4-Tier Badges & Smart Routing Pill */
+.onshot-tier-badge-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #f05b2b20;
+  border: 1px solid #f05b2b40;
+  color: var(--flame, #f05b2b);
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+}
+
+.onshot-routing-reason-notice {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(124, 58, 237, 0.1);
+  border: 1px solid rgba(124, 58, 237, 0.25);
+  color: #c4b5fd;
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 11px;
+  line-height: 1.4;
+  margin: 6px 0 10px;
+}
+
+

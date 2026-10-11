@@ -2,7 +2,8 @@ import { useState, useMemo } from 'react';
 import {
   Globe, Shield, Bot, UserCheck, AlertOctagon, CheckCircle2,
   RefreshCw, Copy, Check, Sparkles, Terminal, Sliders, Smartphone,
-  Monitor, CreditCard, ChevronRight, Play, Eye, Search, User, Zap, HelpCircle, ShieldAlert
+  Monitor, CreditCard, ChevronRight, Play, Eye, Search, User, Zap, HelpCircle, ShieldAlert,
+  BrainCircuit, BarChart3
 } from 'lucide-react';
 import type { Platform } from './platform';
 import { KNOWN_GATEWAYS } from './gatewaysData';
@@ -11,6 +12,10 @@ import { findCustomerBy7DigitId, PRESET_CUSTOMERS, type CustomerProfileWithGatew
 import FeaturePropertiesModal from './FeaturePropertiesModal';
 import GatewayCountryMatrixManager from './GatewayCountryMatrixManager';
 import FraudSimulationToolkit from './FraudSimulationToolkit';
+import CardCountryCompatibilityChecker from './CardCountryCompatibilityChecker';
+import AiBinIntelligenceCenter from './AiBinIntelligenceCenter';
+import MultiBinAcceptanceTool from './MultiBinAcceptanceTool';
+import PaymentFailuresDashboard from './PaymentFailuresDashboard';
 import './LoaderTestingSuite.css';
 
 interface SimulatedCard {
@@ -128,7 +133,7 @@ export default function LoaderTestingSuite({
   const [customerSearchMsg, setCustomerSearchMsg] = useState('');
   const [inspectPropertyKey, setInspectPropertyKey] = useState<string | null>(null);
   const [autoMatchedNotice, setAutoMatchedNotice] = useState<string | null>(null);
-  const [suiteMode, setSuiteMode] = useState<'simulator' | 'country_matrix' | 'fraud_toolkit'>('simulator');
+  const [suiteMode, setSuiteMode] = useState<'simulator' | 'card_checker' | 'country_matrix' | 'fraud_toolkit' | 'ai_bin_intelligence' | 'multi_bin_matcher' | 'failures_dashboard'>('simulator');
 
   // Auto-Match Gateway, IP, and Currency from Card BIN
   const handleAutoGenerateFromCard = (card: SimulatedCard) => {
@@ -447,11 +452,51 @@ export default function LoaderTestingSuite({
         <button
           type="button"
           className="outline-button"
+          style={suiteMode === 'multi_bin_matcher' ? { background: '#00c853', color: '#ffffff', borderColor: '#00c853', fontWeight: 'bold' } : { fontWeight: '600' }}
+          onClick={() => setSuiteMode('multi_bin_matcher')}
+        >
+          <Sparkles size={18} />
+          <span>مطابق بوابات قبول 100% للأنواع والـ BINs (100% Acceptance Matcher)</span>
+        </button>
+
+        <button
+          type="button"
+          className="outline-button"
+          style={suiteMode === 'card_checker' ? { background: '#ff5500', color: '#ffffff', borderColor: '#ff5500', fontWeight: 'bold' } : { fontWeight: '600' }}
+          onClick={() => setSuiteMode('card_checker')}
+        >
+          <Zap size={18} />
+          <span>أداة فحص رقم البطاقة والتوافق مع الدول المدعومة (Instant Card Checker)</span>
+        </button>
+
+        <button
+          type="button"
+          className="outline-button"
           style={suiteMode === 'country_matrix' ? { background: '#ff5500', color: '#ffffff', borderColor: '#ff5500', fontWeight: 'bold' } : { fontWeight: '600' }}
           onClick={() => setSuiteMode('country_matrix')}
         >
           <CreditCard size={18} />
           <span>فاحص توافقية الدول والـ BIN للبوابات (Country & Card Matrix)</span>
+        </button>
+
+        <button
+          type="button"
+          className="outline-button"
+          style={suiteMode === 'ai_bin_intelligence' ? { background: '#ff5500', color: '#ffffff', borderColor: '#ff5500', fontWeight: 'bold' } : { fontWeight: '600' }}
+          onClick={() => setSuiteMode('ai_bin_intelligence')}
+        >
+          <BrainCircuit size={18} />
+          <span>مركز ذكاء الـ BIN والذكاء الاصطناعي (AI BIN Lab & Disparity)</span>
+        </button>
+
+        <button
+          type="button"
+          className="outline-button"
+          style={suiteMode === 'failures_dashboard' ? { background: '#ef4444', color: '#ffffff', borderColor: '#ef4444', fontWeight: 'bold' } : { fontWeight: '600' }}
+          onClick={() => setSuiteMode('failures_dashboard')}
+        >
+          <BarChart3 size={18} />
+          <span>لوحة تحليل حالات الرفض الذكية (Failures AI Dashboard)</span>
         </button>
 
         <button
@@ -464,6 +509,59 @@ export default function LoaderTestingSuite({
           <span>مختبر محاكاة هجمات الاحتيال واختبار الثغرات (Fraud Simulator)</span>
         </button>
       </div>
+
+      {/* Sub-view: Failures AI Dashboard */}
+      {suiteMode === 'failures_dashboard' && (
+        <PaymentFailuresDashboard />
+      )}
+
+      {/* Sub-view: Multi BIN 100% Acceptance Matcher */}
+      {suiteMode === 'multi_bin_matcher' && (
+        <MultiBinAcceptanceTool />
+      )}
+
+      {/* Sub-view: AI BIN Intelligence Center */}
+      {suiteMode === 'ai_bin_intelligence' && (
+        <AiBinIntelligenceCenter
+          onApplyCardToSimulator={(cardInfo) => {
+            const simCard: SimulatedCard = {
+              number: cardInfo.number,
+              exp: '12/28',
+              cvv: '123',
+              scheme: `${cardInfo.scheme} (${cardInfo.bankName})`,
+              country: 'المملكة العربية السعودية',
+              countryCode: 'SA',
+              type: 'Debit/Credit',
+              expectedBehavior: `تم تطبيقها من مركز ذكاء الـ BIN للبنك [${cardInfo.bankName}]`
+            };
+            handleAutoGenerateFromCard(simCard);
+            setSelectedGatewayId(cardInfo.gatewayId);
+            setSuiteMode('simulator');
+          }}
+        />
+      )}
+
+      {/* Sub-view: Card Country Compatibility Checker */}
+      {suiteMode === 'card_checker' && (
+        <CardCountryCompatibilityChecker
+          onApplyCardToSimulator={(cardInfo) => {
+            // Apply card details to simulator and switch to simulator mode
+            const simCard: SimulatedCard = {
+              number: cardInfo.number,
+              exp: '12/28',
+              cvv: '123',
+              scheme: `${cardInfo.scheme} (${cardInfo.country})`,
+              country: cardInfo.country,
+              countryCode: cardInfo.countryCode,
+              type: 'Debit/Credit',
+              expectedBehavior: `تم تطبيقها من أداة فحص التوافقية الفورية للبوابة [${cardInfo.gatewayId}]`
+            };
+            handleAutoGenerateFromCard(simCard);
+            setSelectedGatewayId(cardInfo.gatewayId);
+            setSuiteMode('simulator');
+          }}
+        />
+      )}
 
       {/* Sub-view: Country Matrix */}
       {suiteMode === 'country_matrix' && (
@@ -830,6 +928,22 @@ export default function LoaderTestingSuite({
                     </div>
                   </div>
                 ))}
+              </div>
+
+              {/* Quick Jump to Custom Card Compatibility Checker */}
+              <div style={{ marginTop: '12px', background: '#0a0d16', border: '1px dashed #2d3748', borderRadius: '8px', padding: '10px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+                <span style={{ fontSize: '0.82rem', color: '#a0aec0' }}>
+                  هل تريد إدخال رقم بطاقة مخصص وفحص توافقيته مع جميع الدول والبوابات فورياً؟
+                </span>
+                <button
+                  type="button"
+                  className="outline-button"
+                  style={{ fontSize: '0.8rem', padding: '5px 12px', color: '#ff7733', borderColor: '#ff5500', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                  onClick={() => setSuiteMode('card_checker')}
+                >
+                  <CreditCard size={14} />
+                  <span>فتح فاحص البطاقات المخصص</span>
+                </button>
               </div>
             </div>
 

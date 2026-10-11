@@ -18,3 +18,158 @@
 @media(max-width:430px){.integrations-grid{grid-template-columns:1fr}.integration-card p{min-height:unset}.integration-card{padding:21px}.integration-top{margin-bottom:15px}.integration-bottom{padding-top:14px}.page-heading{flex-wrap:wrap}.page-heading>.primary-button{align-self:flex-start}.stat-top{font-size:8px}.stat-card p{font-size:6px}.search-field{width:200px}.search-field input{min-width:0}.welcome-actions .light-button{font-size:9px}.welcome-trust{font-size:7px}}
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
 @media print{.checkout-header,.checkout-summary,.checkout-secondary,.checkout-pay,.card-entry-form,.checkout-footer,.iframe-overlay,.checkout-security{display:none!important}.checkout-layout{display:block;padding:0;margin:0}.checkout-card{border:0;box-shadow:none}.checkout-page{background:white}.checkout-card>.message{display:none}}
+
+/* ==========================================================================
+   GOOGLE AUTHENTICATION & MULTI-LANGUAGE STYLING
+   ========================================================================== */
+.google-auth-container {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.google-sign-in-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  width: 100%;
+  background: #ffffff;
+  color: #374151;
+  border: 1.5px solid #d1d5db;
+  border-radius: 10px;
+  padding: 12px 18px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+  transition: all 0.2s ease;
+  min-height: 48px;
+}
+
+.google-sign-in-button:hover:not(:disabled) {
+  background: #f9fafb;
+  border-color: #9ca3af;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.google-welcome-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  background: #ffffff;
+  color: #1f2937;
+  border: 1.5px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 11px 18px;
+  font-size: 11px;
+  font-weight: 700;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  min-height: 43px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.google-welcome-button:hover {
+  background: #f9fafb;
+  border-color: #cbd5e1;
+  transform: translateY(-1px);
+}
+
+.auth-separator {
+  display: flex;
+  align-items: center;
+  text-align: center;
+  margin: 6px 0;
+  color: #9ca3af;
+  font-size: 11px;
+}
+
+.auth-separator::before,
+.auth-separator::after {
+  content: '';
+  flex: 1;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.auth-separator span {
+  padding: 0 10px;
+  font-size: 11px;
+}
+
+/* Appearance & Language selector enhancements */
+.language-select-wrapper {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.language-select-wrapper .globe-icon {
+  position: absolute;
+  inset-inline-start: 10px;
+  color: #6b7280;
+  pointer-events: none;
+}
+
+.language-dropdown-select {
+  padding: 8px 12px;
+  padding-inline-start: 32px;
+  border-radius: 8px;
+  border: 1px solid var(--border, #e5e7eb);
+  background: #ffffff;
+  color: #374151;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  min-height: 38px;
+}
+
+.language-dropdown-select:focus {
+  outline: 2px solid var(--flame, #f05b2b);
+}
+
+/* ==========================================================================
+   BIDIRECTIONAL LTR LAYOUT & ACCURATE DEVICE SIZING
+   ========================================================================== */
+[dir="ltr"] .sidebar {
+  inset: 0 auto 0 0;
+}
+
+[dir="ltr"] .main-content {
+  margin-right: 0;
+  margin-left: var(--sidebar-width);
+}
+
+[dir="ltr"] .nav-item {
+  text-align: left;
+}
+
+[dir="ltr"] .nav-item.active:before {
+  right: auto;
+  left: 0;
+}
+
+[dir="ltr"] .nav-count {
+  margin-right: 0;
+  margin-left: auto;
+}
+
+[dir="ltr"] .tiny-tag {
+  margin-right: 0;
+  margin-left: auto;
+}
+
+@media(max-width:760px) {
+  [dir="ltr"] .sidebar {
+    transform: translateX(-100%);
+  }
+  [dir="ltr"] .sidebar.is-open {
+    transform: translateX(0);
+  }
+  [dir="ltr"] .main-content {
+    margin-left: 0;
+  }
+}
+

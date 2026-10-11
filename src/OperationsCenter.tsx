@@ -1,15 +1,17 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
-import { Bell, Check, LockKeyhole, RefreshCw, Search, ShieldCheck, Sparkles, X } from 'lucide-react';
+import { Bell, Check, LockKeyhole, RefreshCw, Search, ShieldCheck, Sparkles, X, BarChart3 } from 'lucide-react';
 import { operationKinds, operationLabels, type OperationRecord, type OperationsState } from '../shared/operations';
 import { api, date } from './platform';
 import AdminAssistant from './AdminAssistant';
+import PaymentFailuresDashboard from './PaymentFailuresDashboard';
 import './OperationsCenter.css';
 
 type Review = { action: 'set-read'; record: OperationRecord; read: boolean } | { action: 'request-api-setup'; merchantId: string };
 const auditLabels: Record<string, string> = { alert_read: 'تأكيد قراءة تنبيه', alert_unread: 'إعادة تنبيه إلى غير مقروء', api_setup_requested: 'تسجيل طلب إعداد API فقط' };
 
 export default function OperationsCenter({ onRefresh }: { onRefresh: () => Promise<void> }) {
-  const [tab, setTab] = useState<'monitoring' | 'assistant'>('assistant');
+  const [tab, setTab] = useState<'failures_dashboard' | 'assistant' | 'monitoring'>('failures_dashboard');
+  const [assistantPrompt, setAssistantPrompt] = useState('');
   const [state, setState] = useState<OperationsState | null>(null);
   const [query, setQuery] = useState('');
   const [kind, setKind] = useState('');
@@ -77,12 +79,28 @@ export default function OperationsCenter({ onRefresh }: { onRefresh: () => Promi
       <span className="operations-preview">DEPLOY PREVIEW ONLY</span>
     </section>}
     <div className="operations-tabs" aria-label="أقسام مركز العمليات">
-      <button type="button" aria-pressed={tab === 'monitoring'} onClick={() => setTab('monitoring')}><Bell size={17} />السجلات والتنبيهات{state && <span>{state.unread}</span>}</button>
-      <button type="button" aria-pressed={tab === 'assistant'} onClick={() => setTab('assistant')}><Sparkles size={17} />مساعد onshot</button>
+      <button type="button" aria-pressed={tab === 'failures_dashboard'} onClick={() => setTab('failures_dashboard')}>
+        <BarChart3 size={17} />لوحة تحليل حالات الرفض (Failures AI)
+      </button>
+      <button type="button" aria-pressed={tab === 'assistant'} onClick={() => setTab('assistant')}>
+        <Sparkles size={17} />مساعد onshot (Chat)
+      </button>
+      <button type="button" aria-pressed={tab === 'monitoring'} onClick={() => setTab('monitoring')}>
+        <Bell size={17} />السجلات والتنبيهات{state && <span>{state.unread}</span>}
+      </button>
     </div>
     {tab === 'monitoring' && error && <div className="alert" role="alert">{error}</div>}
     {tab === 'monitoring' && notice && <div className="success-message" role="status">{notice}</div>}
-    {tab === 'assistant' ? <AdminAssistant onRefresh={onRefresh} /> : <>
+    {tab === 'failures_dashboard' ? (
+      <PaymentFailuresDashboard
+        onConsultAi={(prompt) => {
+          setAssistantPrompt(prompt);
+          setTab('assistant');
+        }}
+      />
+    ) : tab === 'assistant' ? (
+      <AdminAssistant onRefresh={onRefresh} initialPrompt={assistantPrompt} />
+    ) : <>
       <section className="panel operations-monitor">
         <div className="operations-section-title"><div><span className="eyebrow">LIVE RECORDS / REDACTED</span><h2>سجل النشاط</h2></div><button type="button" className="outline-button" disabled={loading} onClick={() => void refresh()}><RefreshCw size={16} />تحديث</button></div>
         <p className="operations-caption">تسجيلات الحساب والدخول الناجح من أحداث Netlify Identity ووقت الدخول الذي يتحقق منه الخادم عند تحميل مساحة التاجر. لا يشمل الدخول الفاشل أو زوار الدفع دون حساب.</p>
