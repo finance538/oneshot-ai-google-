@@ -1,0 +1,39 @@
+========================================================
+oneShot - Official Brand & Logo Identity Specifications
+========================================================
+
+1. Brand Unification & Concept:
+-------------------------------
+The "oneShot" identity fuses two primary visual metaphors:
+• The Precision Shutter: 6-blade mechanical camera iris aperture, representing photography, cinematography, and optical perfection.
+• The Bullseye Target: Concentric circular reticle with 4 cardinal tick notches and center focal point, representing precision, accuracy, and "taking the perfect shot".
+
+2. Brand Colors:
+----------------
+• Precision Orange (Accent / "one" / Target Reticle):
+  HEX: #FF5500
+  RGB: rgb(255, 85, 0)
+  CMYK: 0% / 67% / 100% / 0%
+
+• Deep Titanium Obsidian (Dark Blades / Light "Shot"):
+  HEX: #12141A
+  RGB: rgb(18, 20, 26)
+
+• Studio Ceramic White (Light Blades / Dark "Shot"):
+  HEX: #FFFFFF
+  RGB: rgb(255, 255, 255)
+
+• Deep Charcoal Dark Canvas:
+  HEX: #0A0B0E
+
+3. Typography:
+--------------
+• "one" (lowercase): Precision Orange, Bold Sans-Serif
+• "Shot" (Capitalized 'S'): White in Dark Mode / Charcoal Black in Light Mode
+• Recommended Font Family: Outfit Bold / Montserrat / Inter Bold
+
+4. Usage Guidelines:
+--------------------
+• Minimum clear space equal to 25% of emblem radius around the logo.
+• All PNG files in this package feature 100% transparent backgrounds.
+• For print and large format billboards, always use the .svg vector files.

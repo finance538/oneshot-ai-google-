@@ -1,0 +1,9 @@
+<resources>
+    <color name="obsidian">#141717</color>
+    <color name="flame">#F05B2B</color>
+    <color name="flame_soft">#FFF1E9</color>
+    <color name="muted">#8A8E90</color>
+    <color name="border">#E8EAEB</color>
+    <color name="white">#FFFFFF</color>
+    <color name="surface_dark">#1D2121</color>
+</resources>

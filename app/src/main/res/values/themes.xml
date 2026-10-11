@@ -1,0 +1,6 @@
+<resources>
+    <style name="Theme.OneShot" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:statusBarColor">@color/obsidian</item>
+        <item name="android:navigationBarColor">@color/obsidian</item>
+    </style>
+</resources>
