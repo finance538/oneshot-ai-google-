@@ -17,7 +17,7 @@
     "@netlify/edge-functions": "^4.0.2",
     "@netlify/identity": "^2.0.0",
     "ai": "^7.0.127",
-    "drizzle-orm": "^1.0.0-beta.22",
+    "drizzle-orm": "1.0.0-beta.22",
     "lucide-react": "^1.51.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
@@ -30,7 +30,7 @@
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.1",
-    "drizzle-kit": "^1.0.0-beta.22",
+    "drizzle-kit": "1.0.0-beta.22",
     "typescript": "^7.0.2",
     "vite": "^8.3.2"
   },
