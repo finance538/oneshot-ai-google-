@@ -137,10 +137,16 @@ export default function Storefront() {
   const nav = [
     { href: '/wallet', ar: 'محفظتي', en: 'My wallet', Icon: CreditCard },
     {
-      href: "/#section-hero",
-      ar: "الخدمات",
-      en: "Services",
-      Icon: ShoppingBag,
+      href: "/api-integration",
+      ar: "ربط الـ API والداشبورد",
+      en: "API & Dashboard",
+      Icon: Code2,
+    },
+    {
+      href: "/#section-ai-staff",
+      ar: "كوادر الـ AI الذكية",
+      en: "AI Workforce",
+      Icon: Bot,
     },
     {
       href: "/#section-media",
@@ -153,12 +159,6 @@ export default function Storefront() {
       ar: "التسويق الرقمي",
       en: "Digital Marketing",
       Icon: Target,
-    },
-    {
-      href: "/#section-api",
-      ar: "ربط الـ API والمدفوعات",
-      en: "API & Payments",
-      Icon: Code2,
     },
     {
       href: "/#section-contact",
@@ -287,41 +287,41 @@ export default function Storefront() {
             <section className="store-hero" id="section-hero">
               <div className="store-hero-copy">
                 <span className="store-pill">
-                  <ShieldCheck size={15} />
+                  <Sparkles size={15} />
                   {tr(
-                    "OneShot • التصوير والتسويق والإنتاج الإبداعي",
-                    "OneShot • Photography, Marketing & Creative Production",
+                    "OneShot • عصر الأتمتة والذكاء الاصطناعي وربط الـ API الموحد",
+                    "OneShot • The Era of AI Workforce & Payment API",
                   )}
                 </span>
                 <h1>
                   {tr(
-                    "التصوير الاحترافي، التسويق الرقمي،",
-                    "Photography, Digital Marketing, &",
+                    "عصر الـ AI الجديد: طاقم موظفين أذكياء يمسك لك الشغل،",
+                    "The New AI Era: Intelligent Staff Running Your Business,",
                   )}{" "}
                   <span>
-                    {tr("والإنتاج الإبداعي المتكامل", "Creative Production")}
+                    {tr("وربط API احترافي يوحد مدفوعاتك ويمنع الفوضى", "& A Unified API Dashboard Ending Payment Chaos")}
                   </span>
                 </h1>
                 <p>
                   {tr(
-                    "خدمات احترافية للتصوير الفوتوغرافي وإنتاج المحتوى المرئي والتسويق الرقمي والتصميم، بهوية متناسقة وتجربة مرتبة للأفراد والمنشآت.",
-                    "Professional photography, visual content production, digital marketing, and design services for individuals and businesses.",
+                    "وداعاً لإدارة المهام اليدوية وتشتت الفواتير العشوائية! وفّر وقتك وجهدك مع كوادر ذكاء اصطناعي (AI Staff) متكاملة تدير العمليات والتسويق والدعم، مع ربط API موحد يجمع بواباتك (PayTabs و Telr) في داشبورد احترافي منظم وفواتير دقيقة 100%.",
+                    "Say goodbye to manual chaos and messy customer invoices. Employ an autonomous AI workforce managing your operations, marketing, and support, backed by a unified API dashboard uniting PayTabs and Telr.",
                   )}
                 </p>
                 <div className="store-actions">
-                  <a className="store-button" href={appearanceLink("/sign-in")}>
-                    <KeyRound size={17} />
+                  <a className="store-button" href={appearanceLink("/api-integration")}>
+                    <Code2 size={17} />
                     {tr(
-                      "تسجيل دخول التجار والعملاء",
-                      "Merchant & Client Sign In",
+                      "تفاصيل ومزايا ربط الـ API الموحد",
+                      "Unified API Details & Dashboard",
                     )}
                     <ArrowLeft size={16} />
                   </a>
-                  <a className="store-button secondary" href="#section-media">
-                    <Video size={16} />
+                  <a className="store-button secondary" href={appearanceLink("/sign-in")}>
+                    <Bot size={16} />
                     {tr(
-                      "استكشف باقات الميديا والتصاميم",
-                      "Explore Creative Media",
+                      "سوق كوادر الـ AI وتوظيف موظفيك",
+                      "AI Staff Marketplace",
                     )}
                   </a>
                   <a
@@ -331,15 +331,15 @@ export default function Storefront() {
                     rel="noreferrer"
                   >
                     <MessageCircle size={16} />
-                    {tr("تواصل واتساب مباشر", "WhatsApp Support")}
+                    {tr("استشارة فورية واتساب", "WhatsApp Consultation")}
                   </a>
                 </div>
                 <div className="store-trust">
                   {[
-                    ["استوديو تصوير وإنتاج ريلز", "Studio Video & Reels"],
-                    ["تسويق وإدارة حملات", "Digital Marketing"],
-                    ["تصميم وهوية بصرية", "Brand & Design"],
-                    ["حلول أعمال رقمية", "Digital Business Solutions"],
+                    ["ربط API موحد وداشبورد تنفيذي", "Unified API & Dashboard"],
+                    ["موظفو ذكاء اصطناعي 24/7", "Autonomous 24/7 AI Staff"],
+                    ["منع الفواتير الملخبطة والعشوائية", "Zero Chaotic Invoices"],
+                    ["تطبيق ون شوت باي للدفع السريع", "OneShot Pay Fast App"],
                   ].map(([arabic, english]) => (
                     <span key={english}>
                       <CheckCircle2 size={15} />
@@ -350,49 +350,139 @@ export default function Storefront() {
               </div>
               <div className="store-highlights">
                 <Highlight
-                  image="media"
-                  badge={tr("الميديا والتصاميم", "Media & Video")}
+                  badge={tr("الخدمة الأساسية الأولى", "CORE SERVICE · NO MORE CHAOS")}
                   title={tr(
-                    "إنتاج مرئي وسينمائي للمتاجر",
-                    "Cinematic Store Reels",
+                    "ربط الـ API الموحد: لماذا هو أفضل 100 مرة من الفواتير المباشرة؟",
+                    "Unified API: Why It Beats Manual Invoicing",
                   )}
                   description={tr(
-                    "جلسات تصوير سينمائي، ريلز تيك توك وإنستغرام إعلانية ترفع نسبة التحويل وتبرز هوية علامتك التجارية.",
-                    "Advertising reels and product photography designed for engagement and a distinctive brand.",
+                    "كتاجر، ربط الـ API الموحد يلغي الفوضى تماماً! يمنع العملاء من وضع فواتير عشوائية أو ملخبطة، ويمنحك داشبورد احترافي يربط PayTabs وTelr ومدى وApple Pay برقم مرجعي دقيق وتحقق فوري من الخادم.",
+                    "Manual invoices cause duplicate submissions and messy accounting. Unified API integration stops chaos, validates amounts, and unifies all gateways in one executive dashboard.",
                   )}
-                  href="#section-media"
-                  link={tr("عرض باقات الميديا", "View Media Packs")}
+                  href="/api-integration"
+                  link={tr("اقرأ صفحة تفاصيل ومزايا ربط الـ API", "Explore Full API Details")}
                 />
                 <Highlight
                   image="marketing"
-                  badge={tr("رصيد إعلانات جوجل", "Google Ads")}
+                  badge={tr("العصر الجديد في الـ AI", "AI WORKFORCE ERA")}
                   title={tr(
-                    "رصيد إعلانات جوجل وحملات الأداء",
-                    "Google Ads Credit & Performance",
+                    "موظفو AI يمسكون لك الشغل: وظّف فريقك التنفيذي",
+                    "AI Staff Running Your Entire Storefront",
                   )}
                   description={tr(
-                    "شحن رصيد إعلاني موثق، استشارات حملات البحث والـ Performance Max لزيادة العائد على الإنفاق ROAS.",
-                    "Advertising credit, search campaign consulting and Performance Max optimization.",
+                    "لا تشيل هم إدارة المهام اليومية! كوادر ذكاء اصطناعي جاهزة للعمل فوراً: مدير عمليات وربط مالي، أخصائي حملات جوجل، حارس رصد الاحتيال، ومساعد خدمة عملاء فوري 24/7.",
+                    "An elite virtual team working round the clock: Operations & gateway manager, Google Ads marketer, fraud prevention officer, and customer care specialist.",
                   )}
-                  href="#section-google-ads"
-                  link={tr("عرض تفاصيل الرصيد", "Explore Ads Credit")}
+                  href="#section-ai-staff"
+                  link={tr("استكشف كوادر وموظفي الـ AI", "View AI Staff Profiles")}
                 />
                 <Highlight
-                  badge={tr("ربط الـ API الموحد", "Payment Integration")}
+                  badge={tr("بوابة الدفع السريع", "ONESHOT PAY CHECKOUT")}
                   title={tr(
-                    "تنظيم مدفوعاتك بلوحة تحكم واحدة",
-                    "Your Payments in One Dashboard",
+                    "تطبيق OneShot Pay: دفع فوري بالدايركت API",
+                    "OneShot Pay: Direct In-Page & Mobile Checkout",
                   )}
                   description={tr(
-                    "روابط دفع وفواتير واشتراكات مع ربط PayTabs وTelr في مساحة مستقلة للتاجر.",
-                    "Payment links, invoices and subscriptions with PayTabs and Telr in your own merchant workspace.",
+                    "العميل يفتح الفاتورة ويدفع فوراً بضغطة زر واحدة داخل صفحتنا (Direct API) أو عبر تطبيق ون شوت باي، مع توجيه ذكي حسب نوع بطاقة العميل (مدى، فيزا، ماستركارد، Apple Pay).",
+                    "Seamless payment links directing clients into OneShot Pay app or direct in-page checkout without external redirects, maximizing conversions.",
                   )}
-                  href="#section-api"
-                  link={tr(
-                    "كيف ينظم لك الـ API الداشبورد؟",
-                    "Explore Payment Integrations",
-                  )}
+                  href="#section-apk"
+                  link={tr("تحميل وتثبيت تطبيق ون شوت باي", "Download OneShot Pay App")}
                 />
+              </div>
+            </section>
+
+            <section className="store-section" id="section-ai-staff">
+              <div className="store-section-heading">
+                <div>
+                  <span className="store-kicker">
+                    <Bot size={16} />
+                    {tr(
+                      "سوق كوادر الـ AI • AI Staff Marketplace",
+                      "AI WORKFORCE & AUTONOMOUS AGENTS",
+                    )}
+                  </span>
+                  <h2>
+                    {tr(
+                      "فريق عمل كامل من موظفي الـ AI جاهز لاستلام المهام فوراً",
+                      "Your Autonomous AI Employees Ready to Work",
+                    )}
+                  </h2>
+                  <p>
+                    {tr(
+                      "في العصر الجديد، أنت لست وحدك! عيّن موظفي ذكاء اصطناعي متخصصين يديرون شؤون متجرك، من الربط المالي ومتابعة العمليات وحتى الرد على استفسارات العملاء.",
+                      "Deploy trained AI specialists running your operations, financial matching, fraud protection, and customer inquiries around the clock.",
+                    )}
+                  </p>
+                </div>
+                <a className="store-button secondary" href={appearanceLink("/sign-in")}>
+                  {tr("دخول لتوظيف موظفي الـ AI", "Hire AI Staff in Workspace")}
+                  <ArrowLeft size={16} />
+                </a>
+              </div>
+              <div className="store-media-grid">
+                {[
+                  {
+                    titleAr: "مدير العمليات والربط المالي (Operations AI)",
+                    titleEn: "Operations & Payment Routing AI",
+                    descAr: "يراقب سير عمليات الربط مع PayTabs وTelr لحظياً، ويطابق الدفعات برقم مرجعي تلقائي دون أي تدخل يدوي.",
+                    descEn: "Monitors PayTabs and Telr gateway traffic, validates server callbacks, and matches orders automatically.",
+                    tagAr: "العمليات والمالية",
+                    tagEn: "Operations",
+                    icon: Zap,
+                  },
+                  {
+                    titleAr: "أخصائي التسويق الرقمي وإعلانات جوجل (Growth AI)",
+                    titleEn: "Google Ads & Marketing AI",
+                    descAr: "يضبط ميزانيات الحملات الإعلانية ومعدل التحويل (ROAS) ويربط أكواد Conversion API لتعظيم المبيعات.",
+                    descEn: "Optimizes Google Ads Performance Max campaigns, monitors CAC, and connects conversion tracking.",
+                    tagAr: "التسويق والنمو",
+                    tagEn: "Marketing",
+                    icon: Target,
+                  },
+                  {
+                    titleAr: "حارس مكافحة الاحتيال وفاحص الـ BINs (Risk Guard AI)",
+                    titleEn: "Fraud Prevention & BIN Intel AI",
+                    descAr: "يحلل بيانات بطاقات العملاء والدول، ويوجه كل بطاقة إلى البوابة صاحبة أعلى نسبة قبول 100% مع منع الرفض.",
+                    descEn: "Evaluates card country schemes, BIN ranges, and routes transactions to optimal gateways for zero decline.",
+                    tagAr: "الأمان والحماية",
+                    tagEn: "Security",
+                    icon: ShieldCheck,
+                  },
+                  {
+                    titleAr: "مستشار خدمة العملاء والدعم الفوري (Customer Care AI)",
+                    titleEn: "Instant Customer Experience AI",
+                    descAr: "يتواجد في صفحة الدفع والمتجر لمساعدة العملاء، والإجابة على أي استفسار حول الخدمة أو وسائل الدفع فوراً.",
+                    descEn: "Embedded in checkout to guide clients, answer product questions, and ensure complete payment completion.",
+                    tagAr: "الدعم المباشر",
+                    tagEn: "Support",
+                    icon: Bot,
+                  },
+                ].map((item, idx) => {
+                  const ItemIcon = item.icon;
+                  return (
+                    <article className="store-media-card" key={idx} style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '14px', background: 'var(--surface, #12141a)', borderRadius: '16px', border: '1px solid rgba(255, 85, 0, 0.15)' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <span style={{ display: 'inline-flex', padding: '8px', background: 'rgba(255, 85, 0, 0.1)', color: '#ff5500', borderRadius: '10px' }}>
+                          <ItemIcon size={22} />
+                        </span>
+                        <span className="store-image-badge" style={{ position: 'static' }}>
+                          {tr(item.tagAr, item.tagEn)}
+                        </span>
+                      </div>
+                      <h3 style={{ margin: 0, fontSize: '1.15rem' }}>{tr(item.titleAr, item.titleEn)}</h3>
+                      <p style={{ margin: 0, color: 'var(--text-muted, #94a3b8)', lineHeight: 1.6, fontSize: '0.95rem' }}>
+                        {tr(item.descAr, item.descEn)}
+                      </p>
+                      <div style={{ marginTop: 'auto', paddingTop: '12px' }}>
+                        <a className="store-button compact full-width" href={appearanceLink("/sign-in")}>
+                          {tr("تفعيل الموظف في لوحة تحكمك", "Activate in Workspace")}
+                          <ArrowLeft size={14} />
+                        </a>
+                      </div>
+                    </article>
+                  );
+                })}
               </div>
             </section>
 
@@ -1277,40 +1367,53 @@ function IntegrationSection() {
       <div>
         <span className="store-kicker">
           <Code2 size={17} />
-          {tr("منظومة ونشوت للدفع • OneShot Payments", "ONESHOT PAYMENTS • BUSINESS INTEGRATIONS")}
+          {tr("منظومة ونشوت للدفع الموحد • Unified API Platform", "ONESHOT UNIFIED PAYMENT API")}
         </span>
         <h2>
-          {tr("ربط الـ API وفوائده: كيف ينظم لك الداشبورد؟", "Connect Your Payments. Organize Your Business.")}
+          {tr("ربط الـ API الموحد: لماذا هو أفضل 100 مرة من الفواتير المباشرة؟", "Unified API: Why It Completely Outperforms Manual Invoices")}
         </h2>
         <p>
-          {tr("روابط دفع وفواتير واشتراكات في مساحة واحدة بهوية متجرك.", "Payment links, invoices and subscriptions in one workspace with your store’s identity.")}
+          {tr("كتاجر، إرسال فواتير يدوية متفرقة يوقعك في فوضى عارمة وسجلات ملخبطة. ربط الـ API الموحد يمنحك نظاماً مرتباً 100% يمنع العشوائية، ويجمع PayTabs و Telr في داشبورد احترافي متكامل.", "Manual invoicing leads to scattered records and payment confusion. Our unified API gives you a rock-solid system preventing random submissions while uniting all gateways in one dashboard.")}
         </p>
-        <a className="store-button" href={appearanceLink("/dashboard")}>
-          <KeyRound size={16} />
-          {tr("فتح مساحة التاجر", "Open Merchant Workspace")}
-        </a>
+        <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', margin: '20px 0' }}>
+          <a className="store-button" href={appearanceLink("/api-integration")}>
+            <FileText size={16} />
+            {tr("صفحة تفاصيل ومزايا ربط الـ API", "Full API Integration Details")}
+          </a>
+          <a className="store-button secondary" href={appearanceLink("/dashboard")}>
+            <KeyRound size={16} />
+            {tr("دخول مساحة التاجر والداشبورد", "Open Merchant Dashboard")}
+          </a>
+        </div>
         <div className="store-integration-features">
           {[
             [
               Layers3,
-              "1. لوحة تحكم موحدة",
-              "1. One Dashboard",
-              "تابع طلبات الدفع والفواتير والعملاء من لوحة واحدة.",
-              "Manage payment requests, invoices and customers in one place.",
-            ],
-            [
-              Blocks,
-              "2. طرق دفع متعددة",
-              "2. Multiple Payment Methods",
-              "ربط PayTabs وTelr وفق إعدادات وتفعيل حساب التاجر.",
-              "Connect PayTabs and Telr based on your merchant account configuration.",
+              "1. داشبورد احترافي موحد",
+              "1. Executive Unified Dashboard",
+              "بدلاً من التشتت بين بوابات متعددة؛ شاشة واحدة تتابع فيها كل المبيعات والعملاء والرصيد لحظياً.",
+              "Instead of hopping between scattered gateway portals, manage everything in one synchronized command center.",
             ],
             [
               ShieldCheck,
-              "3. الأمان وحماية البيانات",
-              "3. Security & Data Protection",
-              "التحقق من حالة الدفع من الخادم وحماية بيانات حساب التاجر.",
-              "Server-side payment verification and protection for merchant account data.",
+              "2. منع الفواتير الملخبطة والعشوائية",
+              "2. Zero Chaotic or Duplicate Invoices",
+              "كل فاتورة مسجلة برقم مرجعي فريد. لا يمكن للعملاء إدخال مبالغ غير متطابقة أو تكرار السداد بالخطأ.",
+              "Enforces pricing integrity. Customers cannot submit arbitrary figures or duplicate accidental charges.",
+            ],
+            [
+              Blocks,
+              "3. ربط جميع البوابات بمرونة",
+              "3. Telr, PayTabs, Mada & Apple Pay",
+              "روابط مباشرة، روابط مفتوحة لبوابة واحدة، أو روابط موحدة لجميع البوابات تدعم التوجيه الذكي.",
+              "Single gateway open links, multi-gateway universal links, and direct checkout integrations.",
+            ],
+            [
+              Zap,
+              "4. تطبيق OneShot Pay للدفع السريع",
+              "4. Direct API & OneShot Pay Checkout",
+              "العميل يفتح الفاتورة ويدفع فوراً داخل صفحتنا (Direct API) أو عبر تطبيق ون شوت باي السريع.",
+              "Frictionless payments via in-page Direct API or OneShot Pay PWA / Android APK app.",
             ],
           ].map(([Icon, titleAr, titleEn, textAr, textEn]) => {
             const FeatureIcon = Icon as typeof Layers3;

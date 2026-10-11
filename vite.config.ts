@@ -49,7 +49,10 @@ Provide expert, accurate, and fluent Arabic assistance with actionable insights.
 }
 
 function netlifyFunctionsMockPlugin(): Plugin {
-  let merchant = { id: 'm-oneshot-01', name: 'OneShot Brand Studio' }
+  let merchant = {
+    id: '166fd935-bc40-44e4-81c0-c840f1f9d1eb',
+    name: 'فاينانس ميرشنت (OneShot)',
+  }
 
   const documents: any[] = [
     {
@@ -59,7 +62,7 @@ function netlifyFunctionsMockPlugin(): Plugin {
       customerEmail: 'client@alofooq.sa',
       amount: 450000,
       method: 'hosted',
-      gateway: 'paytabs',
+      gateway: 'telr',
       interval: 'one_time',
       status: 'paid',
       createdAt: new Date(Date.now() - 86400000 * 2).toISOString(),
@@ -80,17 +83,49 @@ function netlifyFunctionsMockPlugin(): Plugin {
       expiresAt: new Date(Date.now() + 86400000 * 25).toISOString(),
       gatewayUrl: null,
     },
+    {
+      id: 'doc-oneshot-003',
+      title: 'فاتورة سداد ربط الـ API وتكامل بوابات الدفع',
+      customerName: 'مجموعة المدى التجارية',
+      customerEmail: 'finance@mada-group.sa',
+      amount: 320000,
+      method: 'invoice',
+      gateway: 'telr',
+      interval: 'one_time',
+      status: 'pending',
+      createdAt: new Date(Date.now() - 86400000).toISOString(),
+      expiresAt: new Date(Date.now() + 86400000 * 14).toISOString(),
+      gatewayUrl: null,
+    },
   ]
 
   const openLinks: any[] = [
     {
       id: 'open-link-001',
-      title: 'رابط دفع عام - خدمات التصوير الفوري',
+      title: 'رابط مفتوح لجميع البوابات (Multi-Gateway: Telr & PayTabs)',
       minimum: 5000,
       maximum: 200000,
-      allowedMethods: ['hosted', 'mada_applepay'],
+      allowedMethods: ['paytabs:hosted', 'paytabs:mada_applepay', 'telr:hosted', 'telr:framed'],
       enabled: true,
       createdAt: new Date().toISOString(),
+    },
+    {
+      id: 'open-link-002',
+      title: 'رابط مفتوح لبوابة تيلر (Telr Store 35574)',
+      minimum: 1000,
+      maximum: 500000,
+      allowedMethods: ['telr:hosted', 'telr:framed'],
+      enabled: true,
+      createdAt: new Date(Date.now() - 86400000).toISOString(),
+    },
+    {
+      id: 'open-link-003',
+      title: 'رابط مفتوح لبوابة PayTabs',
+      minimum: 1000,
+      maximum: 300000,
+      allowedMethods: ['paytabs:hosted', 'paytabs:mada_applepay'],
+      enabled: true,
+      createdAt: new Date(Date.now() - 86400000 * 2).toISOString(),
     },
   ]
 
@@ -151,12 +186,11 @@ function netlifyFunctionsMockPlugin(): Plugin {
     name: 'netlify-functions-mock',
     configureServer(server) {
       server.middlewares.use(async (req, res, next) => {
-        if (!req.url?.startsWith('/.netlify/functions/')) {
+        if (!req.url?.startsWith('/.netlify/functions/') && !req.url?.startsWith('/.netlify/identity/')) {
           return next()
         }
 
         const url = new URL(req.url, 'http://localhost:3000')
-        const functionName = url.pathname.replace('/.netlify/functions/', '').split('/')[0]
 
         let body: any = {}
         if (req.method === 'POST') {
@@ -173,17 +207,73 @@ function netlifyFunctionsMockPlugin(): Plugin {
         res.setHeader('Content-Type', 'application/json')
         res.setHeader('Cache-Control', 'no-store')
 
+        // Handle Netlify Identity endpoints
+        if (req.url.startsWith('/.netlify/identity/')) {
+          const idPath = req.url.replace('/.netlify/identity/', '').split('?')[0]
+          if (idPath === 'settings') {
+            return res.end(JSON.stringify({
+              autoconfirm: true,
+              disable_signup: false,
+              external: { google: true, github: false },
+              roles: ['merchant', 'admin'],
+            }))
+          }
+          if (idPath === 'signup' || idPath === 'token' || idPath === 'login') {
+            const email = body.email || 'finance@1shotcam.com'
+            return res.end(JSON.stringify({
+              access_token: 'mock-token-' + Date.now(),
+              token_type: 'bearer',
+              expires_in: 3600,
+              refresh_token: 'mock-ref-' + Date.now(),
+              user: {
+                id: 'usr-finance-admin',
+                email,
+                user_metadata: { full_name: body.data?.full_name || 'فاينانس ميرشنت (المدير والتاجر)' },
+                app_metadata: { roles: ['merchant', 'admin'], provider: 'email' },
+                created_at: new Date().toISOString(),
+              },
+            }))
+          }
+          if (idPath === 'user') {
+            return res.end(JSON.stringify({
+              id: 'usr-finance-admin',
+              email: 'finance@1shotcam.com',
+              user_metadata: { full_name: 'فاينانس ميرشنت (المدير والتاجر)' },
+              app_metadata: { roles: ['merchant', 'admin'] },
+            }))
+          }
+          return res.end(JSON.stringify({ ok: true }))
+        }
+
+        const functionName = url.pathname.replace('/.netlify/functions/', '').split('/')[0]
+
         // 1. Platform Dashboard API
         if (functionName === 'platform') {
           if (req.method === 'POST') {
             if (body.name) {
-              merchant = { id: 'm-oneshot-01', name: body.name }
+              merchant = { id: '166fd935-bc40-44e4-81c0-c840f1f9d1eb', name: body.name }
             }
             if (body.action === 'cancel-document' && body.id) {
               const doc = documents.find((d) => d.id === body.id)
               if (doc) doc.status = 'cancelled'
             }
-            if (body.title && body.amount) {
+            if (body.action === 'toggle-open-link' && body.id) {
+              const link = openLinks.find((l) => l.id === body.id)
+              if (link) link.enabled = body.enabled ?? !link.enabled
+            }
+            if (body.action === 'create-open-link' || (body.linkId && body.minimum)) {
+              const newLink = {
+                id: 'open-' + Math.random().toString(36).substring(2, 9),
+                title: body.title || 'رابط دفع جديد',
+                minimum: Number(body.minimum) * 100 || 5000,
+                maximum: Number(body.maximum) * 100 || 50000,
+                allowedMethods: Array.isArray(body.allowedMethods) ? body.allowedMethods : ['paytabs:hosted', 'telr:hosted'],
+                enabled: true,
+                createdAt: new Date().toISOString(),
+              }
+              openLinks.unshift(newLink)
+            }
+            if ((body.action === 'create' || !body.action) && (body.title && body.amount)) {
               const newDoc = {
                 id: 'doc-' + Math.random().toString(36).substring(2, 9),
                 title: body.title,
@@ -191,7 +281,7 @@ function netlifyFunctionsMockPlugin(): Plugin {
                 customerEmail: body.customerEmail || 'customer@example.com',
                 amount: Math.round(Number(body.amount) * (Number(body.amount) > 1000 ? 1 : 100)) || 10000,
                 method: body.method || 'hosted',
-                gateway: body.gateway || 'paytabs',
+                gateway: body.gateway || 'telr',
                 interval: body.interval || 'one_time',
                 status: 'pending',
                 createdAt: new Date().toISOString(),
@@ -199,18 +289,6 @@ function netlifyFunctionsMockPlugin(): Plugin {
                 gatewayUrl: null,
               }
               documents.unshift(newDoc)
-            }
-            if (body.linkId && body.minimum) {
-              const newLink = {
-                id: 'open-' + Math.random().toString(36).substring(2, 9),
-                title: body.title || 'رابط دفع جديد',
-                minimum: Number(body.minimum) * 100 || 5000,
-                maximum: Number(body.maximum) * 100 || 50000,
-                allowedMethods: body.allowedMethods || ['hosted'],
-                enabled: true,
-                createdAt: new Date().toISOString(),
-              }
-              openLinks.unshift(newLink)
             }
           }
 
@@ -233,8 +311,10 @@ function netlifyFunctionsMockPlugin(): Plugin {
                 { day: new Date(Date.now() - 86400000).toISOString().split('T')[0], amount: 100000 },
               ],
               capabilities: { hosted: true, framed: true, managed: true, own: true, paylink: true, invoice: true, recurring: true, mada_applepay: true, mobile: true },
-              telrCapabilities: { hosted: true, framed: true, mada_applepay: true, paylink: true, invoice: true },
-              policy: { requestsEnabled: true, paymentsEnabled: true, maxAmount: 10000000, allowedGateways: ['paytabs', 'telr'] },
+              telrCapabilities: { connected: true, hosted: true, framed: true, mada_applepay: true, paylink: true, invoice: true, mobile: true },
+              credentialPrefix: 'PAYTABS_166FD935BC4044E481C0C840F1F9D1EB',
+              telrPrefix: 'TELR_166FD935BC4044E481C0C840F1F9D1EB',
+              policy: { requestsEnabled: true, paymentsEnabled: true, openLinksEnabled: true, maxAmount: 10000000, allowedGateways: ['paytabs', 'telr'] },
               isAdmin: true,
               gatewayRequests: [],
               adminGatewayRequests: [],

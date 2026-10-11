@@ -8,6 +8,7 @@ const publicPages = new Set([
   "/terms",
   "/support",
   "/accounts",
+  "/api-integration",
 ]);
 
 export function isStorefrontPath(path: string) {
