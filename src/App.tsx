@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode, type FormEvent } from 'react';
 import { acceptInvite, getSettings, getUser, handleAuthCallback, login, logout, onAuthChange, requestPasswordRecovery, signup, updateUser, type User } from '@netlify/identity';
-import { ArrowUpLeft, Plus, LayoutDashboard, Link2, FileText, Repeat2, Blocks, Settings2, ShieldCheck, Download, LogOut, Menu, X, Search, Copy, ExternalLink, CreditCard, Check, RefreshCw, Users, SlidersHorizontal, ArrowRight, Sparkles } from 'lucide-react';
+import { ArrowUpLeft, Plus, LayoutDashboard, Link2, FileText, Repeat2, Blocks, Settings2, ShieldCheck, Download, LogOut, Menu, X, Search, Copy, ExternalLink, CreditCard, Check, RefreshCw, Users, SlidersHorizontal, ArrowRight, Sparkles, Globe } from 'lucide-react';
 import { api, date, methods, money, openPaymentLink, paymentLink, statuses, type InstallPrompt, type Method, type PaymentDocument, type Platform } from './platform';
 import { AppearanceControls, Brand } from './Brand';
 import { appearanceLink, useAppearance } from './i18n';
@@ -17,11 +17,17 @@ import CeoSuite from './CeoSuite';
 import SecuritySystemsManager from './SecuritySystemsManager';
 import LoaderTestingSuite from './LoaderTestingSuite';
 import VirtualMerchantStation from './VirtualMerchantStation';
+import AdminIpSpoofingManager from './AdminIpSpoofingManager';
+import GatewayCountryMatrixManager from './GatewayCountryMatrixManager';
+import FraudSimulationToolkit from './FraudSimulationToolkit';
+import AiStaffMarketplace from './AiStaffMarketplace';
+import FeaturePropertiesModal from './FeaturePropertiesModal';
 import { isStorefrontPath } from './storefront/routes';
-import { Shield, FlaskConical, MonitorCheck } from 'lucide-react';
+import { Shield, FlaskConical, MonitorCheck, UserPlus, HelpCircle, ShieldAlert } from 'lucide-react';
 
 type View =
   | 'overview'
+  | 'staff'
   | 'wallet'
   | 'ceo'
   | 'links'
@@ -35,9 +41,10 @@ type View =
   | 'assistant';
 type Auth = 'login' | 'signup' | 'reset' | 'password' | 'invite';
 const navigation = [
+  { id: 'overview' as const, name: 'نظرة عامة', icon: LayoutDashboard },
+  { id: 'staff' as const, name: 'سوق كوادر الـ AI (توظيف موظفين)', icon: UserPlus },
   { id: 'wallet' as const, name: 'محفظتي', icon: CreditCard },
   { id: 'ceo' as const, name: 'مكتب الرئيس التنفيذي (CEO Agents)', icon: Users },
-  { id: 'overview' as const, name: 'نظرة عامة', icon: LayoutDashboard },
   { id: 'links' as const, name: 'روابط الدفع', icon: Link2 },
   { id: 'invoices' as const, name: 'الفواتير', icon: FileText },
   { id: 'subscriptions' as const, name: 'الاشتراكات', icon: Repeat2 },
@@ -212,11 +219,12 @@ function MerchantPlatform() {
     <main className="main-content"><header className="topbar"><div className="topbar-start"><button className="icon-button mobile-menu" aria-label={t('فتح القائمة')} onClick={() => setSidebar(true)}><Menu size={21} /></button><div className="breadcrumb"><span>oneShot</span><ArrowRight size={12} /><strong>{t(navigation.find(item => item.id === view)!.name)}</strong></div></div><div className="topbar-actions"><AppearanceControls />{user ? <span className="user-avatar" title={user.email}>{merchant?.name.slice(0, 1) || 'o'}</span> : <button className="text-button" onClick={() => setAuth('login')}>{t('تسجيل الدخول')}</button>}</div></header>
       <div className="page-content view-transition" key={view}>
         {notice && <div className="message success" role="status">{t(notice)}<button className="icon-button" aria-label={t('إغلاق')} onClick={() => setNotice('')}><X size={16} /></button></div>}{error && <div className="message error" role="alert">{t(error)}<button className="icon-button" aria-label={t('إغلاق')} onClick={() => setError('')}><X size={16} /></button></div>}
-        {!user && <section className="welcome-banner"><div className="welcome-copy"><span className="eyebrow">{tr('ونشوت. لكل دفعة.', 'ONE SHOT. EVERY PAYMENT.')}</span><h1>{t('من علامتك إلى دفعتك.')}</h1><p>{t('مساحة واحدة لروابطك وفواتيرك وعملائك، بهوية oneShot.')}</p><div className="welcome-actions"><button className="primary-button" onClick={() => setAuth('signup')} disabled={!signupEnabled}>{t('إنشاء حساب')}<ArrowUpLeft size={18} /></button><button className="outline-button" onClick={() => setAuth('login')}>{t('تسجيل الدخول')}</button><a className="text-button" href={appearanceLink('/')}>{t('زيارة موقع oneShot')}</a></div></div><div className="hero-art" aria-hidden="true"><div className="hero-orbit" /><div className="hero-ticket"><img src="/oneshot.svg" alt="" /><span>PAYMENT STUDIO</span><strong>{tr('رابط واحد.', 'one link.')}<br />{tr('احتمالات أكثر.', 'more possibilities.')}</strong><div className="ticket-bottom"><ShieldCheck size={20} /><span>{tr('صُممت لعلامتك', 'DESIGNED FOR YOUR BRAND')}</span></div></div><span className="floating-label"><Sparkles size={15} />{tr('مساحة عمل متصلة', 'ONE CONNECTED WORKSPACE')}</span></div></section>}
+        {!user && <section className="welcome-banner"><div className="welcome-copy"><span className="eyebrow">{tr('يا تاجر.. تعال ونشوت وما حتطلع من عندنا أبداً!', 'COME AS A MERCHANT. STAY AS AN EMPIRE.')}</span><h1>{t('كل ما تحتاجه لتجارتك، بواباتك، وموظفي AI تحت سقف واحد!')}</h1><p>{t('بدلاً من تشتيت أعمالك بين منصات متعددة، ونشوت تمنحك بوابات دفع مصرفية مرخصة، فوترة فورية، وأنظمة حماية متقدمة مع أسطول موظفي ذكاء اصطناعي (دعم عملاء مجاني، مسوق، مبرمج، محاسب قانوني) يعملون معك 24/7 دون توقف.')}</p><div className="welcome-actions"><button className="primary-button" onClick={() => setAuth('signup')} disabled={!signupEnabled}>{t('ابدأ بتوظيف فريقك مجاناً')}<ArrowUpLeft size={18} /></button><button className="outline-button" onClick={() => setView('staff')}>{t('سوق موظفي الـ AI')}</button><button className="outline-button" onClick={() => setAuth('login')}>{t('تسجيل الدخول')}</button></div></div><div className="hero-art" aria-hidden="true"><div className="hero-orbit" /><div className="hero-ticket"><img src="/oneshot.svg" alt="" /><span>PAYMENT & AI STUDIO</span><strong>{tr('بوابات دفع.', 'PAYMENTS.')}<br />{tr('طاقم موظفي AI.', 'AI WORKFORCE.')}</strong><div className="ticket-bottom"><ShieldCheck size={20} /><span>{tr('صُممت لعلامتك', 'DESIGNED FOR YOUR BRAND')}</span></div></div><span className="floating-label"><Sparkles size={15} />{tr('مساحة متكاملة لن تخرج منها', 'ALL IN ONE ECOSYSTEM')}</span></div></section>}
         {user && !merchant && !loading && view !== 'wallet' && <section className="panel onboarding"><h2>{t('ابدأ مساحة التاجر')}</h2><p>{t('أنشئ مساحتك المستقلة لتبدأ استقبال المدفوعات.')}</p><form onSubmit={event => { event.preventDefault(); const name = new FormData(event.currentTarget).get('name'); void run(() => api('platform', { action: 'onboard', name })); }}><label>{t('اسم المتجر')}<input name="name" required maxLength={100} /></label><button className="primary-button" disabled={busy}>{t('ابدأ مساحة التاجر')}<Plus size={17} /></button></form></section>}
         <div className="page-heading"><div><span className="eyebrow">{tr('علامتك. أعمالك.', 'YOUR BRAND. YOUR BUSINESS.')}</span><h1>{t(navigation.find(item => item.id === view)!.name)}</h1><p>{t(view === 'links' ? 'رابط واحد تشاركه مراراً؛ يحدد كل عميل المبلغ وطريقة الدفع المتاحة له.' : 'المتاح يعتمد على إعدادات المسؤول وتفعيل حساب البوابة.')}</p></div>{['overview', 'links', 'invoices'].includes(view) && <button className="primary-button" disabled={!canCreate || busy} onClick={() => { setGateway('paytabs'); setCreate(view === 'invoices' ? 'invoice' : 'hosted'); }}><Plus size={17} />{t('طلب دفع جديد')}</button>}</div>
         {loading && <LoadingPanel compact />}
         {view === 'wallet' && user && <Wallet key={user.id} />}
+        {view === 'staff' && <AiStaffMarketplace />}
         {view === 'ceo' && <CeoSuite />}
         {view === 'overview' && <><div className="stats-grid"><Stat title={t('إجمالي المدفوعات')} value={money(metrics.totalPaid, locale)} suffix="SAR" icon={<CreditCard size={19} />} featured /><Stat title={t('عمليات مكتملة')} value={new Intl.NumberFormat(locale).format(metrics.paidCount)} icon={<Check size={19} />} /><Stat title={t('طلبات معلقة')} value={new Intl.NumberFormat(locale).format(metrics.pendingCount)} icon={<FileText size={19} />} /><Stat title={t('العملاء')} value={new Intl.NumberFormat(locale).format(metrics.customers)} icon={<Users size={19} />} /></div><VirtualMerchantStation /><div className="overview-grid"><section className="panel activity-panel"><div className="section-heading"><h2>{t('نشاط آخر 7 أيام')}</h2><span className="subtle-tag">SAR</span></div><Activity daily={platform.daily || []} /></section><section className="panel quick-panel"><span className="eyebrow">{tr('أنشئ. شارك. حصّل.', 'CREATE. SHARE. COLLECT.')}</span><Link2 size={32} /><h2>{t('رابط مفتوح')}</h2><p>{t('رابط واحد تشاركه مراراً؛ يحدد كل عميل المبلغ وطريقة الدفع المتاحة له.')}</p><button className="primary-button" disabled={!canCreate || !policy.openLinksEnabled} onClick={() => setOpenBuilder(true)}>{t('رابط مفتوح جديد')}<Plus size={17} /></button></section></div><div className="section-heading"><h2>{t('آخر الطلبات')}</h2></div><DocumentTable documents={platform.documents.slice(0, 6)} copy={copy} cancel={cancel} busy={busy} /></>}
         {['links', 'invoices'].includes(view) && <>{view === 'links' && <section className="panel open-links-panel"><div className="section-heading"><div><span className="eyebrow">{tr('رابط مرن. بقواعدك.', 'A LINK WITHOUT LIMITS. WITH YOUR RULES.')}</span><h2>{t('روابط بمبلغ يحدده العميل')}</h2></div><button className="outline-button" disabled={!canCreate || !policy.openLinksEnabled || busy} onClick={() => setOpenBuilder(true)}><Plus size={16} />{t('رابط مفتوح جديد')}</button></div>{platform.openLinks?.length ? <div className="open-link-grid">{platform.openLinks.map(link => <article className="open-link-card" key={link.id}><div className="section-heading"><Link2 size={22} /><span className={`status-badge ${link.enabled ? 'status-active' : 'status-cancelled'}`}>{t(link.enabled ? 'نشط' : 'متوقف')}</span></div><h3>{link.title}</h3><p>{money(link.minimum, locale)} — {money(link.maximum, locale)} SAR</p><code className="share-url" dir="ltr">{openPaymentLink(link.id)}</code><div className="row-actions"><button className="outline-button" onClick={() => void copy(openPaymentLink(link.id))}><Copy size={15} />{t('نسخ الرابط')}</button><a className="icon-button" aria-label={t('فتح الرابط')} href={openPaymentLink(link.id)} target="_blank" rel="noreferrer"><ExternalLink size={16} /></a><button className="icon-button" role="switch" aria-checked={link.enabled} aria-label={t(link.enabled ? 'متوقف' : 'نشط')} disabled={busy} onClick={() => void run(() => api('platform', { action: 'toggle-open-link', id: link.id, enabled: !link.enabled }))}>{link.enabled ? <X size={16} /> : <Check size={16} />}</button></div></article>)}</div> : <Empty title={t('لا توجد روابط مفتوحة بعد.')} />}</section>}<div className="list-toolbar"><h2>{t('طلبات بمبلغ ثابت')}</h2><label className="search-field"><Search size={17} /><input value={search} onChange={event => setSearch(event.target.value)} placeholder={t('ابحث عن عميل أو طلب')} /></label></div><DocumentTable documents={filtered} copy={copy} cancel={cancel} busy={busy} /></>}
@@ -280,11 +288,13 @@ function Modal({ title, close, children }: { title: string; close: () => void; c
 
 function AdminControls({ onSave }: { onSave: () => Promise<void> }) {
   const { t, tr } = useAppearance();
+  const [adminTab, setAdminTab] = useState<'ip_spoofing' | 'country_matrix' | 'fraud_toolkit' | 'policies'>('country_matrix');
   const [policy, setPolicy] = useState<PaymentPolicy | null>(null);
   const [version, setVersion] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [inspectKey, setInspectKey] = useState<string | null>(null);
   const fetchSettings = useCallback(async () => { try { const result = await api<{ policy: PaymentPolicy; version: number }>('admin-settings'); setPolicy(result.policy); setVersion(result.version); } catch (caught) { setError(caught instanceof Error ? caught.message : 'تعذر إتمام الطلب.'); } }, []);
   useEffect(() => { void fetchSettings(); }, [fetchSettings]);
   async function save() {
@@ -294,9 +304,127 @@ function AdminControls({ onSave }: { onSave: () => Promise<void> }) {
     finally { setBusy(false); }
   }
   function all(enabled: boolean) { setPolicy({ paymentsEnabled: enabled, requestsEnabled: enabled, openLinksEnabled: enabled, aiEnabled: enabled, gateways: { paytabs: enabled, telr: enabled }, methods: Object.fromEntries(methods.map(method => [method.id, enabled])) as PaymentPolicy['methods'] }); }
-  return <section className="panel settings-panel admin-panel"><div className="section-heading"><div><span className="eyebrow">{tr('مركز إدارة المنصة', 'PLATFORM CONTROL ROOM')}</span><h2>{t('إدارة المنصة')}</h2><p>{t('التحكم للمسؤول فقط ويُطبّق من الخادم.')}</p></div><ShieldCheck size={28} /></div>{error && <p className="message error" role="alert">{t(error)}<button className="text-button" onClick={() => void fetchSettings()}>{t('إعادة فحص الربط')}</button></p>}{notice && <p className="message success" role="status">{t(notice)}</p>}{policy && <><div className="admin-actions"><button className="outline-button" disabled={busy} onClick={() => all(true)}>{t('تشغيل جميع الميزات')}</button><button className="outline-button danger-text" disabled={busy} onClick={() => all(false)}>{t('إيقاف جميع الميزات')}</button></div><div className="toggle-grid">{([{ key: 'paymentsEnabled', label: 'استقبال المدفوعات' }, { key: 'requestsEnabled', label: 'إنشاء طلبات جديدة' }, { key: 'openLinksEnabled', label: 'الروابط المفتوحة' }, { key: 'aiEnabled', label: 'مساعد التعبئة الذكي' }] as const).map(flag => <Toggle key={flag.key} label={t(flag.label)} checked={policy[flag.key]} disabled={busy} onChange={value => setPolicy({ ...policy, [flag.key]: value })} />)}{(['paytabs', 'telr'] as const).map(provider => <Toggle key={provider} label={provider === 'telr' ? 'Telr' : 'PayTabs'} checked={policy.gateways[provider]} disabled={busy} onChange={value => setPolicy({ ...policy, gateways: { ...policy.gateways, [provider]: value } })} />)}{methods.map(method => <Toggle key={method.id} label={t(method.name)} checked={policy.methods[method.id]} disabled={busy} onChange={value => setPolicy({ ...policy, methods: { ...policy.methods, [method.id]: value } })} />)}</div><p className="helper-note">{t('المتاح يعتمد على إعدادات المسؤول وتفعيل حساب البوابة.')}</p><p className="helper-note">{t('إيقاف ميزة لا يلغي جلسة دفع بدأت بالفعل لدى البوابة.')}</p><button className="primary-button" disabled={busy} onClick={() => void save()}>{t(busy ? 'جارٍ التنفيذ…' : 'حفظ إعدادات المنصة')}<Check size={17} /></button></>}<Safeguards /></section>;
+
+  return (
+    <div className="admin-wrapper" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+      <div className="admin-nav-tabs" style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+        <button
+          type="button"
+          className="outline-button"
+          style={adminTab === 'country_matrix' ? { background: '#ff5500', color: '#ffffff', borderColor: '#ff5500', fontWeight: 'bold' } : { fontWeight: '600' }}
+          onClick={() => setAdminTab('country_matrix')}
+        >
+          <CreditCard size={18} />
+          <span>{t('فاحص توافقية الدول والبطاقات (Country Matrix & BIN)')}</span>
+        </button>
+
+        <button
+          type="button"
+          className="outline-button"
+          style={adminTab === 'fraud_toolkit' ? { background: '#ff5500', color: '#ffffff', borderColor: '#ff5500', fontWeight: 'bold' } : { fontWeight: '600' }}
+          onClick={() => setAdminTab('fraud_toolkit')}
+        >
+          <ShieldAlert size={18} />
+          <span>{t('أدوات محاكاة الاحتيال واختبار الثغرات (Fraud Simulator)')}</span>
+        </button>
+
+        <button
+          type="button"
+          className="outline-button"
+          style={adminTab === 'ip_spoofing' ? { background: '#ff5500', color: '#ffffff', borderColor: '#ff5500', fontWeight: 'bold' } : { fontWeight: '600' }}
+          onClick={() => setAdminTab('ip_spoofing')}
+        >
+          <Globe size={18} />
+          <span>{t('إعدادات انتحال الموقع الجغرافي (IP Spoofing) لطلبات الدفع')}</span>
+        </button>
+
+        <button
+          type="button"
+          className="outline-button"
+          style={adminTab === 'policies' ? { background: '#ff5500', color: '#ffffff', borderColor: '#ff5500', fontWeight: 'bold' } : { fontWeight: '600' }}
+          onClick={() => setAdminTab('policies')}
+        >
+          <SlidersHorizontal size={18} />
+          <span>{t('سياسات المنصة وتراخيص البوابات')}</span>
+        </button>
+      </div>
+
+      {adminTab === 'country_matrix' && (
+        <GatewayCountryMatrixManager />
+      )}
+
+      {adminTab === 'fraud_toolkit' && (
+        <FraudSimulationToolkit />
+      )}
+
+      {adminTab === 'ip_spoofing' && (
+        <AdminIpSpoofingManager onNotify={setNotice} />
+      )}
+
+      {adminTab === 'policies' && (
+        <section className="panel settings-panel admin-panel">
+          <div className="section-heading">
+            <div>
+              <span className="eyebrow">{tr('مركز إدارة المنصة', 'PLATFORM CONTROL ROOM')}</span>
+              <h2>{t('إدارة سياسات وميزات المنصة')}</h2>
+              <p>{t('التحكم للمسؤول فقط ويُطبّق من الخادم.')}</p>
+            </div>
+            <ShieldCheck size={28} />
+          </div>
+          {error && <p className="message error" role="alert">{t(error)}<button className="text-button" onClick={() => void fetchSettings()}>{t('إعادة فحص الربط')}</button></p>}
+          {notice && <p className="message success" role="status">{t(notice)}</p>}
+          {policy && (
+            <>
+              <div className="admin-actions">
+                <button className="outline-button" disabled={busy} onClick={() => all(true)}>{t('تشغيل جميع الميزات')}</button>
+                <button className="outline-button danger-text" disabled={busy} onClick={() => all(false)}>{t('إيقاف جميع الميزات')}</button>
+              </div>
+              <div className="toggle-grid">
+                {([{ key: 'paymentsEnabled', label: 'استقبال المدفوعات' }, { key: 'requestsEnabled', label: 'إنشاء طلبات جديدة' }, { key: 'openLinksEnabled', label: 'الروابط المفتوحة' }, { key: 'aiEnabled', label: 'مساعد التعبئة الذكي' }] as const).map(flag => (
+                  <Toggle key={flag.key} label={t(flag.label)} checked={policy[flag.key]} disabled={busy} onChange={value => setPolicy({ ...policy, [flag.key]: value })} onInspect={() => setInspectKey(flag.key)} />
+                ))}
+                {(['paytabs', 'telr'] as const).map(provider => (
+                  <Toggle key={provider} label={provider === 'telr' ? 'Telr' : 'PayTabs'} checked={policy.gateways[provider]} disabled={busy} onChange={value => setPolicy({ ...policy, gateways: { ...policy.gateways, [provider]: value } })} />
+                ))}
+                {methods.map(method => (
+                  <Toggle key={method.id} label={t(method.name)} checked={policy.methods[method.id]} disabled={busy} onChange={value => setPolicy({ ...policy, methods: { ...policy.methods, [method.id]: value } })} />
+                ))}
+              </div>
+              <p className="helper-note">{t('المتاح يعتمد على إعدادات المسؤول وتفعيل حساب البوابة.')}</p>
+              <p className="helper-note">{t('إيقاف ميزة لا يلغي جلسة دفع بدأت بالفعل لدى البوابة.')}</p>
+              <button className="primary-button" disabled={busy} onClick={() => void save()}>{t(busy ? 'جارٍ التنفيذ…' : 'حفظ إعدادات المنصة')}<Check size={17} /></button>
+            </>
+          )}
+          <Safeguards />
+        </section>
+      )}
+
+      {inspectKey && (
+        <FeaturePropertiesModal propertyKey={inspectKey} onClose={() => setInspectKey(null)} />
+      )}
+    </div>
+  );
 }
 
-function Toggle({ label, checked, disabled, onChange }: { label: string; checked: boolean; disabled: boolean; onChange: (value: boolean) => void }) {
-  return <label className="toggle-row"><span>{label}</span><input type="checkbox" role="switch" checked={checked} disabled={disabled} onChange={event => onChange(event.target.checked)} /><span className="toggle-track" aria-hidden="true" /></label>;
+function Toggle({ label, checked, disabled, onChange, onInspect }: { label: string; checked: boolean; disabled: boolean; onChange: (value: boolean) => void; onInspect?: () => void }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+      <label className="toggle-row" style={{ flex: 1, margin: 0 }}>
+        <span>{label}</span>
+        <input type="checkbox" role="switch" checked={checked} disabled={disabled} onChange={event => onChange(event.target.checked)} />
+        <span className="toggle-track" aria-hidden="true" />
+      </label>
+      {onInspect && (
+        <button
+          type="button"
+          className="info-prop-dot"
+          onClick={e => { e.preventDefault(); e.stopPropagation(); onInspect(); }}
+          title="معاينة خصائص وتأثير هذه الخاصية"
+          style={{ marginRight: '6px' }}
+        >
+          ?
+        </button>
+      )}
+    </div>
+  );
 }

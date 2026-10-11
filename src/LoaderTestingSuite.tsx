@@ -2,11 +2,15 @@ import { useState, useMemo } from 'react';
 import {
   Globe, Shield, Bot, UserCheck, AlertOctagon, CheckCircle2,
   RefreshCw, Copy, Check, Sparkles, Terminal, Sliders, Smartphone,
-  Monitor, CreditCard, ChevronRight, Play, Eye
+  Monitor, CreditCard, ChevronRight, Play, Eye, Search, User, Zap, HelpCircle, ShieldAlert
 } from 'lucide-react';
 import type { Platform } from './platform';
 import { KNOWN_GATEWAYS } from './gatewaysData';
 import { initialSecuritySystems, type SecuritySystem } from './securitySystemsData';
+import { findCustomerBy7DigitId, PRESET_CUSTOMERS, type CustomerProfileWithGateways } from './customerGatewaysData';
+import FeaturePropertiesModal from './FeaturePropertiesModal';
+import GatewayCountryMatrixManager from './GatewayCountryMatrixManager';
+import FraudSimulationToolkit from './FraudSimulationToolkit';
 import './LoaderTestingSuite.css';
 
 interface SimulatedCard {
@@ -46,12 +50,40 @@ export default function LoaderTestingSuite({
   platform: Platform;
   userEmail?: string;
 }) {
-  // Simulator State
+  // Read Admin IP Spoofing Configuration
+  const [adminIpConfig] = useState<{
+    enabled: boolean;
+    proxyMode: string;
+    isCustomActive: boolean;
+    customIp: string;
+    customCountryName: string;
+  } | null>(() => {
+    try {
+      const saved = localStorage.getItem('oneshot_admin_ip_spoofing');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
+
+  // Simulator State (synced with admin proxy if set)
   const [selectedGatewayId, setSelectedGatewayId] = useState('paytabs');
   const [selectedIntegrationType, setSelectedIntegrationType] = useState('hosted');
-  const [clientProxy, setClientProxy] = useState(PROXY_COUNTRIES[0]);
+  const [clientProxy, setClientProxy] = useState(() => {
+    try {
+      const activeProxy = localStorage.getItem('oneshot_test_active_proxy');
+      if (activeProxy) return JSON.parse(activeProxy);
+    } catch {}
+    return PROXY_COUNTRIES[0];
+  });
   const [customIp, setCustomIp] = useState('');
-  const [activeIp, setActiveIp] = useState(PROXY_COUNTRIES[0].ip);
+  const [activeIp, setActiveIp] = useState(() => {
+    try {
+      const activeProxy = localStorage.getItem('oneshot_test_active_proxy');
+      if (activeProxy) return JSON.parse(activeProxy).ip;
+    } catch {}
+    return PROXY_COUNTRIES[0].ip;
+  });
   const [deviceEnvironment, setDeviceEnvironment] = useState<'desktop' | 'mobile'>('desktop');
   const [isVpnEnabled, setIsVpnEnabled] = useState(true);
 
@@ -89,6 +121,83 @@ export default function LoaderTestingSuite({
   } | null>(null);
 
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+
+  // Customer retrieval state (7-digit random ID)
+  const [searchCustomerId, setSearchCustomerId] = useState('');
+  const [retrievedCustomer, setRetrievedCustomer] = useState<CustomerProfileWithGateways | null>(null);
+  const [customerSearchMsg, setCustomerSearchMsg] = useState('');
+  const [inspectPropertyKey, setInspectPropertyKey] = useState<string | null>(null);
+  const [autoMatchedNotice, setAutoMatchedNotice] = useState<string | null>(null);
+  const [suiteMode, setSuiteMode] = useState<'simulator' | 'country_matrix' | 'fraud_toolkit'>('simulator');
+
+  // Auto-Match Gateway, IP, and Currency from Card BIN
+  const handleAutoGenerateFromCard = (card: SimulatedCard) => {
+    setSelectedCard(card);
+    let targetGw = 'paytabs';
+    let targetProxy = PROXY_COUNTRIES[0]; // KSA
+    let targetCurrency = 'SAR';
+
+    if (card.countryCode === 'SA') {
+      targetGw = 'paytabs';
+      targetProxy = PROXY_COUNTRIES[0];
+      targetCurrency = 'SAR';
+    } else if (card.countryCode === 'AE') {
+      targetGw = 'telr';
+      targetProxy = PROXY_COUNTRIES.find((p) => p.code === 'AE') || PROXY_COUNTRIES[2];
+      targetCurrency = 'AED';
+    } else if (card.countryCode === 'KW') {
+      targetGw = 'myfatoorah';
+      targetProxy = PROXY_COUNTRIES.find((p) => p.code === 'KW') || PROXY_COUNTRIES[3];
+      targetCurrency = 'KWD';
+    } else if (card.countryCode === 'US') {
+      targetGw = 'telr';
+      targetProxy = PROXY_COUNTRIES.find((p) => p.code === 'US') || PROXY_COUNTRIES[4];
+      targetCurrency = 'USD';
+    } else if (card.countryCode === 'GB') {
+      targetGw = 'telr';
+      targetProxy = PROXY_COUNTRIES.find((p) => p.code === 'GB') || PROXY_COUNTRIES[5];
+      targetCurrency = 'GBP';
+    } else if (card.countryCode === 'DE') {
+      targetGw = 'telr';
+      targetProxy = PROXY_COUNTRIES.find((p) => p.code === 'GB') || PROXY_COUNTRIES[5];
+      targetCurrency = 'EUR';
+    }
+
+    setSelectedGatewayId(targetGw);
+    setClientProxy(targetProxy);
+    setActiveIp(targetProxy.ip);
+    if (customerProfile) {
+      setCustomerProfile((prev) => (prev ? { ...prev, currency: targetCurrency } : null));
+    }
+
+    const gwName = KNOWN_GATEWAYS.find((g) => g.id === targetGw)?.name || targetGw;
+    setAutoMatchedNotice(
+      `تمت المطابقة التلقائية: تم اختيار بوابة [${gwName}] وموقع الـ IP [${targetProxy.name} - ${targetProxy.ip}] لضمان التوافق التام مع بطاقة ${card.scheme} ومنع الرفض الجغرافي!`
+    );
+    setTimeout(() => setAutoMatchedNotice(null), 4500);
+  };
+
+  // Fetch Customer Gateways by 7-digit ID
+  const handleFetchCustomerGateways = (idToFetch?: string) => {
+    const targetId = idToFetch || searchCustomerId;
+    if (!targetId.trim()) {
+      setCustomerSearchMsg('يرجى إدخال رقم العميل المكون من 7 أرقام (مثال: 8492015).');
+      return;
+    }
+    const cust = findCustomerBy7DigitId(targetId);
+    if (cust) {
+      setRetrievedCustomer(cust);
+      setSearchCustomerId(cust.customerId);
+      setCustomerSearchMsg(`تم استرداد بيانات ${cust.merchantName} (معرف: ${cust.customerId}) بنجاح! تم جلب ${cust.activeGateways.length} بوابات مربوطة.`);
+      const firstGw = cust.activeGateways[0];
+      if (firstGw && KNOWN_GATEWAYS.some((g) => g.id === firstGw.gatewayId)) {
+        setSelectedGatewayId(firstGw.gatewayId);
+      }
+    } else {
+      setRetrievedCustomer(null);
+      setCustomerSearchMsg(`لم يتم العثور على عميل مسجل بالرقم "${targetId}". يمكنك اختيار أحد المعرفات التجريبية المقترحة أدناه.`);
+    }
+  };
 
   const currentGateway = useMemo(
     () => KNOWN_GATEWAYS.find((g) => g.id === selectedGatewayId) || KNOWN_GATEWAYS[0],
@@ -301,12 +410,188 @@ export default function LoaderTestingSuite({
             <span>الحساب النشط في المختبر: <strong>{userEmail}</strong> (صلاحية لودر معتمدة)</span>
           </div>
         )}
+
+        {adminIpConfig?.enabled && (
+          <div className="loader-admin-spoof-sync" style={{
+            background: 'rgba(255, 85, 0, 0.1)',
+            border: '1px solid rgba(255, 85, 0, 0.3)',
+            borderRadius: '10px',
+            padding: '10px 16px',
+            marginTop: '12px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px',
+            color: '#ff6a28',
+            fontSize: '0.85rem'
+          }}>
+            <Globe size={16} />
+            <span>
+              <strong>انتحال الموقع الجغرافي (IP Spoofing) مفعّل من إعدادات الأدمن:</strong> يتم إرسال طلبات الاختبار باستخدام الـ IP المنتحل <code style={{ background: '#000', padding: '2px 6px', borderRadius: '4px', color: '#38bdf8' }}>{activeIp}</code> ({clientProxy.name}).
+            </span>
+          </div>
+        )}
       </section>
 
+      {/* Loader Workspace Sub-Navigation Tabs */}
+      <div className="loader-workspace-tabs" style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginBottom: '8px' }}>
+        <button
+          type="button"
+          className="outline-button"
+          style={suiteMode === 'simulator' ? { background: '#ff5500', color: '#ffffff', borderColor: '#ff5500', fontWeight: 'bold' } : { fontWeight: '600' }}
+          onClick={() => setSuiteMode('simulator')}
+        >
+          <Monitor size={18} />
+          <span>المختبر الرئيسي ومعالج الدفع الافتراضي (Sandbox Simulator)</span>
+        </button>
+
+        <button
+          type="button"
+          className="outline-button"
+          style={suiteMode === 'country_matrix' ? { background: '#ff5500', color: '#ffffff', borderColor: '#ff5500', fontWeight: 'bold' } : { fontWeight: '600' }}
+          onClick={() => setSuiteMode('country_matrix')}
+        >
+          <CreditCard size={18} />
+          <span>فاحص توافقية الدول والـ BIN للبوابات (Country & Card Matrix)</span>
+        </button>
+
+        <button
+          type="button"
+          className="outline-button"
+          style={suiteMode === 'fraud_toolkit' ? { background: '#ff5500', color: '#ffffff', borderColor: '#ff5500', fontWeight: 'bold' } : { fontWeight: '600' }}
+          onClick={() => setSuiteMode('fraud_toolkit')}
+        >
+          <ShieldAlert size={18} />
+          <span>مختبر محاكاة هجمات الاحتيال واختبار الثغرات (Fraud Simulator)</span>
+        </button>
+      </div>
+
+      {/* Sub-view: Country Matrix */}
+      {suiteMode === 'country_matrix' && (
+        <GatewayCountryMatrixManager
+          onSelectGatewayForTest={(gwId) => {
+            setSelectedGatewayId(gwId);
+            setSuiteMode('simulator');
+          }}
+        />
+      )}
+
+      {/* Sub-view: Fraud Toolkit */}
+      {suiteMode === 'fraud_toolkit' && (
+        <FraudSimulationToolkit />
+      )}
+
       {/* Grid: Left = Control & Tools, Right = Live Terminal & Virtual Monitor */}
-      <div className="loader-layout-grid">
+      {suiteMode === 'simulator' && (
+        <div className="loader-layout-grid">
         {/* Left Column: Configuration */}
         <div className="loader-controls-column">
+          {/* Customer 7-Digit Gateways Retrieval */}
+          <section className="panel loader-card customer-fetch-card">
+            <div className="loader-card-title">
+              <User size={18} />
+              <h3>استرداد وجلب بوابات العميل بالمعرّف (7 أرقام عشوائية)</h3>
+              <button
+                type="button"
+                className="info-prop-dot"
+                onClick={() => setInspectPropertyKey('requestsEnabled')}
+                title="معاينة خصائص النظام"
+              >
+                ?
+              </button>
+            </div>
+            <p className="loader-desc-text">
+              لكل عميل مسجل معرّف عشوائي فريد من 7 أرقام. أدخل الرقم لجلب البوابات المربوطة والمفاتيح وإجراء الفحص المباشر عليها:
+            </p>
+
+            <div className="cust-search-bar" style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
+              <input
+                type="text"
+                placeholder="أدخل معرّف العميل (7 أرقام، مثال: 8492015)"
+                value={searchCustomerId}
+                onChange={(e) => setSearchCustomerId(e.target.value)}
+                maxLength={7}
+                dir="ltr"
+                style={{ flex: 1, background: '#0a0d16', border: '1px solid #1f2536', color: '#fff', padding: '10px 14px', borderRadius: '8px' }}
+              />
+              <button
+                type="button"
+                className="primary-button"
+                onClick={() => handleFetchCustomerGateways()}
+                style={{ padding: '0 18px', display: 'flex', alignItems: 'center', gap: '6px' }}
+              >
+                <Search size={16} />
+                <span>جلب البوابات</span>
+              </button>
+            </div>
+
+            {/* Quick Presets */}
+            <div className="quick-presets-row" style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '12px', alignItems: 'center' }}>
+              <span style={{ fontSize: '0.78rem', color: '#718096' }}>عملاء تجريبيون مقترحون:</span>
+              {PRESET_CUSTOMERS.map((c) => (
+                <button
+                  key={c.customerId}
+                  type="button"
+                  className="quick-chip-btn"
+                  onClick={() => handleFetchCustomerGateways(c.customerId)}
+                  style={{
+                    background: searchCustomerId === c.customerId ? 'rgba(255,85,0,0.2)' : 'rgba(255,255,255,0.05)',
+                    border: searchCustomerId === c.customerId ? '1px solid #ff5500' : '1px solid rgba(255,255,255,0.1)',
+                    color: searchCustomerId === c.customerId ? '#ff7733' : '#a0aec0',
+                    fontSize: '0.75rem',
+                    padding: '3px 10px',
+                    borderRadius: '6px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  {c.customerId} ({c.merchantName.slice(0, 15)}…)
+                </button>
+              ))}
+            </div>
+
+            {customerSearchMsg && (
+              <p style={{ fontSize: '0.82rem', color: retrievedCustomer ? '#34d399' : '#fbbf24', margin: '4px 0 10px 0' }}>
+                {customerSearchMsg}
+              </p>
+            )}
+
+            {retrievedCustomer && (
+              <div className="retrieved-cust-box" style={{ background: '#0a0d16', border: '1px solid #232a3d', borderRadius: '10px', padding: '14px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
+                    <strong style={{ color: '#fff', fontSize: '0.95rem' }}>{retrievedCustomer.merchantName}</strong>
+                    <div style={{ color: '#718096', fontSize: '0.78rem' }}>{retrievedCustomer.city}، {retrievedCustomer.country} · معرّف: <code style={{ color: '#ff7733' }}>{retrievedCustomer.customerId}</code></div>
+                  </div>
+                  <span style={{ background: 'rgba(16,185,129,0.15)', color: '#34d399', fontSize: '0.72rem', padding: '2px 8px', borderRadius: '4px', fontWeight: 'bold' }}>
+                    KYC موثق ✓
+                  </span>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  <span style={{ fontSize: '0.78rem', color: '#8b9bb4' }}>البوابات المربوطة والمتاحة للاختبار:</span>
+                  {retrievedCustomer.activeGateways.map((gw, idx) => (
+                    <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#111522', padding: '8px 12px', borderRadius: '6px', border: selectedGatewayId === gw.gatewayId ? '1px solid #ff5500' : '1px solid #1a202c' }}>
+                      <div>
+                        <strong style={{ color: '#f7fafc', fontSize: '0.85rem' }}>{gw.gatewayName}</strong>
+                        <div style={{ color: '#718096', fontSize: '0.74rem' }}>{gw.integrationType} · عملة: {gw.currency}</div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedGatewayId(gw.gatewayId);
+                          setAutoMatchedNotice(`تم تفعيل بوابة [${gw.gatewayName}] الخاصة بالعميل ${retrievedCustomer.merchantName} للاختبار!`);
+                          setTimeout(() => setAutoMatchedNotice(null), 3000);
+                        }}
+                        style={{ background: selectedGatewayId === gw.gatewayId ? '#ff5500' : '#232a3d', border: 'none', color: '#fff', fontSize: '0.75rem', padding: '4px 10px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}
+                      >
+                        {selectedGatewayId === gw.gatewayId ? 'نشطة للفحص' : 'اختبار هذه البوابة'}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </section>
+
           {/* Gateway & Integration Selection */}
           <section className="panel loader-card">
             <div className="loader-card-title">
@@ -491,13 +776,44 @@ export default function LoaderTestingSuite({
 
             {/* Simulated Card Picker */}
             <div className="card-selector-section">
-              <label>اختر بطاقة مصرفية حقيقية لبيئة الاختبار:</label>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', flexWrap: 'wrap', gap: '8px' }}>
+                <label style={{ margin: 0, fontWeight: 'bold' }}>اختر بطاقة مصرفية لبيئة الاختبار:</label>
+                <button
+                  type="button"
+                  onClick={() => handleAutoGenerateFromCard(selectedCard)}
+                  style={{
+                    background: 'linear-gradient(135deg, #ff5500 0%, #d84300 100%)',
+                    border: 'none',
+                    color: '#fff',
+                    fontSize: '0.8rem',
+                    fontWeight: 'bold',
+                    padding: '6px 14px',
+                    borderRadius: '8px',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    cursor: 'pointer',
+                    boxShadow: '0 2px 10px rgba(255,85,0,0.3)'
+                  }}
+                >
+                  <Zap size={14} />
+                  <span>توليد ومطابقة البوابة والـ IP تلقائياً من البطاقة</span>
+                </button>
+              </div>
+
+              {autoMatchedNotice && (
+                <div style={{ background: 'rgba(255,85,0,0.12)', border: '1px solid rgba(255,85,0,0.35)', color: '#ff7733', padding: '8px 14px', borderRadius: '8px', fontSize: '0.82rem', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <CheckCircle2 size={16} />
+                  <span>{autoMatchedNotice}</span>
+                </div>
+              )}
+
               <div className="test-cards-list">
                 {TEST_CARDS.map((card, idx) => (
                   <div
                     key={idx}
                     className={`test-card-item ${selectedCard.number === card.number ? 'selected' : ''}`}
-                    onClick={() => setSelectedCard(card)}
+                    onClick={() => handleAutoGenerateFromCard(card)}
                   >
                     <div className="card-item-top">
                       <strong>{card.scheme}</strong>
@@ -509,6 +825,9 @@ export default function LoaderTestingSuite({
                       <span>CVV: {card.cvv}</span>
                     </div>
                     <p className="card-expected-note">{card.expectedBehavior}</p>
+                    <div style={{ marginTop: '6px', fontSize: '0.72rem', color: '#ff7733', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <Zap size={12} /> انقر للمطابقة الفورية للبوابة وموقع الـ IP
+                    </div>
                   </div>
                 ))}
               </div>
@@ -685,7 +1004,17 @@ export default function LoaderTestingSuite({
               {securitySystems.map((sec) => (
                 <div key={sec.id} className="sec-mini-row">
                   <div className="sec-info">
-                    <strong>{sec.name}</strong>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <strong>{sec.name}</strong>
+                      <button
+                        type="button"
+                        className="info-prop-dot"
+                        onClick={() => setInspectPropertyKey(sec.id)}
+                        title="معاينة خصائص وتأثير هذا النظام"
+                      >
+                        ?
+                      </button>
+                    </div>
                     <p>{sec.whatItDoes}</p>
                   </div>
                   <span className={`sec-status-badge ${sec.enabled ? 'enabled' : 'disabled'}`}>
@@ -697,6 +1026,15 @@ export default function LoaderTestingSuite({
           </section>
         </div>
       </div>
+      )}
+
+      {/* Feature Properties Inspector Modal */}
+      {inspectPropertyKey && (
+        <FeaturePropertiesModal
+          propertyKey={inspectPropertyKey}
+          onClose={() => setInspectPropertyKey(null)}
+        />
+      )}
     </div>
   );
 }
