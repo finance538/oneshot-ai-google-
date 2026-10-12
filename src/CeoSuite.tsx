@@ -102,20 +102,18 @@ export default function CeoSuite() {
   const currentAgent = agents.find(a => a.id === selectedAgent) || agents[0];
   const currentChat = messages[selectedAgent] || [];
 
+  // الميكروفون غير مربوط بمسار تفريغ صوتي في هذه النسخة، فلا نُظهِر تسجيلًا وهميًا.
   const startRecording = () => {
-    setIsRecording(true);
+    setIsRecording(false);
     setRecSeconds(0);
-    recTimerRef.current = window.setInterval(() => setRecSeconds(s => s + 1), 1000);
+    alert('التسجيل الصوتي غير مربوط بهذه النسخة: لا يوجد التقاط صوت ولا تفريغ نصي. اكتب أمرك نصًا في مربع الرسالة.');
   };
 
   const stopRecording = (sendVoice = true) => {
     if (recTimerRef.current) clearInterval(recTimerRef.current);
     setIsRecording(false);
-    if (sendVoice) {
-      const durationStr = `${Math.floor(recSeconds / 60)}:${(recSeconds % 60).toString().padStart(2, '0')}`;
-      sendMessage(`🎤 أمر صوتي مسجل من الرئيس التنفيذي (${durationStr})`);
-    }
     setRecSeconds(0);
+    void sendVoice;
   };
 
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {

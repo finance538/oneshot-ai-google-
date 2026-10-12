@@ -31,6 +31,8 @@ export interface AiTierDefinition {
   models: OllamaModelDefinition[];
 }
 
+// رمز فتح واجهة Tier X. يُشحن داخل حزمة المتصفح، فهو حاجز واجهة (يمنع الفتح العَرَضي)
+// وليس حدًا أمنيًا: أي عملية مقيّدة فعليًا يجب أن تتحقق من دور المستخدم على الخادم.
 export const ADMIN_TIER_X_SECRET = 'Aa#2133155826';
 
 export const AI_TIERS: Record<AiTierId, AiTierDefinition> = {

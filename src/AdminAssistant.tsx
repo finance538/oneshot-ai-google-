@@ -90,9 +90,7 @@ export default function AdminAssistant({ onRefresh, initialPrompt }: { onRefresh
   const startRecording = async () => {
     try {
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        setIsRecording(true);
-        setRecordingSeconds(0);
-        recordTimerRef.current = window.setInterval(() => setRecordingSeconds(s => s + 1), 1000);
+        setError('تعذر بدء التسجيل الصوتي: هذا المتصفح لا يدعم التقاط الصوت.');
         return;
       }
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -107,9 +105,8 @@ export default function AdminAssistant({ onRefresh, initialPrompt }: { onRefresh
         if (recordTimerRef.current) clearInterval(recordTimerRef.current);
       };
     } catch {
-      setIsRecording(true);
-      setRecordingSeconds(0);
-      recordTimerRef.current = window.setInterval(() => setRecordingSeconds(s => s + 1), 1000);
+      setError('تعذر بدء التسجيل الصوتي: لم يتم منح إذن الميكروفون.');
+      setIsRecording(false);
     }
   };
 
@@ -204,7 +201,7 @@ export default function AdminAssistant({ onRefresh, initialPrompt }: { onRefresh
         action: 'chat',
         message: input,
         history,
-        consent: true,
+        consent,
         modelId: selectedModel,
         ...(selectedModel === 'ollama-cloud' ? { ollamaModel: activeOllamaModel || routeDecision.model.id } : {})
       });
@@ -604,7 +601,7 @@ export default function AdminAssistant({ onRefresh, initialPrompt }: { onRefresh
               <button
                 className="primary-button onshot-send"
                 aria-label="إرسال الرسالة"
-                disabled={busy || loading || (!message.trim() && !attachedImage)}
+                disabled={busy || loading || !consent || (!message.trim() && !attachedImage)}
                 type="submit"
               >
                 {busy ? <LoaderCircle size={19} /> : <ArrowUp size={19} />}

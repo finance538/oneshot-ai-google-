@@ -6,6 +6,16 @@ import {
 } from 'lucide-react';
 import './FraudSimulationToolkit.css';
 
+// مفتاح تجريبي محلي فقط: التوقيع أدناه يُحسب فعليًا في المتصفح بـHMAC-SHA256
+// لأغراض العرض، وليس مفاتيح بوابة حقيقية.
+const DEMO_SIGNING_KEY = 'oneshot-demo-signing-key-v1';
+const demoDigest = async (payload: string) => {
+  const encoder = new TextEncoder();
+  const key = await crypto.subtle.importKey('raw', encoder.encode(DEMO_SIGNING_KEY), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  const signature = await crypto.subtle.sign('HMAC', key, encoder.encode(payload));
+  return Array.from(new Uint8Array(signature)).map(byte => byte.toString(16).padStart(2, '0')).join('').slice(0, 40);
+};
+
 interface AttackLog {
   id: string;
   time: string;
@@ -147,21 +157,25 @@ export default function FraudSimulationToolkit() {
   // Run Parameter Tampering Simulation
   const handleTestTampering = () => {
     setTamperingResult({ status: 'testing' });
-    setTimeout(() => {
+    void (async () => {
+      const signatureSent = await demoDigest(`amount=${originalAmount}|currency=${tamperedCurrency}|demo`);
+      const signatureExpected = await demoDigest(`amount=${tamperedAmount}|currency=${tamperedCurrency}|demo`);
       if (originalAmount !== tamperedAmount) {
         setTamperingResult({
           status: 'blocked',
-          details: 'تم رفض العملية فوراً! خوارزمية HMAC-SHA256 كشفت عدم تطابق البصمة الرقمية (Hash Signature Mismatch). لم يتم الخصم.',
-          hashSent: 'a9f4c398102d7e1194b308e2f89b4c023412',
-          hashExpected: 'e812d47781a93b5840283c749911e3b00451',
+          details: 'محاكاة: التوقيع المرفق بالطلب لا يطابق المبلغ الواصل، لذلك ترفض البوابة العملية. البصمتان أدناه محسوبتان فعليًا في متصفحك الآن بـHMAC-SHA256 بمفتاح تجريبي.',
+          hashSent: signatureSent,
+          hashExpected: signatureExpected,
         });
       } else {
         setTamperingResult({
           status: 'vulnerable',
-          details: 'المبلغ لم يتم تعديله، لا يوجد تلاعب.',
+          details: 'لا يوجد تلاعب ليُكتشف: المبلغ الواصل مطابق للمبلغ الموقّع. عدّل المبلغ في حقل «المبلغ المتلاعب به» ثم أعد الفحص.',
+          hashSent: signatureSent,
+          hashExpected: signatureExpected,
         });
       }
-    }, 600);
+    })();
   };
 
   // Run Webhook Forgery Simulation
@@ -446,11 +460,31 @@ export default function FraudSimulationToolkit() {
                 <p>{tamperingResult.details}</p>
                 <div className="hash-details-grid">
                   <div>
-                    <small>الهاش المحسوب من خادم البوابة:</small>
+                    <small>البصمة المحسوبة على المبلغ الواصل (أول 40 خانة):</small>
                     <code>{tamperingResult.hashExpected}</code>
                   </div>
                   <div>
-                    <small>الهاش المرسل من الطلب المتلاعب به:</small>
+                    <small>البصمة المرفقة بالطلب المتلاعب به (أول 40 خانة):</small>
+                    <code>{tamperingResult.hashSent}</code>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {tamperingResult.status === 'vulnerable' && (
+            <div className="tampering-result-card warning">
+              <AlertTriangle size={24} />
+              <div>
+                <h4>لا يوجد تلاعب ليُكتشف في هذه المحاولة</h4>
+                <p>{tamperingResult.details}</p>
+                <div className="hash-details-grid">
+                  <div>
+                    <small>البصمة المحسوبة على المبلغ الواصل (أول 40 خانة):</small>
+                    <code>{tamperingResult.hashExpected}</code>
+                  </div>
+                  <div>
+                    <small>البصمة المرفقة بالطلب المتلاعب به (أول 40 خانة):</small>
                     <code>{tamperingResult.hashSent}</code>
                   </div>
                 </div>

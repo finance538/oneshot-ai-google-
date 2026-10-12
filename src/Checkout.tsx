@@ -45,13 +45,13 @@ export default function Checkout({ id }: { id: string }) {
         if (payment?.document.method === 'framed') setIframe(result.url);
         else window.location.assign(result.url);
       } else { setMessage(result.status === 'paid' ? 'تم تأكيد الدفع بنجاح.' : 'الدفع قيد التأكيد. لا تكرر العملية.'); await load(); }
-    } catch (caught) { setError(caught instanceof Error ? caught.message : 'تعذر إتمام الطلب.'); }
-    finally {
+      // Only clear the card form after the gateway accepted the request; a rejected
+      // attempt keeps the customer's input so they can correct it and retry.
       formRef.current?.reset();
       formRef.current?.querySelectorAll('input[name="token"]').forEach(element => element.remove());
       formRef.current?.querySelector('#register-container')?.remove();
-      setBusy(false); processing.current = false;
-    }
+    } catch (caught) { setError(caught instanceof Error ? caught.message : 'تعذر إتمام الطلب.'); }
+    finally { setBusy(false); processing.current = false; }
   }, [id, consent, language, payment?.document.method, load]);
 
   useEffect(() => {

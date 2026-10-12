@@ -102,7 +102,7 @@ export default function PaymentFailuresDashboard({ onConsultAi }: PaymentFailure
 
   const handleApplyFailover = (alert: FailureSpikeAlert, targetGw?: string) => {
     const destination = (targetGw || 'paytabs').toUpperCase();
-    setAlertActionNotice(`⚡ تم تفعيل التوجيه الذكي التلقائي (Smart Failover) بنجاح: تم تحويل عمليات ${alert.gatewayName} المتأثرة برفض ${alert.reasonDetails.titleAr} مباشرة إلى ${destination}.`);
+    setAlertActionNotice(`⚡ محاكاة داخل هذه الشاشة: فُرض تحويل عمليات ${alert.gatewayName} المتأثرة برفض ${alert.reasonDetails.titleAr} إلى ${destination}. لا يوجد تبديل فعلي لأي بوابة ولم يُحوَّل أي مبلغ.`);
     setTimeout(() => setAlertActionNotice(null), 4500);
   };
 
@@ -118,7 +118,7 @@ export default function PaymentFailuresDashboard({ onConsultAi }: PaymentFailure
     const newAlert = generateCustomSpikeAlert(simGateway, simReason, simSpikePct);
     setAlerts(prev => [newAlert, ...prev]);
     setActiveTab('alerts');
-    setAlertActionNotice(`🚨 تم اكتشاف ومحاكاة زيادة مفاجئة بنسبة (+${simSpikePct}%) على بوابة ${newAlert.gatewayName} بسبب ${newAlert.reasonDetails.titleAr}.`);
+    setAlertActionNotice(`🚨 تنبيه توضيحي: أُضيفت زيادة مفاجئة مقدّرة بـ(+${simSpikePct}%) على بوابة ${newAlert.gatewayName} بسبب ${newAlert.reasonDetails.titleAr}. الأرقام مولّدة محليًا للعرض فقط.`);
     setTimeout(() => setAlertActionNotice(null), 4000);
   };
 
@@ -126,7 +126,7 @@ export default function PaymentFailuresDashboard({ onConsultAi }: PaymentFailure
     setIsScanning(true);
     setTimeout(() => {
       setIsScanning(false);
-      setAlertActionNotice('✅ تم مسح وتحديث تدفقات البوابات (Telr, PayTabs, Tap, Stripe, Urway): تم تأكيد رصد معدلات الارتفاع اللحظية.');
+      setAlertActionNotice('✅ أُعيد ترتيب بطاقات هذه الشاشة (Telr, PayTabs, Tap, Stripe, Urway). لا يوجد اتصال حقيقي بالبوابات ولا قراءة لمعدلات لحظية.');
       setTimeout(() => setAlertActionNotice(null), 3500);
     }, 1100);
   };

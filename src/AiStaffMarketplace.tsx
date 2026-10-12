@@ -360,9 +360,8 @@ export default function AiStaffMarketplace() {
                         </div>
                       ) : (
                         <div className="price-paid">
-                          <span className="price-num">{employee.priceMonthly}</span>
-                          <span className="price-currency">ر.س</span>
-                          <span className="price-term">/ شهرياً</span>
+                          <span className="price-num">عند الاستخدام</span>
+                          <span className="price-term">بدون راتب أو اشتراك شهري</span>
                         </div>
                       )}
                     </div>
@@ -430,7 +429,7 @@ export default function AiStaffMarketplace() {
                 <span className="station-avatar">{activeEmployee.avatar}</span>
                 <div>
                   <h4>محادثة واختبار الموظف: {activeEmployee.name}</h4>
-                  <small>{activeEmployee.arabicRole} · {activeEmployee.isFreeTier ? 'باقة مجانية 100%' : `${activeEmployee.priceMonthly} ر.س / شهرياً`}</small>
+                  <small>{activeEmployee.arabicRole} · {activeEmployee.isFreeTier ? 'باقة مجانية 100%' : 'الدفع عند الاستخدام — بدون اشتراك شهري'}</small>
                 </div>
               </div>
 

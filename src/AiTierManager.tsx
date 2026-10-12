@@ -1,6 +1,7 @@
 // AiTierManager.tsx
 // Interactive 4-Tier AI Control Panel & Ollama Model Selector
-// Supports Tier 1 (Fast), Tier 2 (Pro), Tier 3 (Reasoning), and Tier X (Admin-Only Abliterated / Uncensored with Password Aa#2133155826)
+// Supports Tier 1 (Fast), Tier 2 (Pro), Tier 3 (Reasoning), and Tier X (Admin-Only Abliterated / Uncensored, behind an admin passcode)
+// ملاحظة: بوابة Tier X هنا حاجز واجهة فقط — أي تنفيذ فعلي مقيّد يجب أن يتحقق من الدور على الخادم.
 // With Intelligent Auto-Router and Server Credentials Configuration
 
 import React, { useState } from 'react';
@@ -248,7 +249,7 @@ export const AiTierManager: React.FC<AiTierManagerProps> = ({
                 <input
                   type="password"
                   value={config.adminSecret ? '••••••••••••••••' : ''}
-                  placeholder="Aa#2133155826 (محفوظة للمسؤول)"
+                  placeholder="•••••••• (يُدخل من إعدادات الإدارة)"
                   readOnly
                   dir="ltr"
                 />
@@ -472,7 +473,7 @@ export const AiTierManager: React.FC<AiTierManagerProps> = ({
                   type="password"
                   value={adminPasswordInput}
                   onChange={(e) => setAdminPasswordInput(e.target.value)}
-                  placeholder={langKey === 'ar' ? 'أدخل كلمة سر السيرفر (Aa#2133155826)...' : 'Enter admin password (Aa#2133155826)...'}
+                  placeholder={langKey === 'ar' ? 'أدخل رمز فتح Tier X...' : 'Enter the Tier X passcode...'}
                   required
                   autoFocus
                   dir="ltr"

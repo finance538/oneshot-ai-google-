@@ -119,24 +119,17 @@ function MerchantPlatform() {
           try { current = JSON.parse(storedGoogleUser); } catch {}
         }
       }
-      if (!current) {
-        current = {
-          id: 'usr-finance-admin',
-          email: 'finance@1shotcam.com',
-          user_metadata: { full_name: 'فاينانس ميرشنت (المدير والتاجر)' },
-          app_metadata: { roles: ['merchant', 'admin'] },
-        } as unknown as User;
-      }
-      setUser(current);
+      setUser(current ?? null);
       let result = initialPlatform;
+      let platformError = '';
       try {
         result = await api<Platform>('platform');
-      } catch {
-        // API offline fallback
+      } catch (caught) {
+        platformError = caught instanceof Error ? caught.message : 'خطأ غير معروف';
       }
       setPlatform(result);
       if (current && !result.merchant) setView(previous => previous === 'overview' ? 'wallet' : previous);
-      setError('');
+      setError(platformError ? `تعذر تحميل بيانات مساحة التاجر — الأرقام المعروضة غير محدّثة. (${platformError})` : '');
     }
     catch { setError('تعذر تحميل مساحة التاجر. تحقق من اتصالك وإعدادات قاعدة البيانات.'); }
     finally { setLoading(false); }
@@ -249,38 +242,23 @@ function MerchantPlatform() {
           await signup(email, password, { full_name: String(data.get('name') || '') });
           const authenticated = await getUser();
           setNotice(authenticated ? 'تم إنشاء الحساب والمحفظة.' : 'راجع بريدك لتأكيد الحساب قبل الدخول.');
-          closeAuth(!!authenticated);
-        } catch {
-          const localUser = {
-            id: 'usr-' + Date.now(),
-            email,
-            user_metadata: { full_name: String(data.get('name') || email.split('@')[0]) },
-            app_metadata: { roles: ['merchant', 'admin'] },
-          } as unknown as User;
-          localStorage.setItem('oneshot_google_user', JSON.stringify(localUser));
-          setUser(localUser);
-          setNotice('تم إنشاء الحساب وتفعيله بنجاح.');
-          closeAuth(true);
+          if (authenticated) closeAuth(true);
+        } catch (caught) {
+          setError(`تعذر إنشاء الحساب: ${caught instanceof Error ? caught.message : 'خطأ غير معروف'}`);
+          return;
         }
       }
-      else if (auth === 'reset') { await requestPasswordRecovery(email); setNotice('تم إرسال الرابط. راجع بريدك.'); closeAuth(); }
+      else if (auth === 'reset') { await requestPasswordRecovery(email); setNotice('تم إرسال الرابط. راجع بريدك.'); }
       else if (auth === 'password') { await updateUser({ password }); closeAuth(true); }
       else if (auth === 'invite' && invite) { await acceptInvite(invite, password); closeAuth(true); }
       else {
         try {
           await login(email, password);
           closeAuth(true);
-        } catch {
-          const localUser = {
-            id: 'usr-' + Date.now(),
-            email,
-            user_metadata: { full_name: email.split('@')[0] },
-            app_metadata: { roles: ['merchant', 'admin'] },
-          } as unknown as User;
-          localStorage.setItem('oneshot_google_user', JSON.stringify(localUser));
-          setUser(localUser);
           setNotice('تم تسجيل الدخول بنجاح.');
-          closeAuth(true);
+        } catch (caught) {
+          setError(`تعذر تسجيل الدخول: ${caught instanceof Error ? caught.message : 'خطأ غير معروف'}`);
+          return;
         }
       }
       await load();
@@ -404,7 +382,7 @@ function MerchantPlatform() {
           </div>
         </div>
       )}
-      {auth === 'signup' && !signupEnabled ? <p>{t('التسجيل غير متاح حالياً.')}</p> : <form onSubmit={event => void authenticate(event)}>{auth === 'signup' && <label>{t('الاسم')}<input name="name" autoComplete="name" required maxLength={100} /></label>}{!['password', 'invite'].includes(auth) && <label>{t('البريد الإلكتروني')}<input name="email" type="email" autoComplete="email" required dir="ltr" maxLength={254} /></label>}{auth !== 'reset' && <label>{t('كلمة المرور')}<input name="password" type="password" autoComplete={auth === 'login' ? 'current-password' : 'new-password'} minLength={8} required dir="ltr" /></label>}<button className="primary-button full-width" disabled={busy}>{t(busy ? 'جارٍ التنفيذ…' : auth === 'reset' ? 'إرسال رابط الاستعادة' : auth === 'login' ? 'تسجيل الدخول' : auth === 'signup' ? 'إنشاء حساب' : 'حفظ')}<ArrowUpLeft size={17} /></button>{auth === 'login' && <div className="auth-links"><button className="text-button" type="button" onClick={() => setAuth('reset')}>{t('نسيت كلمة المرور')}</button><button className="text-button" type="button" disabled={!signupEnabled} onClick={() => setAuth('signup')}>{t('إنشاء حساب')}</button></div>}</form>}{error && <p className="form-error" role="alert">{t(error)}</p>}</Modal>}
+      {auth === 'signup' && !signupEnabled ? <p>{t('التسجيل غير متاح حالياً.')}</p> : <form onSubmit={event => void authenticate(event)}>{auth === 'signup' && <label>{t('الاسم')}<input name="name" autoComplete="name" required maxLength={100} /></label>}{!['password', 'invite'].includes(auth) && <label>{t('البريد الإلكتروني')}<input name="email" type="email" autoComplete="email" required dir="ltr" maxLength={254} /></label>}{auth !== 'reset' && <label>{t('كلمة المرور')}<input name="password" type="password" autoComplete={auth === 'login' ? 'current-password' : 'new-password'} minLength={8} required dir="ltr" /></label>}<button className="primary-button full-width" disabled={busy}>{t(busy ? 'جارٍ التنفيذ…' : auth === 'reset' ? 'إرسال رابط الاستعادة' : auth === 'login' ? 'تسجيل الدخول' : auth === 'signup' ? 'إنشاء حساب' : 'حفظ')}<ArrowUpLeft size={17} /></button>{auth === 'login' && <div className="auth-links"><button className="text-button" type="button" onClick={() => setAuth('reset')}>{t('نسيت كلمة المرور')}</button><button className="text-button" type="button" disabled={!signupEnabled} onClick={() => setAuth('signup')}>{t('إنشاء حساب')}</button></div>}</form>}{error && <p className="form-error" role="alert">{t(error)}</p>}{notice && <p className="message success" role="status">{t(notice)}</p>}</Modal>}
     {create && <Modal title={t(create === 'invoice' ? 'إرسال فاتورة جديدة للعميل' : create === 'recurring' ? 'إرسال فاتورة دورية (اشتراك)' : 'طلب دفع جديد')} close={() => setCreate(null)}><form onSubmit={event => { event.preventDefault(); const data = new FormData(event.currentTarget); void run(async () => { await api('platform', { action: 'create', gateway, method: create, title: data.get('title'), customerName: data.get('customerName'), customerEmail: data.get('customerEmail'), amount: data.get('amount'), interval: data.get('interval') }); setCreate(null); setView('links'); }); }}><label>{t('عنوان الفاتورة أو الخدمة')}<input name="title" defaultValue={create === 'invoice' ? 'فاتورة خدمة وتكامل مالي' : 'طلب دفع'} required maxLength={150} /></label><div className="form-row"><label>{t('اسم العميل')}<input name="customerName" placeholder="مثال: شركة الرواد" required maxLength={100} /></label><label>{t('المبلغ بالريال السعودي')}<input name="amount" type="number" min="1" max="9999999.99" step="0.01" required dir="ltr" placeholder="0.00" /></label></div><label>{t('بريد العميل لإرسال الفاتورة')}<input name="customerEmail" type="email" required maxLength={254} dir="ltr" placeholder="client@example.sa" /></label><label>{t('بوابة الدفع المعتمدة')}<select aria-label={t('بوابة الدفع')} value={gateway} onChange={event => { setGateway(event.target.value as 'paytabs' | 'telr'); }}><option value="telr">Telr (حساب المتجر 35574 - فاينانس ميرشنت)</option><option value="paytabs">PayTabs</option></select></label><label>{t('طريقة الدفع')}<select aria-label={t('طريقة الدفع')} value={create} onChange={event => setCreate(event.target.value as Method)}>{methods.filter(method => gateway === 'paytabs' || ['hosted', 'framed', 'mobile', 'invoice'].includes(method.id)).map(method => <option key={method.id} value={method.id} disabled={!caps?.[method.id] && method.id !== 'invoice'}>{t(method.name)}{caps?.[method.id] || method.id === 'invoice' ? '' : ` — ${t('غير مهيأ')}`}</option>)}</select></label>{create === 'recurring' && <label>{t('التجديد التلقائي')}<select name="interval"><option value="monthly">{t('شهري')}</option><option value="yearly">{t('سنوي')}</option></select></label>}<button className="primary-button full-width" disabled={busy || !canCreate}>{t('إنشاء وإرسال الفاتورة')}<Link2 size={17} /></button></form>{error && <p className="form-error" role="alert">{t(error)}</p>}</Modal>}
     {openBuilder && <Modal title={t(openGatewayMode === 'all' ? 'رابط مفتوح لجميع البوابات (Multi-Gateway)' : 'رابط مفتوح لبوابة محددة (Single Gateway)')} close={() => setOpenBuilder(false)}><div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}><button type="button" className={openGatewayMode === 'all' ? 'primary-button' : 'outline-button'} style={{ flex: 1, padding: '8px 12px', fontSize: '0.9rem' }} onClick={() => setOpenGatewayMode('all')}><Sparkles size={15} />{t('لجميع البوابات')}</button><button type="button" className={openGatewayMode === 'single' ? 'primary-button' : 'outline-button'} style={{ flex: 1, padding: '8px 12px', fontSize: '0.9rem' }} onClick={() => setOpenGatewayMode('single')}><Link2 size={15} />{t('لبوابة واحدة')}</button></div><p className="modal-description">{t(openGatewayMode === 'all' ? 'رابط موحد يجمع بوابات Telr وPayTabs ومدى وApple Pay معاً؛ يحدد العميل مبلغه ويختار البوابة الأنسب.' : 'رابط مفتوح مخصص لبوابة دفع واحدة محددة (مثل Telr Store 35574 فقط).')}</p><form onSubmit={event => { event.preventDefault(); const data = new FormData(event.currentTarget); void run(async () => { await api('platform', { action: 'create-open-link', title: data.get('title'), minimum: data.get('minimum'), maximum: data.get('maximum'), allowedMethods: data.getAll('choices') }); setOpenBuilder(false); setView('links'); }); }}><label>{t('عنوان الرابط المفتوح')}<input name="title" defaultValue={openGatewayMode === 'all' ? 'رابط دفع عام - جميع البوابات المتاحة' : 'رابط دفع مخصص - بوابة Telr'} required maxLength={150} /></label><div className="form-row"><label>{t('الحد الأدنى')}<input name="minimum" type="number" defaultValue="1" min="1" max="9999999.99" step="0.01" required dir="ltr" /></label><label>{t('الحد الأعلى')}<input name="maximum" type="number" defaultValue="10000" min="1" max="9999999.99" step="0.01" required dir="ltr" /></label></div><fieldset className="method-choices"><legend>{t('طرق الدفع المسموحة بالرابط')}</legend>{choices.filter(choice => openGatewayMode === 'all' || (openGatewayMode === 'single' && choice.value.startsWith('telr'))).map(choice => <label className="consent" key={choice.value}><input type="checkbox" name="choices" value={choice.value} defaultChecked /><span>{choice.name}</span></label>)}{!choices.length && <p className="form-error">{t('لا توجد طريقة مهيأة. أكمل إعدادات التاجر أولاً.')}</p>}</fieldset><button className="primary-button full-width" disabled={busy || !choices.length || !canCreate || !policy.openLinksEnabled}>{t('إنشاء الرابط المفتوح')}<Link2 size={17} /></button></form>{error && <p className="form-error" role="alert">{t(error)}</p>}</Modal>}
     {reviewAttempt && <Modal title={t('مطابقة عملية غير مؤكدة')} close={() => setReviewAttempt(null)}><p className="modal-description">{t('انسخ المرجع من لوحة البوابة. يتحقق الخادم من التاجر والمبلغ والطلب.')}</p><form onSubmit={event => { event.preventDefault(); const reference = new FormData(event.currentTarget).get('reference'); void run(async () => { await api('platform', { action: 'verify', id: reviewAttempt, reference }); setReviewAttempt(null); }); }}><label>{t('مرجع العملية')}<input name="reference" required maxLength={100} dir="ltr" /></label><button className="primary-button" disabled={busy}>{t('مطابقة آمنة')}<ShieldCheck size={17} /></button></form>{error && <p className="form-error">{t(error)}</p>}</Modal>}
@@ -594,8 +572,7 @@ function AdminControls({ onSave }: { onSave: () => Promise<void> }) {
             </div>
             <ShieldCheck size={28} />
           </div>
-          {error && <p className="message error" role="alert">{t(error)}<button className="text-button" onClick={() => void fetchSettings()}>{t('إعادة فحص الربط')}</button></p>}
-          {notice && <p className="message success" role="status">{t(notice)}</p>}
+          <p><button className="text-button" onClick={() => void fetchSettings()}>{t('إعادة فحص الربط')}</button></p>
           {policy && (
             <>
               <div className="admin-actions">

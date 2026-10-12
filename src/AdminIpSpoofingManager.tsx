@@ -178,9 +178,9 @@ export default function AdminIpSpoofingManager({ onNotify }: AdminIpSpoofingMana
         reasons.push('الـ IP المحاكى صادر من خارج النطاق الإقليمي الأساسي للبوابة.');
         reasons.push('يتطلب تفعيل التحقق الثنائي وإدخال رمز OTP إضافي لإتمام الدفع.');
       } else {
-        reasons.push(`تم التعرف بنجاح على الـ IP المحقون (${activeIp}) كعنوان محلي معتمد.`);
-        reasons.push(`توافق تام مع مزود الخدمة ${activeIsp} وزمن استجابة ${currentCountry.avgLatency}.`);
-        reasons.push('اجتازت كافة قواعد مكافحة الاحتيال وفحص Geo-IP Consistency.');
+        reasons.push(`محاكاة: تم افتراض قبول العنوان (${activeIp}) كعنوان محلي معتمد — لا يوجد فحص شبكي فعلي.`);
+        reasons.push(`محاكاة: مزود الخدمة ${activeIsp} وزمن الاستجابة ${currentCountry.avgLatency} مأخوذان من جدول مرجعي داخل الواجهة، لا من استعلام حقيقي.`);
+        reasons.push('محاكاة: لا تُرسل أي ترويسات X-Forwarded-For ولا يوجد فحص Geo-IP أو قواعد احتيال فعلية — النتيجة محسوبة محليًا.');
       }
 
       setProbeResult({
@@ -698,7 +698,7 @@ export default function AdminIpSpoofingManager({ onNotify }: AdminIpSpoofingMana
               <Sparkles size={20} className="accent-sparkle" />
               <div>
                 <h4>تقرير فحص المحاكاة الجغرافية لبوابة {probeResult.gateway}</h4>
-                <small>تم التنفيذ في: {probeResult.timestamp} · معدل أمان الطلب: {probeResult.score}%</small>
+                <small>تم التنفيذ في: {probeResult.timestamp} · درجة تقديرية محسوبة محليًا (محاكاة): {probeResult.score}%</small>
               </div>
             </div>
             <button className="close-probe-btn" onClick={() => setProbeResult(null)}>
