@@ -200,6 +200,8 @@ const phrases: [string, string, string, string][] = [
   ['تغيرت الإعدادات. حدّث الصفحة قبل الحفظ.', 'Settings changed. Refresh before saving.', '设置已更改，请刷新后再保存。', 'Настройки изменились. Обновите страницу перед сохранением.'],
   ['التجديد التلقائي', 'Automatic renewal', '自动续费', 'Автопродление'],
   ['فتح الدفع في صفحة مستقلة', 'Open checkout in a new page', '在独立页面打开支付', 'Открыть оплату на отдельной странице'],
+  ['فريق كامل يشتغل معك 24/7 — بدون رواتب، بدون عقود، وبدون تكلفة ثابتة.', 'A full team on duty 24/7 — no salaries, no contracts, no fixed cost.', '全天候 24/7 的完整团队 — 无需薪资，无需合同，无固定成本。', 'Команда на связи 24/7 — без зарплат, без договоров, без постоянных расходов.'],
+  ['ونشوت تجمع لك بوابات دفع مصرفية مرخّصة، فوترة فورية، وحماية متقدمة — مع سوق موظفي AI جاهزين: دعم عملاء، مسوّق، مبرمج، ومحاسب قانوني. شغّل اللي تحتاجه وقت ما تحتاجه، وادفع عن كل نموذج تستخدمه فقط.', 'OneShot brings licensed payment gateways, instant invoicing and advanced protection onto one platform — plus a ready AI workforce: support, marketing, engineering and accounting. Activate whatever you need, whenever you need it, and pay only for the models you actually use.', 'OneShot 将持牌支付网关、即时开票与高级防护整合到一个平台 — 并配备现成的 AI 员工团队：客服、营销、工程与会计。按需启用，只为实际使用的模型付费。', 'OneShot объединяет лицензированные платёжные шлюзы, мгновенное выставление счетов и продвинутую защиту — плюс готовый штат ИИ-сотрудников: поддержка, маркетинг, разработка и бухгалтерия. Подключайте нужное и платите только за используемые модели.'],
 ];
 
 const errorGroups: [string[], string, string, string][] = [
