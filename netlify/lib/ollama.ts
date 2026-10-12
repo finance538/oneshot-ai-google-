@@ -9,25 +9,13 @@ export async function readOllamaCloud(): Promise<OllamaCloudState> {
     if (!response.ok) throw new Error('catalogue unavailable');
     const data = await response.json() as { models?: { name?: unknown }[] };
     if (!Array.isArray(data.models)) throw new Error('invalid catalogue');
-    const defaultCatalog = [
-      'llama3.2:3b', 'qwen2.5:7b', 'mistral:7b', 'gemma2:2b', 'phi3:mini',
-      'llama3.1:70b', 'deepseek-coder:33b', 'qwen2.5:32b', 'mistral-large:latest',
-      'deepseek-r1:70b', 'deepseek-r1:32b', 'qwq:32b', 'llama3.3:70b',
-      'llama3.1:70b-instruct-abliterated', 'deepseek-r1:70b-abliterated',
-      'mistral-nemo:12b-abliterated', 'dolphin-mixtral:8x7b-abliterated', 'qwen2.5:72b-abliterated'
-    ];
-    state.models = [...new Set([...(data.models || []).flatMap(model => typeof model?.name === 'string' && /^[a-zA-Z0-9][a-zA-Z0-9._:/-]{0,119}$/.test(model.name) ? [model.name] : []), ...defaultCatalog])].slice(0, 100);
-    const preferredModel = process.env.OLLAMA_MODEL || 'deepseek-r1:70b';
-    state.defaultModel = preferredModel && state.models.includes(preferredModel) ? preferredModel : 'deepseek-r1:70b';
+    state.models = [...new Set(data.models.flatMap(model => typeof model?.name === 'string' && /^[a-zA-Z0-9][a-zA-Z0-9._:/-]{0,119}$/.test(model.name) ? [model.name] : []))].slice(0, 100);
+    const preferredModel = process.env.OLLAMA_MODEL || '';
+    state.defaultModel = preferredModel && state.models.includes(preferredModel) ? preferredModel : (state.models[0] || '');
   } catch {
-    state.models = [
-      'llama3.2:3b', 'qwen2.5:7b', 'mistral:7b', 'gemma2:2b', 'phi3:mini',
-      'llama3.1:70b', 'deepseek-coder:33b', 'qwen2.5:32b', 'mistral-large:latest',
-      'deepseek-r1:70b', 'deepseek-r1:32b', 'qwq:32b', 'llama3.3:70b',
-      'llama3.1:70b-instruct-abliterated', 'deepseek-r1:70b-abliterated',
-      'mistral-nemo:12b-abliterated', 'dolphin-mixtral:8x7b-abliterated', 'qwen2.5:72b-abliterated'
-    ];
-    state.defaultModel = 'deepseek-r1:70b';
+    state.models = [];
+    state.defaultModel = '';
+    state.error = 'تعذر جلب كتالوج Ollama Cloud من الخادم. أعد المحاولة بعد قليل، وتأكد من OLLAMA_API_KEY في متغيرات بيئة Netlify.';
   }
   return state;
 }

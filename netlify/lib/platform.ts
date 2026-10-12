@@ -5,7 +5,8 @@ import { database } from '../../db/index.js';
 import { merchants, rateLimits } from '../../db/schema.js';
 
 export class HttpError extends Error {
-  constructor(public status: number, message: string) { super(message); }
+  status: number;
+  constructor(status: number, message: string) { super(message); this.status = status; }
 }
 
 export function reply(body: unknown, status = 200) {

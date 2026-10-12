@@ -66,7 +66,7 @@ async function harness({ user = customer, selections = {}, updates = {}, inserts
     if (identifier === '@netlify/identity') return synthetic(identifier, { getUser: async () => user });
     if (!path.isAbsolute(identifier)) return synthetic(identifier, await import(identifier));
     const source = await readFile(identifier, 'utf8');
-    const module = new vm.SourceTextModule(stripTypeScriptTypes(source, { mode: 'transform' }), { context: sandbox, identifier });
+    const module = new vm.SourceTextModule(stripTypeScriptTypes(source, { mode: 'strip' }), { context: sandbox, identifier });
     cache.set(identifier, module);
     return module;
   }

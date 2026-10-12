@@ -77,7 +77,7 @@ async function harness({ user = administrator, context = 'deploy-preview', selec
     if (identifier === '@netlify/identity') return synthetic(identifier, { getUser: async () => user });
     if (!path.isAbsolute(identifier)) return synthetic(identifier, await import(identifier));
     const source = await readFile(identifier, 'utf8');
-    const code = stripTypeScriptTypes(source, { mode: 'transform' });
+    const code = stripTypeScriptTypes(source, { mode: 'strip' });
     const module = new vm.SourceTextModule(code, { context: sandbox, identifier });
     cache.set(identifier, module);
     return module;
