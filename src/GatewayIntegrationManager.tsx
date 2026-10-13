@@ -68,6 +68,52 @@ export default function GatewayIntegrationManager({
   const adminRequests = platform.adminGatewayRequests || [];
   const isAdmin = platform.isAdmin;
 
+  // Payment gateways are provisioned from the platform administrator account only:
+  // every connected gateway runs under that account, so other dashboard users get a read-only view.
+  if (!isAdmin) {
+    const platformGateways: { id: 'paytabs' | 'telr'; label: string; english: string }[] = [
+      { id: 'paytabs', label: 'بيتابس (PayTabs)', english: 'PayTabs Gateway' },
+      { id: 'telr', label: 'تيلر (Telr)', english: 'Telr Gateway' },
+    ];
+    return (
+      <div className="gateway-integration-hub">
+        <section className="panel gateway-hub-intro">
+          <div className="hub-intro-header">
+            <div className="hub-tag">
+              <ShieldCheck size={16} />
+              <span>{tr('بوابات الدفع', 'PAYMENT GATEWAYS')}</span>
+            </div>
+            <h2>بوابات الدفع مرتبطة بحساب مسؤول المنصة</h2>
+            <p>
+              ربط البوابات وإدخال بياناتها يتم من <strong>حساب مسؤول المنصة</strong> فقط، وكل البوابات المربوطة تعمل تحت ذلك
+              الحساب. لا تُطلب منك أي بيانات ربط — ما يُفعّل هناك يتاح تلقائيًا في محفظتك وصفحات الدفع.
+            </p>
+          </div>
+          <div className="gw-catalog-grid">
+            {platformGateways.map((gateway) => {
+              const allowed = Boolean(platform.policy?.gateways?.[gateway.id]);
+              return (
+                <article key={gateway.id} className="gw-catalog-card">
+                  <div className="gw-card-top">
+                    <h3>{gateway.label}</h3>
+                  </div>
+                  <p className="gw-short-desc">{gateway.english}</p>
+                  <div className="gw-card-footer">
+                    <span className="gw-it-badge">{allowed ? 'مفعّلة على المنصة' : 'متوقفة على المنصة'}</span>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+          <div className="gw-alert-banner success">
+            <Info size={18} />
+            <span>الظهور الفعلي للبوابة في صفحة الدفع يعتمد على توصيل بياناتها في حساب المسؤول.</span>
+          </div>
+        </section>
+      </div>
+    );
+  }
+
   const currentGateway = KNOWN_GATEWAYS.find((g) => g.id === selectedGatewayId) || KNOWN_GATEWAYS[0];
   const currentIntegration =
     currentGateway.integrationTypes.find((it) => it.id === selectedIntegrationId) ||

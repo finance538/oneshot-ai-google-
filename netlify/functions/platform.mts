@@ -90,6 +90,7 @@ export default async (req: Request) => {
     }
     const merchant = await tenant();
     if (body.action === 'submit-gateway-request') {
+      if (!userIsAdmin) throw new HttpError(403, 'ربط بوابات الدفع يتم من حساب مسؤول المنصة.');
       const targetGateway = text(body.gateway, 30);
       if (!['paytabs', 'telr'].includes(targetGateway)) throw new HttpError(400, 'بوابة دفع غير مدعومة.');
       const variables = body.variables;
