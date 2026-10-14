@@ -206,7 +206,8 @@ export default function AiStaffMarketplace() {
         if (!alive || !data) return;
         const models: string[] = Array.isArray(data.available) ? data.available : [];
         setLiveModels(models);
-        if (models.length && !models.includes('claude-haiku-4-5')) setModelId(models[0]);
+        // Follow the server's preference order (self-hosted server model first, when configured).
+        if (models.length) setModelId(models[0]);
       })
       .catch(() => {});
     return () => { alive = false; };

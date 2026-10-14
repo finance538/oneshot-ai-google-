@@ -22,9 +22,11 @@ type ModelId = typeof modelIds[number];
 async function availableModels() {
   const ollama = await readOllamaCloud();
   const available: ModelId[] = [];
-  if (process.env.ANTHROPIC_API_KEY) available.push('claude-haiku-4-5', 'claude-sonnet-4-5');
-  if (ollama.configured && !ollama.error) available.push('ollama-cloud');
+  // Server gateway first: it is the free, self-hosted path (local Ollama on the VPS)
+  // and the merchant-facing default unless the user picks another model in the UI.
   if (process.env.ONESHOT_VPS_AGENT_URL) available.push('hermes-3-vps');
+  if (ollama.configured && !ollama.error) available.push('ollama-cloud');
+  if (process.env.ANTHROPIC_API_KEY) available.push('claude-haiku-4-5', 'claude-sonnet-4-5');
   return {
     available,
     ollama: { configured: ollama.configured, defaultModel: ollama.defaultModel, models: ollama.models.slice(0, 40), error: ollama.error },
