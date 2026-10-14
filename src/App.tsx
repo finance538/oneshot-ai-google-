@@ -61,6 +61,7 @@ const navigation = [
   { id: 'admin' as const, name: 'إدارة المنصة واستقبال الطلبات', icon: SlidersHorizontal },
   { id: 'assistant' as const, name: 'مركز عمليات AI (Full Admin)', icon: Sparkles },
 ];
+const guestNavigation: View[] = ['overview', 'staff', 'links'];
 const initialPlatform: Platform = { merchant: null, documents: [], subscriptions: [], attempts: [], openLinks: [] };
 
 export default function App() {
@@ -309,7 +310,9 @@ function MerchantPlatform() {
   return <div className="app-shell">
     {sidebar && <button className="sidebar-scrim" aria-label={t('إغلاق')} onClick={() => setSidebar(false)} />}
     <aside className={`sidebar ${sidebar ? 'is-open' : ''}`}><Brand /><span className="workspace-label">{t('مساحة التاجر')}</span>
-      <nav>{navigation.filter(item => !['admin', 'assistant'].includes(item.id) || platform.isAdmin).map(item => <button key={item.id} className={`nav-item ${view === item.id ? 'active' : ''}`} aria-current={view === item.id ? 'page' : undefined} onClick={() => { setView(item.id); setSidebar(false); }}><item.icon size={19} /><span>{t(item.name)}</span>{view === item.id && <span className="nav-active-dot" />}</button>)}</nav>
+      <nav>{navigation.filter(item => user ? (!['admin', 'assistant'].includes(item.id) || platform.isAdmin) : guestNavigation.includes(item.id)).map(item => <button key={item.id} className={`nav-item ${view === item.id ? 'active' : ''}`} aria-current={view === item.id ? 'page' : undefined} onClick={() => { setView(item.id); setSidebar(false); }}><item.icon size={19} /><span>{t(item.name)}</span>{view === item.id && <span className="nav-active-dot" />}</button>)}</nav>
+      {!user && <button className="nav-item nav-signup" onClick={() => setAuth('signup')}><UserPlus size={19} /><span>{t('أنشئ حسابك مجاناً')}</span></button>}
+      {!user && <p className="nav-locked-hint">{t('بقية أدوات مساحة التاجر تظهر بعد تسجيل الدخول.')}</p>}
       <div className="sidebar-note"><ShieldCheck size={23} /><strong>{t('الحمايات الأساسية دائمة')}</strong><p>{t('المبالغ مؤكدة من بوابة الدفع، وليست من عودة المتصفح.')}</p></div><a className="sidebar-external" href={appearanceLink('/')}>{t('العودة إلى oneShot')}<ArrowUpLeft size={16} /></a>
       {user && <button className="sidebar-logout" onClick={() => void run(async () => { localStorage.removeItem('oneshot_google_user'); await logout(); setUser(null); setView('overview'); })}><LogOut size={17} />{t('تسجيل الخروج')}</button>}<span className="sidebar-version">ONESHOT / PAYMENT STUDIO</span>
     </aside>

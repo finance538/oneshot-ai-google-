@@ -165,7 +165,7 @@ export default function AppInstallBanner({
 
           <a
             className="install-btn-secondary"
-            href="https://github.com/finance538/oneshot-ai-google-/releases/latest/download/oneshot-hub.apk"
+            href="/oneshot-hub.apk"
             download="oneshot-hub.apk"
             target="_blank"
             rel="noreferrer"

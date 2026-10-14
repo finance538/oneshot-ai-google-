@@ -22,6 +22,8 @@ jobs:
   build-apk:
     name: Build & Package Android APK
     runs-on: ubuntu-latest
+    # Skip the run triggered by the bot's own APK-sync commit (push to public/**).
+    if: ${{ !contains(github.event.head_commit.message || '', '[apk-sync]') }}
 
     steps:
       - name: Checkout Repository
@@ -109,3 +111,19 @@ jobs:
             Latest oneShot Hub Android build, rebuilt automatically from main.
           files: oneshot-hub.apk
           make_latest: true
+
+      # Same-domain download: https://www.1shotcam.com/oneshot-hub.apk
+      - name: Sync APK to public/ (same-domain download)
+        if: success() && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+        run: |
+          set -e
+          cp oneshot-hub.apk public/oneshot-hub.apk
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet -- public/oneshot-hub.apk; then
+            echo "APK unchanged — nothing to sync"
+            exit 0
+          fi
+          git add public/oneshot-hub.apk
+          git commit -m "chore(apk): تحديث نسخة التحميل على الدومين [apk-sync]"
+          git push

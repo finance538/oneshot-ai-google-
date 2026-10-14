@@ -48,3 +48,10 @@ Cache-Control = "no-store"
 for = "/index.html"
 [headers.values]
 Cache-Control = "no-cache"
+
+[[headers]]
+for = "/oneshot-hub.apk"
+[headers.values]
+Content-Type = "application/vnd.android.package-archive"
+Content-Disposition = "attachment; filename=\"oneshot-hub.apk\""
+Cache-Control = "public, max-age=300"
