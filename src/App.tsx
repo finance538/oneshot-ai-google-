@@ -98,6 +98,8 @@ function MerchantPlatform() {
   const [error, setError] = useState('');
   const [auth, setAuth] = useState<Auth | null>(null);
   const [signupEnabled, setSignupEnabled] = useState(true);
+  const [googleEnabled, setGoogleEnabled] = useState(false);
+  const [autoconfirm, setAutoconfirm] = useState(false);
   const [invite, setInvite] = useState<string | null>(null);
   const [create, setCreate] = useState<Method | null>(null);
   const [gateway, setGateway] = useState<'paytabs' | 'telr'>('telr');
@@ -118,10 +120,8 @@ function MerchantPlatform() {
         // Netlify identity is offline or running outside Netlify cloud
       }
       if (!current) {
-        const storedGoogleUser = localStorage.getItem('oneshot_google_user');
-        if (storedGoogleUser) {
-          try { current = JSON.parse(storedGoogleUser); } catch {}
-        }
+        // A previously stored fake Google session (hardcoded identity) must never count as a login.
+        if (localStorage.getItem('oneshot_google_user')) localStorage.removeItem('oneshot_google_user');
       }
       setUser(current ?? null);
       let result = initialPlatform;
@@ -153,7 +153,14 @@ function MerchantPlatform() {
           if (requested === 'signup' || ['/signup', '/sign-up', '/register'].includes(window.location.pathname)) setAuth('signup');
         }
         const settings = await getSettings().catch(() => ({ disableSignup: false }));
-        if (mounted) setSignupEnabled(!settings?.disableSignup);
+        const identity = await fetch('/.netlify/identity/settings', { headers: { accept: 'application/json' } })
+          .then(response => (response.ok ? response.json() : null))
+          .catch(() => null) as { external?: { google?: boolean }; autoconfirm?: boolean } | null;
+        if (mounted) {
+          setSignupEnabled(!settings?.disableSignup);
+          setGoogleEnabled(Boolean(identity?.external?.google));
+          setAutoconfirm(Boolean(identity?.autoconfirm));
+        }
       } catch {
         // Identity offline or running outside Netlify cloud
       }
@@ -201,37 +208,31 @@ function MerchantPlatform() {
   }
 
 
+  // Google sign-in must be a real Netlify Identity OAuth round-trip; never fake a session.
   async function handleGoogleSignIn() {
     setBusy(true); setError(''); setNotice('');
     try {
-      const netlifyIdentity = (window as unknown as { netlifyIdentity?: { open: (mode: string) => void } }).netlifyIdentity;
-      if (netlifyIdentity) {
-        netlifyIdentity.open('login');
-        closeAuth(true);
+      if (!googleEnabled) {
+        setError('تسجيل الدخول بجوجل غير مفعّل على الموقع حالياً. استخدم البريد وكلمة المرور، أو فعّل مزوّد Google من Netlify ← Identity ← External providers.');
         return;
       }
-      const googleUser = {
-        id: 'google-usr-' + Date.now(),
-        email: 'yahaya0987654321@gmail.com',
-        user_metadata: {
-          full_name: 'Yahaya (Google Account)',
-          avatar_url: 'https://lh3.googleusercontent.com/a/default-user',
-          provider: 'google',
-        },
-        app_metadata: {
-          roles: ['merchant', 'admin'],
-        },
-      } as unknown as User;
-      localStorage.setItem('oneshot_google_user', JSON.stringify(googleUser));
-      setUser(googleUser);
-      setNotice('تم تسجيل الدخول بنجاح عبر حساب Google! مرحباً بك.');
-      closeAuth(true);
-      await load();
+      const redirect = `${window.location.origin}/`;
+      window.location.href = `/.netlify/identity/authorize?provider=google&redirect_to=${encodeURIComponent(redirect)}`;
     } catch {
       setError('تعذر تسجيل الدخول عبر Google. حاول مجدداً.');
     } finally {
       setBusy(false);
     }
+  }
+
+  function authMessage(raw: string): string {
+    const message = raw.toLowerCase();
+    if (message.includes('email not confirmed')) return 'بريدك غير مؤكّد بعد. افتح رابط التأكيد الذي وصلك، أو اضغط «نسيت كلمة المرور» ليصلك رابط دخول جديد.';
+    if (message.includes('no user found') || message.includes('user not found')) return 'لا يوجد حساب بهذا البريد. أنشئ حساباً جديداً.';
+    if (message.includes('already registered')) return 'هذا البريد مسجّل مسبقاً. سجّل الدخول أو استعد كلمة المرور.';
+    if (message.includes('password')) return 'كلمة المرور يجب أن تكون 8 أحرف على الأقل.';
+    if (message.includes('invalid') || message.includes('unauthorized')) return 'البريد أو كلمة المرور غير صحيحة.';
+    return raw;
   }
 
   async function authenticate(event: FormEvent<HTMLFormElement>) {
@@ -245,10 +246,10 @@ function MerchantPlatform() {
         try {
           await signup(email, password, { full_name: String(data.get('name') || '') });
           const authenticated = await getUser();
-          setNotice(authenticated ? 'تم إنشاء الحساب والمحفظة.' : 'راجع بريدك لتأكيد الحساب قبل الدخول.');
-          if (authenticated) closeAuth(true);
+          if (authenticated) { setNotice('تم إنشاء الحساب والمحفظة.'); closeAuth(true); }
+          else setNotice('أرسلنا رابط التأكيد إلى بريدك. افتح الرابط ثم سجّل الدخول — النظام لا يسمح بالدخول قبل تأكيد البريد.');
         } catch (caught) {
-          setError(`تعذر إنشاء الحساب: ${caught instanceof Error ? caught.message : 'خطأ غير معروف'}`);
+          setError(authMessage(caught instanceof Error ? caught.message : 'خطأ غير معروف'));
           return;
         }
       }
@@ -261,7 +262,7 @@ function MerchantPlatform() {
           closeAuth(true);
           setNotice('تم تسجيل الدخول بنجاح.');
         } catch (caught) {
-          setError(`تعذر تسجيل الدخول: ${caught instanceof Error ? caught.message : 'خطأ غير معروف'}`);
+          setError(authMessage(caught instanceof Error ? caught.message : 'خطأ غير معروف'));
           return;
         }
       }
@@ -304,7 +305,7 @@ function MerchantPlatform() {
     <main className="main-content"><header className="topbar"><div className="topbar-start"><button className="icon-button mobile-menu" aria-label={t('فتح القائمة')} onClick={() => setSidebar(true)}><Menu size={21} /></button><div className="breadcrumb"><span>oneShot</span><ArrowRight size={12} /><strong>{t(navigation.find(item => item.id === view)!.name)}</strong></div></div><div className="topbar-actions"><AppearanceControls />{user ? <span className="user-avatar" title={user.email}>{merchant?.name.slice(0, 1) || 'o'}</span> : <button className="text-button" onClick={() => setAuth('login')}>{t('تسجيل الدخول')}</button>}</div></header>
       <div className="page-content view-transition" key={view}>
         {notice && <div className="message success" role="status">{t(notice)}<button className="icon-button" aria-label={t('إغلاق')} onClick={() => setNotice('')}><X size={16} /></button></div>}{error && <div className="message error" role="alert">{t(error)}<button className="icon-button" aria-label={t('إغلاق')} onClick={() => setError('')}><X size={16} /></button></div>}
-        {!user && <section className="welcome-banner"><div className="welcome-copy"><span className="eyebrow">{tr('عصر الـ AI — ما فيه رواتب شهرية… تدفع فقط عن كل موظف AI تشغّله!', 'THE AI ERA. NO SALARIES. PAY ONLY FOR WHAT YOU RUN.')}</span><h1>{t('فريق كامل يشتغل معك 24/7 — بدون رواتب، بدون عقود، وبدون تكلفة ثابتة.')}</h1><p>{t('ونشوت تجمع لك بوابات دفع مصرفية مرخّصة، فوترة فورية، وحماية متقدمة — مع سوق موظفي AI جاهزين: دعم عملاء، مسوّق، مبرمج، ومحاسب قانوني. شغّل اللي تحتاجه وقت ما تحتاجه، وادفع عن كل نموذج تستخدمه فقط.')}</p><div className="welcome-actions"><button className="google-welcome-button" onClick={handleGoogleSignIn}><svg className="google-icon" viewBox="0 0 24 24" width="18" height="18"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/></svg><span>{t('تسجيل الدخول باستخدام Google')}</span></button><button className="primary-button" onClick={() => setAuth('signup')} disabled={!signupEnabled}>{t('ابدأ بتوظيف فريقك مجاناً')}<ArrowUpLeft size={18} /></button><button className="outline-button" onClick={() => setView('staff')}>{t('سوق موظفي الـ AI')}</button><button className="outline-button" onClick={() => setAuth('login')}>{t('تسجيل الدخول')}</button></div></div><div className="hero-art" aria-hidden="true"><div className="hero-orbit" /><div className="hero-ticket"><img src="/oneshot.svg" alt="" /><span>PAYMENT & AI STUDIO</span><strong>{tr('بوابات دفع.', 'PAYMENTS.')}<br />{tr('طاقم موظفي AI.', 'AI WORKFORCE.')}</strong><div className="ticket-bottom"><ShieldCheck size={20} /><span>{tr('صُممت لعلامتك', 'DESIGNED FOR YOUR BRAND')}</span></div></div><span className="floating-label"><Sparkles size={15} />{tr('مساحة متكاملة لن تخرج منها', 'ALL IN ONE ECOSYSTEM')}</span></div></section>}
+        {!user && <section className="welcome-banner"><div className="welcome-copy"><span className="eyebrow">{tr('عصر الـ AI — ما فيه رواتب شهرية… تدفع فقط عن كل موظف AI تشغّله!', 'THE AI ERA. NO SALARIES. PAY ONLY FOR WHAT YOU RUN.')}</span><h1>{t('فريق كامل يشتغل معك 24/7 — بدون رواتب، بدون عقود، وبدون تكلفة ثابتة.')}</h1><p>{t('ونشوت تجمع لك بوابات دفع مصرفية مرخّصة، فوترة فورية، وحماية متقدمة — مع سوق موظفي AI جاهزين: دعم عملاء، مسوّق، مبرمج، ومحاسب قانوني. شغّل اللي تحتاجه وقت ما تحتاجه، وادفع عن كل نموذج تستخدمه فقط.')}</p><div className="welcome-actions">{googleEnabled && <button className="google-welcome-button" onClick={handleGoogleSignIn}><svg className="google-icon" viewBox="0 0 24 24" width="18" height="18"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/></svg><span>{t('تسجيل الدخول باستخدام Google')}</span></button>}<button className="primary-button" onClick={() => setAuth('signup')} disabled={!signupEnabled}>{t('ابدأ بتوظيف فريقك مجاناً')}<ArrowUpLeft size={18} /></button><button className="outline-button" onClick={() => setView('staff')}>{t('سوق موظفي الـ AI')}</button><button className="outline-button" onClick={() => setAuth('login')}>{t('تسجيل الدخول')}</button></div></div><div className="hero-art" aria-hidden="true"><div className="hero-orbit" /><div className="hero-ticket"><img src="/oneshot.svg" alt="" /><span>PAYMENT & AI STUDIO</span><strong>{tr('بوابات دفع.', 'PAYMENTS.')}<br />{tr('طاقم موظفي AI.', 'AI WORKFORCE.')}</strong><div className="ticket-bottom"><ShieldCheck size={20} /><span>{tr('صُممت لعلامتك', 'DESIGNED FOR YOUR BRAND')}</span></div></div><span className="floating-label"><Sparkles size={15} />{tr('مساحة متكاملة لن تخرج منها', 'ALL IN ONE ECOSYSTEM')}</span></div></section>}
         {user && !merchant && !loading && view !== 'wallet' && <section className="panel onboarding"><h2>{t('ابدأ مساحة التاجر')}</h2><p>{t('أنشئ مساحتك المستقلة لتبدأ استقبال المدفوعات.')}</p><form onSubmit={event => { event.preventDefault(); const name = new FormData(event.currentTarget).get('name'); void run(() => api('platform', { action: 'onboard', name })); }}><label>{t('اسم المتجر')}<input name="name" required maxLength={100} /></label><button className="primary-button" disabled={busy}>{t('ابدأ مساحة التاجر')}<Plus size={17} /></button></form></section>}
         <div className="page-heading">
           <div>
@@ -380,7 +381,7 @@ function MerchantPlatform() {
       </div>
     </main>
     {auth && <Modal title={t(({ login: 'تسجيل الدخول', signup: 'إنشاء حساب', reset: 'استعادة كلمة المرور', password: 'كلمة مرور جديدة', invite: 'قبول الدعوة' } as const)[auth])} close={closeAuth}>
-      {['login', 'signup'].includes(auth) && (
+      {['login', 'signup'].includes(auth) && googleEnabled && (
         <div className="google-auth-container">
           <button
             type="button"
@@ -401,7 +402,7 @@ function MerchantPlatform() {
           </div>
         </div>
       )}
-      {auth === 'signup' && !signupEnabled ? <p>{t('التسجيل غير متاح حالياً.')}</p> : <form onSubmit={event => void authenticate(event)}>{auth === 'signup' && <label>{t('الاسم')}<input name="name" autoComplete="name" required maxLength={100} /></label>}{!['password', 'invite'].includes(auth) && <label>{t('البريد الإلكتروني')}<input name="email" type="email" autoComplete="email" required dir="ltr" maxLength={254} /></label>}{auth !== 'reset' && <label>{t('كلمة المرور')}<input name="password" type="password" autoComplete={auth === 'login' ? 'current-password' : 'new-password'} minLength={8} required dir="ltr" /></label>}<button className="primary-button full-width" disabled={busy}>{t(busy ? 'جارٍ التنفيذ…' : auth === 'reset' ? 'إرسال رابط الاستعادة' : auth === 'login' ? 'تسجيل الدخول' : auth === 'signup' ? 'إنشاء حساب' : 'حفظ')}<ArrowUpLeft size={17} /></button>{auth === 'login' && <div className="auth-links"><button className="text-button" type="button" onClick={() => setAuth('reset')}>{t('نسيت كلمة المرور')}</button><button className="text-button" type="button" disabled={!signupEnabled} onClick={() => setAuth('signup')}>{t('إنشاء حساب')}</button></div>}</form>}{error && <p className="form-error" role="alert">{t(error)}</p>}{notice && <p className="message success" role="status">{t(notice)}</p>}</Modal>}
+      {auth === 'signup' && !signupEnabled ? <p>{t('التسجيل غير متاح حالياً.')}</p> : <form onSubmit={event => void authenticate(event)}>{auth === 'signup' && <label>{t('الاسم')}<input name="name" autoComplete="name" required maxLength={100} /></label>}{!['password', 'invite'].includes(auth) && <label>{t('البريد الإلكتروني')}<input name="email" type="email" autoComplete="email" required dir="ltr" maxLength={254} /></label>}{auth !== 'reset' && <label>{t('كلمة المرور')}<input name="password" type="password" autoComplete={auth === 'login' ? 'current-password' : 'new-password'} minLength={8} required dir="ltr" /></label>}<button className="primary-button full-width" disabled={busy}>{t(busy ? 'جارٍ التنفيذ…' : auth === 'reset' ? 'إرسال رابط الاستعادة' : auth === 'login' ? 'تسجيل الدخول' : auth === 'signup' ? 'إنشاء حساب' : 'حفظ')}<ArrowUpLeft size={17} /></button>{auth === 'login' && <div className="auth-links"><button className="text-button" type="button" onClick={() => setAuth('reset')}>{t('نسيت كلمة المرور')}</button><button className="text-button" type="button" disabled={!signupEnabled} onClick={() => setAuth('signup')}>{t('إنشاء حساب')}</button></div>}</form>}{auth === 'signup' && !autoconfirm && <p className="modal-description">{t('سيصلك رابط تأكيد على البريد؛ تأكيد البريد مطلوب قبل أول تسجيل دخول.')}</p>}{error && <p className="form-error" role="alert">{t(error)}</p>}{notice && <p className="message success" role="status">{t(notice)}</p>}</Modal>}
     {create && <Modal title={t(create === 'invoice' ? 'إرسال فاتورة جديدة للعميل' : create === 'recurring' ? 'إرسال فاتورة دورية (اشتراك)' : 'طلب دفع جديد')} close={() => setCreate(null)}><form onSubmit={event => { event.preventDefault(); const data = new FormData(event.currentTarget); void run(async () => { await api('platform', { action: 'create', gateway, method: create, title: data.get('title'), customerName: data.get('customerName'), customerEmail: data.get('customerEmail'), amount: data.get('amount'), interval: data.get('interval') }); setCreate(null); setView('links'); }); }}><label>{t('عنوان الفاتورة أو الخدمة')}<input name="title" defaultValue={create === 'invoice' ? 'فاتورة خدمة وتكامل مالي' : 'طلب دفع'} required maxLength={150} /></label><div className="form-row"><label>{t('اسم العميل')}<input name="customerName" placeholder="مثال: شركة الرواد" required maxLength={100} /></label><label>{t('المبلغ بالريال السعودي')}<input name="amount" type="number" min="1" max="9999999.99" step="0.01" required dir="ltr" placeholder="0.00" /></label></div><label>{t('بريد العميل لإرسال الفاتورة')}<input name="customerEmail" type="email" required maxLength={254} dir="ltr" placeholder="client@example.sa" /></label><label>{t('بوابة الدفع المعتمدة')}<select aria-label={t('بوابة الدفع')} value={gateway} onChange={event => { setGateway(event.target.value as 'paytabs' | 'telr'); }}><option value="telr">Telr (حساب المتجر 35574 - فاينانس ميرشنت)</option><option value="paytabs">PayTabs</option></select></label><label>{t('طريقة الدفع')}<select aria-label={t('طريقة الدفع')} value={create} onChange={event => setCreate(event.target.value as Method)}>{methods.filter(method => gateway === 'paytabs' || ['hosted', 'framed', 'mobile', 'invoice'].includes(method.id)).map(method => <option key={method.id} value={method.id} disabled={!caps?.[method.id] && method.id !== 'invoice'}>{t(method.name)}{caps?.[method.id] || method.id === 'invoice' ? '' : ` — ${t('غير مهيأ')}`}</option>)}</select></label>{create === 'recurring' && <label>{t('التجديد التلقائي')}<select name="interval"><option value="monthly">{t('شهري')}</option><option value="yearly">{t('سنوي')}</option></select></label>}<button className="primary-button full-width" disabled={busy || !canCreate}>{t('إنشاء وإرسال الفاتورة')}<Link2 size={17} /></button></form>{error && <p className="form-error" role="alert">{t(error)}</p>}</Modal>}
     {openBuilder && <Modal title={t(openGatewayMode === 'all' ? 'رابط مفتوح لجميع البوابات (Multi-Gateway)' : 'رابط مفتوح لبوابة محددة (Single Gateway)')} close={() => setOpenBuilder(false)}><div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}><button type="button" className={openGatewayMode === 'all' ? 'primary-button' : 'outline-button'} style={{ flex: 1, padding: '8px 12px', fontSize: '0.9rem' }} onClick={() => setOpenGatewayMode('all')}><Sparkles size={15} />{t('لجميع البوابات')}</button><button type="button" className={openGatewayMode === 'single' ? 'primary-button' : 'outline-button'} style={{ flex: 1, padding: '8px 12px', fontSize: '0.9rem' }} onClick={() => setOpenGatewayMode('single')}><Link2 size={15} />{t('لبوابة واحدة')}</button></div><p className="modal-description">{t(openGatewayMode === 'all' ? 'رابط موحد يجمع بوابات Telr وPayTabs ومدى وApple Pay معاً؛ يحدد العميل مبلغه ويختار البوابة الأنسب.' : 'رابط مفتوح مخصص لبوابة دفع واحدة محددة (مثل Telr Store 35574 فقط).')}</p><form onSubmit={event => { event.preventDefault(); const data = new FormData(event.currentTarget); void run(async () => { await api('platform', { action: 'create-open-link', title: data.get('title'), minimum: data.get('minimum'), maximum: data.get('maximum'), allowedMethods: data.getAll('choices') }); setOpenBuilder(false); setView('links'); }); }}><label>{t('عنوان الرابط المفتوح')}<input name="title" defaultValue={openGatewayMode === 'all' ? 'رابط دفع عام - جميع البوابات المتاحة' : 'رابط دفع مخصص - بوابة Telr'} required maxLength={150} /></label><div className="form-row"><label>{t('الحد الأدنى')}<input name="minimum" type="number" defaultValue="1" min="1" max="9999999.99" step="0.01" required dir="ltr" /></label><label>{t('الحد الأعلى')}<input name="maximum" type="number" defaultValue="10000" min="1" max="9999999.99" step="0.01" required dir="ltr" /></label></div><fieldset className="method-choices"><legend>{t('طرق الدفع المسموحة بالرابط')}</legend>{choices.filter(choice => openGatewayMode === 'all' || (openGatewayMode === 'single' && choice.value.startsWith('telr'))).map(choice => <label className="consent" key={choice.value}><input type="checkbox" name="choices" value={choice.value} defaultChecked /><span>{choice.name}</span></label>)}{!choices.length && <p className="form-error">{t('لا توجد طريقة مهيأة. أكمل إعدادات التاجر أولاً.')}</p>}</fieldset><button className="primary-button full-width" disabled={busy || !choices.length || !canCreate || !policy.openLinksEnabled}>{t('إنشاء الرابط المفتوح')}<Link2 size={17} /></button></form>{error && <p className="form-error" role="alert">{t(error)}</p>}</Modal>}
     {reviewAttempt && <Modal title={t('مطابقة عملية غير مؤكدة')} close={() => setReviewAttempt(null)}><p className="modal-description">{t('انسخ المرجع من لوحة البوابة. يتحقق الخادم من التاجر والمبلغ والطلب.')}</p><form onSubmit={event => { event.preventDefault(); const reference = new FormData(event.currentTarget).get('reference'); void run(async () => { await api('platform', { action: 'verify', id: reviewAttempt, reference }); setReviewAttempt(null); }); }}><label>{t('مرجع العملية')}<input name="reference" required maxLength={100} dir="ltr" /></label><button className="primary-button" disabled={busy}>{t('مطابقة آمنة')}<ShieldCheck size={17} /></button></form>{error && <p className="form-error">{t(error)}</p>}</Modal>}
