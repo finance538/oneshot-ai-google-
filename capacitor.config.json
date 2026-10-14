@@ -1,0 +1,16 @@
+{
+  "appId": "com.oneshotcam.pay",
+  "appName": "oneShot Pay",
+  "webDir": "dist",
+  "bundledWebRuntime": false,
+  "server": {
+    "url": "https://www.1shotcam.com",
+    "cleartext": false
+  },
+  "android": {
+    "allowMixedContent": false,
+    "captureInput": true,
+    "webContentsDebuggingEnabled": false,
+    "backgroundColor": "#0a0b0e"
+  }
+}

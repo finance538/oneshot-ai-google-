@@ -916,8 +916,8 @@ export default function Storefront() {
               <div className="store-footer-apk-buttons">
                 <a
                   className="apk-download-btn primary"
-                  href="/oneshot-app.apk"
-                  download="oneshot-payment-studio.apk"
+                  href="https://github.com/finance538/oneshot-ai-google-/releases/latest/download/oneshot-pay.apk"
+                  download="oneshot-pay.apk"
                   title={tr("تحميل حزمة APK المباشرة", "Download APK Package")}
                 >
                   <Download size={18} />

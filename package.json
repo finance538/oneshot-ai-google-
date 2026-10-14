@@ -25,6 +25,9 @@
     "zod": "^4.6.5"
   },
   "devDependencies": {
+    "@capacitor/android": "^8.5.3",
+    "@capacitor/cli": "^8.5.3",
+    "@capacitor/core": "^8.5.3",
     "@netlify/functions": "^6.0.2",
     "@types/node": "^26.6.4",
     "@types/react": "^19.3.0",

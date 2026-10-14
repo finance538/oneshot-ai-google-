@@ -165,8 +165,10 @@ export default function AppInstallBanner({
 
           <a
             className="install-btn-secondary"
-            href="/oneshot-app.apk"
-            download="oneshot-payment-studio.apk"
+            href="https://github.com/finance538/oneshot-ai-google-/releases/latest/download/oneshot-pay.apk"
+            download="oneshot-pay.apk"
+            target="_blank"
+            rel="noreferrer"
             onClick={() => handleClose()}
           >
             <Download size={18} />
