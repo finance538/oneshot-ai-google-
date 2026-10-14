@@ -1826,3 +1826,67 @@
     animation: none !important;
   }
 }
+
+.store-plain {
+  margin: 0 0 14px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 85, 0, 0.24);
+  background: rgba(255, 85, 0, 0.08);
+  font-size: 14px;
+  line-height: 1.75;
+}
+
+.store-plain strong {
+  color: #ff5500;
+}
+
+.store-steps {
+  margin: 16px 0 6px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.store-steps-title {
+  display: block;
+  margin-bottom: 10px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #ff5500;
+}
+
+.store-steps ol {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.store-steps li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.store-steps li b {
+  flex: 0 0 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: #ff5500;
+  color: #0a0b0e;
+  font-size: 13px;
+}
+
+@media (max-width: 640px) {
+  .store-plain { font-size: 13.5px; }
+  .store-steps li { font-size: 13.5px; }
+}

@@ -308,6 +308,13 @@ export default function Storefront() {
                     "Say goodbye to manual chaos and messy customer invoices. Employ an autonomous AI workforce managing your operations, marketing, and support, backed by a unified API dashboard uniting PayTabs and Telr.",
                   )}
                 </p>
+                <div className="store-plain">
+                  <strong>{tr("بكلمات بسيطة:", "In plain words:")}</strong>{" "}
+                  {tr(
+                    "نجمع كل مدفوعاتك وفواتيرك في مكان واحد، وموظفون أذكياء يشتغلون عنك 24 ساعة — بدون أي تعقيد تقني.",
+                    "All your payments and invoices in one place, with AI staff working for you around the clock — no technical complexity.",
+                  )}
+                </div>
                 <div className="store-actions">
                   <a className="store-button" href={appearanceLink("/api-integration")}>
                     <Code2 size={17} />
@@ -339,7 +346,7 @@ export default function Storefront() {
                     ["ربط API موحد وداشبورد تنفيذي", "Unified API & Dashboard"],
                     ["موظفو ذكاء اصطناعي 24/7", "Autonomous 24/7 AI Staff"],
                     ["منع الفواتير الملخبطة والعشوائية", "Zero Chaotic Invoices"],
-                    ["تطبيق ون شوت باي للدفع السريع", "OneShot Pay Fast App"],
+                    ["تطبيق ون شوت هوب", "OneShot Hub App"],
                   ].map(([arabic, english]) => (
                     <span key={english}>
                       <CheckCircle2 size={15} />
@@ -347,6 +354,23 @@ export default function Storefront() {
                     </span>
                   ))}
                 </div>
+              </div>
+              <div className="store-steps">
+                <span className="store-steps-title">{tr("تبدأ في 3 خطوات", "START IN 3 STEPS")}</span>
+                <ol>
+                  <li>
+                    <b>1</b>
+                    {tr("أنشئ حسابك ببريدك الإلكتروني", "Create your account with your email")}
+                  </li>
+                  <li>
+                    <b>2</b>
+                    {tr("اربط بوابة الدفع (PayTabs أو Telr)", "Connect your payment gateway (PayTabs / Telr)")}
+                  </li>
+                  <li>
+                    <b>3</b>
+                    {tr("أرسل أول فاتورة أو فعّل موظف AI", "Send your first invoice or hire an AI staffer")}
+                  </li>
+                </ol>
               </div>
               <div className="store-highlights">
                 <Highlight
@@ -377,17 +401,17 @@ export default function Storefront() {
                   link={tr("استكشف كوادر وموظفي الـ AI", "View AI Staff Profiles")}
                 />
                 <Highlight
-                  badge={tr("بوابة الدفع السريع", "ONESHOT PAY CHECKOUT")}
+                  badge={tr("بوابة الدفع السريع", "ONESHOT HUB CHECKOUT")}
                   title={tr(
-                    "تطبيق OneShot Pay: دفع فوري بالدايركت API",
-                    "OneShot Pay: Direct In-Page & Mobile Checkout",
+                    "تطبيق OneShot Hub: دفع فوري بضغطة زر",
+                    "OneShot Hub: Direct In-Page & Mobile Checkout",
                   )}
                   description={tr(
-                    "العميل يفتح الفاتورة ويدفع فوراً بضغطة زر واحدة داخل صفحتنا (Direct API) أو عبر تطبيق ون شوت باي، مع توجيه ذكي حسب نوع بطاقة العميل (مدى، فيزا، ماستركارد، Apple Pay).",
-                    "Seamless payment links directing clients into OneShot Pay app or direct in-page checkout without external redirects, maximizing conversions.",
+                    "العميل يفتح الفاتورة ويدفع فوراً بضغطة زر واحدة داخل صفحتنا (Direct API) أو عبر تطبيق ون شوت هوب، مع توجيه ذكي حسب نوع بطاقة العميل (مدى، فيزا، ماستركارد، Apple Pay).",
+                    "Seamless payment links directing clients into OneShot Hub app or direct in-page checkout without external redirects, maximizing conversions.",
                   )}
                   href="#section-apk"
-                  link={tr("تحميل وتثبيت تطبيق ون شوت باي", "Download OneShot Pay App")}
+                  link={tr("تحميل وتثبيت تطبيق ون شوت هوب", "Download OneShot Hub App")}
                 />
               </div>
             </section>
@@ -1410,10 +1434,10 @@ function IntegrationSection() {
             ],
             [
               Zap,
-              "4. تطبيق OneShot Pay للدفع السريع",
-              "4. Direct API & OneShot Pay Checkout",
-              "العميل يفتح الفاتورة ويدفع فوراً داخل صفحتنا (Direct API) أو عبر تطبيق ون شوت باي السريع.",
-              "Frictionless payments via in-page Direct API or OneShot Pay PWA / Android APK app.",
+              "4. تطبيق OneShot Hub للدفع السريع",
+              "4. Direct API & OneShot Hub Checkout",
+              "العميل يفتح الفاتورة ويدفع فوراً داخل صفحتنا (Direct API) أو عبر تطبيق ون شوت هوب السريع.",
+              "Frictionless payments via in-page Direct API or OneShot Hub PWA / Android APK app.",
             ],
           ].map(([Icon, titleAr, titleEn, textAr, textEn]) => {
             const FeatureIcon = Icon as typeof Layers3;

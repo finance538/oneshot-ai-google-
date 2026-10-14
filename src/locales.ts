@@ -341,7 +341,7 @@ const storefrontPhrases: [string, string, string, string][] = [
   ['Contact our team to confirm the scope, delivery and receive a payment link for your order.', '联系团队确认服务范围、交付时间并获取订单支付链接。', 'Свяжитесь с нами для подтверждения объёма, сроков и получения платёжной ссылки.', 'Contactez notre équipe pour confirmer le périmètre, les délais et recevoir votre lien de paiement.'],
   ['Refund & Return Policy', '退款与退货政策', 'Правила возврата', 'Politique de remboursement'],
   ['Copy failed. Select the code to copy it manually.', '复制失败，请选择代码手动复制。', 'Не удалось скопировать. Выделите код и скопируйте вручную.', 'Échec de la copie. Sélectionnez le code pour le copier manuellement.'],
-  ['ONESHOT PAYMENTS • BUSINESS INTEGRATIONS', 'ONESHOT 支付 • 业务集成', 'ONESHOT PAYMENTS • БИЗНЕС-ИНТЕГРАЦИИ', 'ONESHOT PAYMENTS • INTÉGRATIONS'],
+  ['ONESHOT HUBMENTS • BUSINESS INTEGRATIONS', 'ONESHOT 支付 • 业务集成', 'ONESHOT HUBMENTS • БИЗНЕС-ИНТЕГРАЦИИ', 'ONESHOT HUBMENTS • INTÉGRATIONS'],
   ['Connect Your Payments. Organize Your Business.', '连接支付，管理业务。', 'Подключите платежи. Упорядочьте бизнес.', 'Connectez vos paiements. Organisez votre activité.'],
   ['Payment links, invoices and subscriptions in one workspace with your store’s identity.', '在品牌专属工作区管理支付链接、发票与订阅。', 'Платёжные ссылки, счета и подписки в одном пространстве с фирменным стилем магазина.', 'Liens de paiement, factures et abonnements dans un espace à l’image de votre boutique.'],
   ['Open Merchant Workspace', '打开商户工作区', 'Открыть кабинет продавца', 'Ouvrir l’espace marchand'],
