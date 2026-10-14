@@ -84,8 +84,31 @@ export function credentialPrefix(merchantId: string) {
   return `PAYTABS_${merchantId.replaceAll('-', '').toUpperCase()}`;
 }
 
+function uuid(value: string | undefined) {
+  const trimmed = value?.trim();
+  return trimmed && /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(trimmed) ? trimmed : null;
+}
+
+// The platform-wide gateway account: every merchant without its own keys collects
+// through the platform credentials, so funds settle in the platform account.
+export function platformCredentialPrefix(kind: 'PAYTABS' | 'TELR'): string | null {
+  const id = uuid(process.env.PLATFORM_MERCHANT_ID) || uuid(process.env[`${kind}_PLATFORM_MERCHANT_ID`]);
+  if (id) return `${kind}_${id.replaceAll('-', '').toUpperCase()}`;
+  if (kind === 'PAYTABS' && process.env.PAYTABS_PLATFORM_SERVER_KEY) return 'PAYTABS_PLATFORM';
+  if (kind === 'TELR' && process.env.TELR_PLATFORM_SERVICE_API_KEY) return 'TELR_PLATFORM';
+  return null;
+}
+
+export function platformCredentialFallback(kind: 'PAYTABS' | 'TELR', own: string) {
+  const candidate = platformCredentialPrefix(kind);
+  if (!candidate || candidate === own) return own;
+  const probe = kind === 'PAYTABS' ? process.env[`${candidate}_SERVER_KEY`] : process.env[`${candidate}_SERVICE_API_KEY`];
+  return probe ? candidate : own;
+}
+
 export function gateway(merchantId: string) {
-  const prefix = credentialPrefix(merchantId);
+  const own = credentialPrefix(merchantId);
+  const prefix = process.env[`${own}_SERVER_KEY`] ? own : platformCredentialFallback('PAYTABS', own);
   const key = process.env[`${prefix}_SERVER_KEY`];
   const profile = process.env[`${prefix}_PROFILE_ID`];
   const base = process.env[`${prefix}_API_BASE_URL`];
@@ -94,17 +117,17 @@ export function gateway(merchantId: string) {
   let url: URL;
   try { url = new URL(base); } catch { throw new HttpError(409, 'عنوان بوابة التاجر غير صالح.'); }
   if (url.protocol !== 'https:' || !allowedHosts.includes(url.hostname) || url.port || url.username || url.password || url.search || url.hash || url.pathname !== '/') throw new HttpError(409, 'عنوان بوابة التاجر غير صالح.');
-  return { key, profile: Number(profile), base: url.origin, prefix };
+  return { key, profile: Number(profile), base: url.origin, prefix, platform: prefix !== own };
 }
 
 export function capabilities(merchantId: string) {
   try {
-    const { prefix } = gateway(merchantId);
+    const { prefix, platform } = gateway(merchantId);
     const managed = process.env[`${prefix}_MANAGED_ENABLED`] === 'true' && !!process.env[`${prefix}_CLIENT_KEY`];
     const own = process.env[`${prefix}_OWN_ENABLED`] === 'true';
     const recurring = process.env[`${prefix}_RECURRING_ENABLED`] === 'true' && /^[a-f0-9]{64}$/i.test(process.env.PAYMENT_TOKEN_ENCRYPTION_KEY || '');
-    return { connected: true, hosted: true, framed: true, mobile: true, mada_applepay: true, paylink: true, invoice: true, managed, own, recurring };
-  } catch { return { connected: false, hosted: false, framed: false, mobile: false, mada_applepay: false, paylink: false, invoice: false, managed: false, own: false, recurring: false }; }
+    return { connected: true, hosted: true, framed: true, mobile: true, mada_applepay: true, paylink: true, invoice: true, managed, own, recurring, platform };
+  } catch { return { connected: false, hosted: false, framed: false, mobile: false, mada_applepay: false, paylink: false, invoice: false, managed: false, own: false, recurring: false, platform: false }; }
 }
 
 export async function paytabs(merchantId: string, path: string, payload: Record<string, unknown>, timeoutMs = 20000) {
