@@ -1,4 +1,4 @@
-name: Build Android APK (oneShot Pay)
+name: Build Android APK (oneShot Hub)
 
 on:
   push:
@@ -84,28 +84,28 @@ jobs:
           set -e
           APK="$(find android/app/build/outputs/apk -name '*.apk' | head -1)"
           echo "built: $APK"
-          cp "$APK" oneshot-pay.apk
-          ls -lh oneshot-pay.apk
-          file oneshot-pay.apk
+          cp "$APK" oneshot-hub.apk
+          ls -lh oneshot-hub.apk
+          file oneshot-hub.apk
 
       - name: Upload APK (artifact)
         if: success()
         uses: actions/upload-artifact@v7
         with:
-          name: OneShot-Pay-APK
-          path: oneshot-pay.apk
+          name: OneShot-Hub-APK
+          path: oneshot-hub.apk
           retention-days: 30
 
       # Stable public download URL used by the site buttons:
-      # https://github.com/finance538/oneshot-ai-google-/releases/latest/download/oneshot-pay.apk
+      # https://github.com/finance538/oneshot-ai-google-/releases/latest/download/oneshot-hub.apk
       - name: Publish to 'app-latest' release
         if: success()
         uses: softprops/action-gh-release@v3
         with:
           tag_name: app-latest
-          name: oneShot Pay — APK (latest)
+          name: oneShot Hub — APK (latest)
           body: |
-            أحدث نسخة APK من تطبيق oneShot Pay، تُبنى تلقائيًا من فرع main.
-            Latest oneShot Pay Android build, rebuilt automatically from main.
-          files: oneshot-pay.apk
+            أحدث نسخة APK من تطبيق oneShot Hub، تُبنى تلقائيًا من فرع main.
+            Latest oneShot Hub Android build, rebuilt automatically from main.
+          files: oneshot-hub.apk
           make_latest: true

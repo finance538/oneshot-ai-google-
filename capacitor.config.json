@@ -1,6 +1,6 @@
 {
-  "appId": "com.oneshotcam.pay",
-  "appName": "oneShot Pay",
+  "appId": "com.oneshotcam.hub",
+  "appName": "oneShot Hub",
   "webDir": "dist",
   "bundledWebRuntime": false,
   "server": {

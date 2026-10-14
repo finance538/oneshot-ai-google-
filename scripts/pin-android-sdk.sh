@@ -31,9 +31,9 @@ echo "✓ variables.gradle pinned (compileSdk 36 / targetSdk 36)"
 
 # ── 2. App label + launcher icons ─────────────────────────────────────────────
 STRINGS="android/app/src/main/res/values/strings.xml"
-if [ -f "$STRINGS" ] && ! grep -q 'oneShot Pay' "$STRINGS"; then
-  sed -i 's|<string name="app_name">[^<]*</string>|<string name="app_name">oneShot Pay</string>|' "$STRINGS"
-  echo "✓ app_name set to oneShot Pay"
+if [ -f "$STRINGS" ] && ! grep -q 'oneShot Hub' "$STRINGS"; then
+  sed -i 's|<string name="app_name">[^<]*</string>|<string name="app_name">oneShot Hub</string>|' "$STRINGS"
+  echo "✓ app_name set to oneShot Hub"
 fi
 
 RES="resources/android"
