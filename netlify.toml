@@ -5,12 +5,10 @@ publish = "dist"
 [functions]
 directory = "netlify/functions"
 
-# Same-domain download URL, served straight from the latest release build.
-[[redirects]]
-from = "/oneshot-hub.apk"
-to = "https://github.com/finance538/oneshot-ai-google-/releases/latest/download/oneshot-hub.apk"
-status = 200
-force = true
+# Same-domain download URL: /oneshot-hub.apk is streamed by netlify/edge-functions/oneshot-hub-apk.ts
+[[edge_functions]]
+path = "/oneshot-hub.apk"
+function = "oneshot-hub-apk"
 
 [[redirects]]
 from = "/*"
