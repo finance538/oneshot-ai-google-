@@ -4,7 +4,7 @@ import { email, failure, HttpError, jsonBody, reply, sameOrigin, throttle } from
 
 // الحساب الجديد يُعتمد مباشرة بعد التسجيل فلا يبقى الدخول معلقاً على رابط البريد،
 // وتُستخدم نفس النافذة لإنقاذ الحسابات القديمة التي أُنشئت قبل تفعيل هذا المسار.
-const freshness = 30 * 60 * 1000;
+const freshness = 24 * 60 * 60 * 1000;
 
 export default async (req: Request, context: Context) => {
   try {
