@@ -89,10 +89,28 @@ function uuid(value: string | undefined) {
   return trimmed && /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(trimmed) ? trimmed : null;
 }
 
-// The platform-wide gateway account: every merchant without its own keys collects
-// through the platform credentials, so funds settle in the platform account.
+function uuidFromCompact(value: string) {
+  const hex = value.toLowerCase();
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
+// The platform-wide gateway account: the merchant whose credentials are configured owns the
+// connected gateways, so every merchant without its own keys collects through them and funds
+// settle in the platform account. No extra setup: the owner is discovered from the environment,
+// and PLATFORM_MERCHANT_ID (or <KIND>_PLATFORM_MERCHANT_ID) overrides it when set.
+export function platformMerchantId(kind: 'PAYTABS' | 'TELR') {
+  const explicit = uuid(process.env.PLATFORM_MERCHANT_ID) || uuid(process.env[`${kind}_PLATFORM_MERCHANT_ID`]);
+  if (explicit) return explicit;
+  const suffix = kind === 'PAYTABS' ? '_SERVER_KEY' : '_SERVICE_API_KEY';
+  const owner = Object.keys(process.env)
+    .filter(key => key.startsWith(`${kind}_`) && key.endsWith(suffix) && /^[0-9a-f]{32}$/i.test(key.slice(kind.length + 1, -suffix.length)) && process.env[key])
+    .map(key => key.slice(kind.length + 1, -suffix.length))
+    .sort()[0];
+  return owner ? uuidFromCompact(owner) : null;
+}
+
 export function platformCredentialPrefix(kind: 'PAYTABS' | 'TELR'): string | null {
-  const id = uuid(process.env.PLATFORM_MERCHANT_ID) || uuid(process.env[`${kind}_PLATFORM_MERCHANT_ID`]);
+  const id = platformMerchantId(kind);
   if (id) return `${kind}_${id.replaceAll('-', '').toUpperCase()}`;
   if (kind === 'PAYTABS' && process.env.PAYTABS_PLATFORM_SERVER_KEY) return 'PAYTABS_PLATFORM';
   if (kind === 'TELR' && process.env.TELR_PLATFORM_SERVICE_API_KEY) return 'TELR_PLATFORM';
