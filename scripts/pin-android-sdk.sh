@@ -42,13 +42,13 @@ if [ -d "$RES" ]; then
   for f in "$RES"/*.png; do
     [ -e "$f" ] || continue
     base="$(basename "$f")"
-    density="${base%%-*}"          # e.g. mipmap-xxxhdpi
-    kind="${base#*-}"              # ic_launcher.png | ic_launcher_foreground.png
+    rest="${base#mipmap-}"         # mdpi-ic_launcher.png
+    density="mipmap-${rest%%-*}"   # mipmap-mdpi
+    kind="${rest#*-}"              # ic_launcher.png | ic_launcher_foreground.png
     dest="android/app/src/main/res/$density"
-    if [ -d "$dest" ]; then
-      cp "$f" "$dest/$kind"
-      installed=$((installed+1))
-    fi
+    mkdir -p "$dest"
+    cp "$f" "$dest/$kind"
+    installed=$((installed+1))
   done
   echo "✓ installed $installed launcher icon(s)"
 else
