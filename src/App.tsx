@@ -66,7 +66,7 @@ const initialPlatform: Platform = { merchant: null, documents: [], subscriptions
 export default function App() {
   const payment = window.location.pathname.match(/^\/pay\/([a-f0-9-]{36})\/?$/i);
   const open = window.location.pathname.match(/^\/p\/([a-f0-9-]{36})\/?$/i);
-  const sitePay = window.location.hostname.toLowerCase() === 'pay.1shotcam.com';
+  const sitePay = window.location.hostname.toLowerCase() === 'pay.1shotcam.com' || new URLSearchParams(window.location.search).get('site') === 'pay';
   const authCallback = window.location.hash.includes('token=') || new URLSearchParams(window.location.search).has('auth');
 
   return (
