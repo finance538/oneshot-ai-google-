@@ -67,30 +67,44 @@ async function harness({ user = administrator, context = 'deploy-preview', selec
   };
   const sandbox = vm.createContext({ Request, Response, URL, Buffer, AbortSignal, fetch: mockFetch, console: { error: message => logs.push(message) }, process: { env: { CONTEXT: context, ...env } } });
   const cache = new Map();
-  async function synthetic(key, exports) {
-    if (!cache.has(key)) cache.set(key, new vm.SyntheticModule(Object.keys(exports), function () { for (const [name, value] of Object.entries(exports)) this.setExport(name, value); }, { context: sandbox, identifier: key }));
-    return cache.get(key);
+  const namespaces = new Map();
+  function synthetic(key, exports) {
+    return new vm.SyntheticModule(Object.keys(exports), function () { for (const [name, value] of Object.entries(exports)) this.setExport(name, value); }, { context: sandbox, identifier: key });
   }
-  async function load(identifier) {
-    if (cache.has(identifier)) return cache.get(identifier);
-    if (identifier === path.join(root, 'db/index.ts')) return synthetic(identifier, { database: () => db });
-    if (identifier === '@netlify/identity') return synthetic(identifier, { getUser: async () => user });
-    if (!path.isAbsolute(identifier)) return synthetic(identifier, await import(identifier));
-    const source = await readFile(identifier, 'utf8');
-    const code = stripTypeScriptTypes(source, { mode: 'strip' });
-    const module = new vm.SourceTextModule(code, { context: sandbox, identifier });
-    cache.set(identifier, module);
-    return module;
+  // Memoize the in-flight promise, never the finished value: linking a module tree walks the same
+  // specifier from several parents, and a second traversal that only saw "not cached yet" used to
+  // build a duplicate instance of shared modules (e.g. platform.ts), so `error instanceof HttpError`
+  // failed intermittently and a 400 came back as 503. That made this suite flaky.
+  function load(identifier) {
+    const cached = cache.get(identifier);
+    if (cached) return cached;
+    const pending = (async () => {
+      if (identifier === path.join(root, 'db/index.ts')) return synthetic(identifier, { database: () => db });
+      if (identifier === '@netlify/identity') return synthetic(identifier, { getUser: async () => user });
+      if (!path.isAbsolute(identifier)) return synthetic(identifier, await import(identifier));
+      const source = await readFile(identifier, 'utf8');
+      const code = stripTypeScriptTypes(source, { mode: 'strip' });
+      return new vm.SourceTextModule(code, { context: sandbox, identifier });
+    })();
+    cache.set(identifier, pending);
+    return pending;
   }
-  async function module(file) {
-    const target = await load(path.resolve(file));
-    if (target.status === 'unlinked') await target.link((specifier, importer) => {
-      if (!specifier.startsWith('.')) return load(specifier);
-      const resolved = path.resolve(path.dirname(importer.identifier), specifier).replace(/\.js$/, '.ts');
-      return load(resolved);
-    });
-    if (target.status !== 'evaluated') await target.evaluate();
-    return target.namespace;
+  function module(file) {
+    const absolute = path.resolve(file);
+    const cached = namespaces.get(absolute);
+    if (cached) return cached;
+    const pending = (async () => {
+      const target = await load(absolute);
+      if (target.status === 'unlinked') await target.link((specifier, importer) => {
+        if (!specifier.startsWith('.')) return load(specifier);
+        const resolved = path.resolve(path.dirname(importer.identifier), specifier).replace(/\.js$/, '.ts');
+        return load(resolved);
+      });
+      if (target.status !== 'evaluated') await target.evaluate();
+      return target.namespace;
+    })();
+    namespaces.set(absolute, pending);
+    return pending;
   }
   return { module, trace, db, logs, network };
 }

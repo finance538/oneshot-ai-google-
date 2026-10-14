@@ -59,7 +59,12 @@ export async function owner() {
 }
 
 export function isAdmin(user: User) {
-  return Array.isArray(user.appMetadata?.roles) && user.appMetadata.roles.includes('admin');
+  if (Array.isArray(user.appMetadata?.roles) && user.appMetadata.roles.includes('admin')) return true;
+  const allowed = (process.env.ADMIN_EMAILS || '')
+    .split(',')
+    .map((value: string) => value.trim().toLowerCase())
+    .filter(Boolean);
+  return allowed.includes(String(user.email || '').trim().toLowerCase());
 }
 
 export function email(value: unknown) {
