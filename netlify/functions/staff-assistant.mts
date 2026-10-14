@@ -19,12 +19,23 @@ import { failure, HttpError, jsonBody, owner, reply, sameOrigin, text, throttle 
 const modelIds = ['claude-haiku-4-5', 'claude-sonnet-4-5', 'ollama-cloud', 'hermes-3-vps'] as const;
 type ModelId = typeof modelIds[number];
 
+// Gateway address. ONESHOT_VPS_AGENT_URL may still hold a legacy plaintext
+// http://<vps-ip>:8790 value: that port is now bound to localhost only and TLS is
+// terminated by traefik, so only an https:// value is honoured and anything else
+// falls back to the TLS endpoint below.
+const GATEWAY_FALLBACK = 'https://gw.187-7-65-45.sslip.io';
+function gatewayUrl(): string {
+  const raw = (process.env.ONESHOT_VPS_AGENT_URL_TLS || process.env.ONESHOT_VPS_AGENT_URL || '').trim();
+  const base = /^https:\/\//i.test(raw) ? raw : GATEWAY_FALLBACK;
+  return base.replace(/\/+$/, '');
+}
+
 async function availableModels() {
   const ollama = await readOllamaCloud();
   const available: ModelId[] = [];
   // Server gateway first: it is the free, self-hosted path (local Ollama on the VPS)
   // and the merchant-facing default unless the user picks another model in the UI.
-  if (process.env.ONESHOT_VPS_AGENT_URL) available.push('hermes-3-vps');
+  if (gatewayUrl()) available.push('hermes-3-vps');
   if (ollama.configured && !ollama.error) available.push('ollama-cloud');
   if (process.env.ANTHROPIC_API_KEY) available.push('claude-haiku-4-5', 'claude-sonnet-4-5');
   return {
@@ -66,10 +77,11 @@ export default async (req: Request) => {
     }
 
     if (requestedModel === 'hermes-3-vps') {
-      if (!process.env.ONESHOT_VPS_AGENT_URL) throw new HttpError(503, 'بوابة السيرفر غير مضبوطة. أضف ONESHOT_VPS_AGENT_URL في متغيرات بيئة Netlify ثم أعد النشر.');
+      const base = gatewayUrl();
+      if (!base) throw new HttpError(503, 'بوابة السيرفر غير مضبوطة. أضف ONESHOT_VPS_AGENT_URL في متغيرات بيئة Netlify ثم أعد النشر.');
       const token = process.env.ONESHOT_VPS_AGENT_TOKEN;
       try {
-        const vpsRes = await fetch(`${process.env.ONESHOT_VPS_AGENT_URL.replace(/\/+$/, '')}/api/agent/chat`, {
+        const vpsRes = await fetch(`${base}/api/agent/chat`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
