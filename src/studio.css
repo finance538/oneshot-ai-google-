@@ -279,7 +279,7 @@ input, textarea, select { caret-color: var(--flame); }
 @media (max-width: 420px) {
   .storefront .store-header-actions { gap: 6px; }
   .storefront .store-logo > span { font-size: 22px; }
-  .storefront .store-logo small { font-size: 6px; }
+  .storefront .store-logo small { font-size: 11px; letter-spacing: 0.14em; }
   .storefront .store-ai-link { display: none; }
   .storefront .store-header-actions .store-button.compact { display: none; }
   .storefront .store-actions > .store-button { width: 100%; }
