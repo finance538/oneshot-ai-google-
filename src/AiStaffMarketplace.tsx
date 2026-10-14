@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Bot, Check, Sparkles, MessageSquare, Briefcase, Zap,
   CheckCircle2, Send, Clock, DollarSign, Star, Shield, ArrowRight,
@@ -193,6 +193,24 @@ export default function AiStaffMarketplace() {
   ]);
   const [userInput, setUserInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  const [chatError, setChatError] = useState<string | null>(null);
+  const [routedTo, setRoutedTo] = useState<string | null>(null);
+  const [modelId, setModelId] = useState('claude-haiku-4-5');
+  const [liveModels, setLiveModels] = useState<string[]>([]);
+
+  useEffect(() => {
+    let alive = true;
+    fetch('/.netlify/functions/staff-assistant', { headers: { Accept: 'application/json' } })
+      .then(res => (res.ok ? res.json() : null))
+      .then(data => {
+        if (!alive || !data) return;
+        const models: string[] = Array.isArray(data.available) ? data.available : [];
+        setLiveModels(models);
+        if (models.length && !models.includes('claude-haiku-4-5')) setModelId(models[0]);
+      })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, []);
   const [hiringSuccessNotice, setHiringSuccessNotice] = useState<string | null>(null);
 
   const activeEmployee = AI_EMPLOYEES.find(e => e.id === activeChatStaffId) || AI_EMPLOYEES[0];
@@ -218,47 +236,57 @@ export default function AiStaffMarketplace() {
     setTimeout(() => setHiringSuccessNotice(null), 3500);
   };
 
-  const handleSendMessage = (e: React.FormEvent) => {
+  const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!userInput.trim()) return;
+    if (!userInput.trim() || isTyping) return;
 
     const userText = userInput.trim();
-    setUserInput('');
-    const nowTime = new Date().toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' });
+    const staffId = activeEmployee.id;
+    const history = chatMessages
+      .filter(msg => msg.text.trim())
+      .slice(-12)
+      .map(msg => ({ role: msg.sender === 'user' ? 'user' : 'assistant', content: msg.text }));
 
+    setUserInput('');
+    setChatError(null);
+    const nowTime = new Date().toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' });
     setChatMessages(prev => [...prev, { sender: 'user', text: userText, time: nowTime }]);
     setIsTyping(true);
 
-    setTimeout(() => {
-      // Find matching sample response or intelligent contextual response
-      const matched = activeEmployee.sampleResponses.find(sr =>
-        userText.includes(sr.prompt) || sr.prompt.includes(userText)
-      );
-
-      let reply = matched ? matched.reply : '';
-      if (!reply) {
-        if (activeEmployee.id === 'customer_care') {
-          reply = `أهلاً بك يا غالي! بخصوص سؤالك: "${userText}"، نحرص في المتجر على تقديم أسرع تجربة سلسة. تم تسجيل الملاحظة وسنقوم بالتحقق من حالة طلبك أو فاتورتك فوراً لضمان رضاك التام!`;
-        } else if (activeEmployee.id === 'social_marketer') {
-          reply = `تحليل تسويقي مميز! بخصوص "${userText}"، أنصحك بالتركيز على إبراز الميزة التنافسية في أول 3 ثوانٍ من الفيديو واستخدام عبارة تحفيزية (Call to Action) واضحة تنقل العميل مباشرة لرابط الدفع.`;
-        } else if (activeEmployee.id === 'ecommerce_dev') {
-          reply = `من الناحية البرمجية لـ "${userText}"، يمكنك إرسال الطلب عبر HTTPS POST مع ترويسة Authorization المناسبة، والتأكد من إرجاع HTTP 200 OK للويب هوك لمنع تكرار الإشعارات.`;
-        } else {
-          reply = `بصفتي ${activeEmployee.arabicRole}، درست استفسارك بعناية: "${userText}". تم تجهيز التوصية الإدارية الدقيقة لحماية هوامش الربح واستقرار التدفق المالي لمتجرك!`;
-        }
+    try {
+      const res = await fetch('/.netlify/functions/staff-assistant', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ staffId, modelId, prompt: userText, history, consent: true }),
+      });
+      const data = await res.json().catch(() => null) as { answer?: string; routedTo?: string; message?: string; error?: string } | null;
+      if (!res.ok) {
+        const detail = data?.message || data?.error || `فشل الطلب (رمز ${res.status}).`;
+        setChatError(res.status === 401 ? 'هذه المحادثة تحتاج تسجيل دخول إلى حسابك في المنصة أولاً.' : detail);
+        return;
       }
-
-      setChatMessages(prev => [...prev, { sender: 'ai', text: reply, time: new Date().toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' }) }]);
+      const answer = (data?.answer || '').trim();
+      if (!answer) {
+        setChatError('لم يرجع النموذج أي نص. أعد صياغة الطلب أو جرّب مرة أخرى.');
+        return;
+      }
+      setRoutedTo(data?.routedTo || null);
+      setChatMessages(prev => [...prev, { sender: 'ai', text: answer, time: nowTime }]);
+    } catch {
+      setChatError('تعذر الوصول إلى خدمة الموظفين. تحقق من اتصالك ثم أعد المحاولة.');
+    } finally {
       setIsTyping(false);
-    }, 800);
+    }
   };
 
   const handleSelectStaffForChat = (employee: AiEmployee) => {
     setActiveChatStaffId(employee.id);
+    setChatError(null);
+    setRoutedTo(null);
     setChatMessages([
       {
         sender: 'ai',
-        text: `مرحباً بك! أنا ${employee.name} (${employee.arabicRole}). أنا في خدمتك الآن، تفضل بسؤالي عن أي شيء يخص مجالي وسأجيبك باحترافية!`,
+        text: `مرحباً بك! أنا ${employee.name} (${employee.arabicRole}). اكتب مهمتك أو سؤالك وأنا أجيبك الآن فعلياً من نموذج الذكاء الاصطناعي — بدون ردود جاهزة.`,
         time: 'الآن'
       }
     ]);
@@ -433,17 +461,30 @@ export default function AiStaffMarketplace() {
                 </div>
               </div>
 
-              <div className="station-live-badge">
-                <span className="live-dot" /> متصل وجاهز للعمل
+              <div className={`station-live-badge ${liveModels.length ? '' : 'station-offline'}`}>
+                <span className="live-dot" /> {liveModels.length ? 'متصل بموديل حقيقي' : 'بانتظار تفعيل النموذج'}
               </div>
             </div>
 
             <div className="chat-trial-note">
               <Sparkles size={16} />
               <span>
-                اختبر ذكاء وسرعة الموظف أمام عينيك! اكتب أي استفسار أو مهمة ترغب في أن ينجزها لمتجرك وشاهد كيف يجيبك.
+                كل رد هنا يولّده النموذج لحظياً بشخصية الموظف وتخصصه — لا توجد ردود جاهزة أو محفوظة. اكتب مهمتك وشاهد الرد الفعلي.
               </span>
             </div>
+
+            {liveModels.length > 1 && (
+              <div className="chat-model-row">
+                <span className="quick-label">النموذج المستخدم:</span>
+                <select value={modelId} onChange={e => setModelId(e.target.value)}>
+                  {liveModels.map(id => (
+                    <option key={id} value={id}>
+                      {id === 'claude-haiku-4-5' ? 'Claude Haiku (سريع)' : id === 'claude-sonnet-4-5' ? 'Claude Sonnet (أدق)' : id === 'ollama-cloud' ? 'Ollama Cloud (مفتوح)' : id === 'hermes-3-vps' ? 'Hermes على السيرفر' : id}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
 
             {/* Messages Feed */}
             <div className="chat-messages-container">
@@ -465,18 +506,34 @@ export default function AiStaffMarketplace() {
                   </div>
                 </div>
               )}
+
+              {chatError && (
+                <div className="chat-error-note" role="alert">
+                  {chatError}
+                </div>
+              )}
+
+              {routedTo && !chatError && (
+                <div className="chat-routed-note">تم توليد هذا الرد بواسطة النموذج: {routedTo}</div>
+              )}
             </div>
 
             {/* Quick Prompts */}
             <div className="quick-prompts-row">
               <span className="quick-label">أسئلة تجريبية سريعة:</span>
-              <button
-                type="button"
-                className="prompt-chip-btn"
-                onClick={() => setUserInput(activeEmployee.defaultPrompt)}
-              >
-                {activeEmployee.defaultPrompt}
-              </button>
+              {[activeEmployee.defaultPrompt, ...activeEmployee.sampleResponses.map(sr => sr.prompt)]
+                .filter((value, index, arr) => arr.indexOf(value) === index)
+                .slice(0, 3)
+                .map(promptText => (
+                  <button
+                    key={promptText}
+                    type="button"
+                    className="prompt-chip-btn"
+                    onClick={() => setUserInput(promptText)}
+                  >
+                    {promptText}
+                  </button>
+                ))}
             </div>
 
             {/* Input Form */}
@@ -496,7 +553,7 @@ export default function AiStaffMarketplace() {
             <div className="chat-contract-footer">
               <Shield size={14} />
               <span>
-                جميع الموظفين مشفرون بالكامل ولا يشاركون بيانات عملائك أو مبيعاتك خارج نطاق متجرك الخاص.
+                ردود الموظفين تُولَّد من نموذج الذكاء الاصطناعي في حساب المنصة، ولا تُخزَّن محادثتك على السيرفر — تبقى في متصفحك فقط، ولا يُشارك محتواها خارج نطاق متجرك.
               </span>
             </div>
           </div>
