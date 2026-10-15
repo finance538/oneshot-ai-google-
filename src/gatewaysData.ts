@@ -394,4 +394,89 @@ export const KNOWN_GATEWAYS: GatewayDefinition[] = [
       },
     ],
   },
+  {
+    id: 'ngenius',
+    name: 'نيجنيس السعودية (N-Genius KSA · Network International)',
+    english: 'N-Genius KSA Gateway',
+    country: 'المملكة العربية السعودية',
+    logoTheme: 'ngenius-theme',
+    website: 'https://portal.ksa.ngenius-payments.com/?tenant=NIARABIA',
+    description:
+      'بوابة Network International السعودية (N-Genius KSA). خمس طرق ربط رسمية: صفحة الدفع المستضافة، الجلسة المستضافة (Web SDK)، الربط المباشر للخوادم (Direct API)، حزم تطوير الجوال، وإضافات المتاجر — إضافة إلى مسارات البوابة بلا كود: روابط الدفع وQR وOneLink، Virtual Terminal/MOTO، حفظ البطاقة (Tokenisation)، الاشتراكات والتقسيط، والويب هوك. المصدر: docs.ksa.ngenius-payments.com',
+    supportedMethods: ['مدى (Cards)', 'Apple Pay', 'Samsung Pay'],
+    securityFeatures: ['PCI-DSS', '3D Secure 2.0', 'Tokenisation / Card on File', 'Webhooks'],
+    integrationTypes: [
+      {
+        id: 'hosted',
+        name: 'صفحة الدفع المستضافة (Hosted Payment Page)',
+        english: 'N-Genius Hosted Page',
+        badge: 'المرتبطة فعليًا بحساب المنصة',
+        description:
+          'إنشاء أمر عبر POST /transactions/outlets/{outletRef}/orders بـ application/vnd.ni-payment.v2+json ثم توجيه العميل إلى paypage.ksa.ngenius-payments.com. هذا هو الربط العامل الآن عبر دالتي ng-pay و ng-pay-return.',
+        suitableFor: 'المتاجر الإلكترونية وصفحات الدفع العامة دون رفع مسؤولية PCI.',
+        requiredFields: [
+          { key: 'OUTLET_REFERENCE', label: 'معرّف المنفذ (Outlet Reference)', placeholder: 'f3602f61-4e1c-4da5-9b98-142466334ae9' },
+          { key: 'API_KEY', label: 'مفتاح حساب الخدمة (Service Account API Key)', placeholder: 'base64(UUID:UUID)', isSecret: true },
+          { key: 'API_BASE_URL', label: 'نطاق الخادم (Identity API)', placeholder: 'https://api-gateway.ksa.ngenius-payments.com' },
+          { key: 'PAYPAGE_URL', label: 'نطاق صفحة الدفع (PayPage)', placeholder: 'https://paypage.ksa.ngenius-payments.com' },
+        ],
+      },
+      {
+        id: 'hosted_session',
+        name: 'الجلسة المستضافة / الويب إس دي كي (Hosted Session · Web SDK)',
+        english: 'Hosted Session Web SDK',
+        badge: 'بلا مسؤولية PCI',
+        description:
+          'إطار داخل موقعك يجمع بيانات البطاقة ويحوّلها توكن لدى البوابة قبل وصولها لخادمك. يحتاج حساب خدمة نوعه Hosted Session Service Account (في حساب المنصة يوجد حساب من هذا النوع).',
+        suitableFor: 'الواجهات الحديثة الراغبة بجمع البطاقة داخل الموقع دون مسؤولية تخزين.',
+        requiredFields: [
+          { key: 'OUTLET_REFERENCE', label: 'معرّف المنفذ (Outlet Reference)', placeholder: 'f3602f61-4e1c-4da5-9b98-142466334ae9' },
+          { key: 'SESSION_API_KEY', label: 'مفتاح حساب الجلسة المستضافة (Hosted Session Key)', placeholder: 'base64(UUID:UUID)', isSecret: true },
+          { key: 'API_BASE_URL', label: 'نطاق الخادم (API Base URL)', placeholder: 'https://api-gateway.ksa.ngenius-payments.com' },
+        ],
+      },
+      {
+        id: 'direct_api',
+        name: 'الربط المباشر للخوادم (Direct API)',
+        english: 'Direct Server-to-Server API',
+        badge: 'تحكم كامل بالعمليات',
+        description:
+          'واجهة REST JSON كاملة: أمر بمرحلة واحدة (PURCHASE) أو مرحلتين (AUTH ثم CAPTURE)، مع الإلغاء والعكس والاسترجاع والاستعلام. تُرسل بيانات البطاقة من خادمك، ويلزم التزام PCI-DSS.',
+        suitableFor: 'المنصات والشركات الحاصلة على متطلبات PCI-DSS والمعالجة الخلفية للاشتراكات.',
+        requiredFields: [
+          { key: 'OUTLET_REFERENCE', label: 'معرّف المنفذ (Outlet Reference)', placeholder: 'f3602f61-4e1c-4da5-9b98-142466334ae9' },
+          { key: 'API_KEY', label: 'مفتاح حساب الخدمة (Service Account API Key)', placeholder: 'base64(UUID:UUID)', isSecret: true },
+          { key: 'WEBHOOK_SECRET', label: 'مفتاح توقيع الويب هوك (Webhook Signature Key)', placeholder: 'whsec_...', isSecret: true },
+        ],
+      },
+      {
+        id: 'mobile_sdk',
+        name: 'حزم تطوير الجوال (Mobile SDKs · iOS / Android / React Native)',
+        english: 'Mobile SDKs',
+        badge: 'للتطبيقات الأصلية',
+        description:
+          'حزم رسمية لتطبيقات iOS وAndroid وReact Native لتحصيل الدفع داخل التطبيق. تطبيق المنصة الحالي WebView على الموقع الحيّ فيعمل تلقائيًا، وتُستخدم الحزمة عند بناء تجربة دفع أصلية.',
+        suitableFor: 'تطبيقات الجوال الأصلية والهجينة.',
+        requiredFields: [
+          { key: 'OUTLET_REFERENCE', label: 'معرّف المنفذ (Outlet Reference)', placeholder: 'f3602f61-4e1c-4da5-9b98-142466334ae9' },
+          { key: 'API_KEY', label: 'مفتاح حساب الخدمة (Service Account API Key)', placeholder: 'base64(UUID:UUID)', isSecret: true },
+          { key: 'APP_BUNDLE_ID', label: 'معرّف التطبيق (Bundle / Package ID)', placeholder: 'com.oneshotcam.hub' },
+        ],
+      },
+      {
+        id: 'plugins',
+        name: 'إضافات المتاجر الجاهزة (Plugins · Shopify / WooCommerce / Magento / PrestaShop / OpenCart)',
+        english: 'E-commerce Plugins',
+        badge: 'تركيب بلا برمجة',
+        description:
+          'إضافات رسمية للمتاجر الجاهزة: Shopify، WooCommerce، Magento 2.4.5+، PrestaShop 8، OpenCart 4. تُركّب المفتاح من لوحة المتجر وتحوّل الحساب إلى وضع الإنتاج.',
+        suitableFor: 'المتاجر المبنية على منصات جاهزة دون تطوير مخصص.',
+        requiredFields: [
+          { key: 'PLUGIN_PLATFORM', label: 'منصة المتجر (Platform)', placeholder: 'Shopify / WooCommerce / Magento / PrestaShop / OpenCart' },
+          { key: 'OUTLET_REFERENCE', label: 'معرّف المنفذ (Outlet Reference)', placeholder: 'f3602f61-4e1c-4da5-9b98-142466334ae9' },
+          { key: 'API_KEY', label: 'مفتاح حساب الخدمة (Service Account API Key)', placeholder: 'base64(UUID:UUID)', isSecret: true },
+        ],
+      },
+    ],
+  },
 ];

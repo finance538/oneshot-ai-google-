@@ -165,6 +165,8 @@
 .tabby-theme { background: #3bffaf; color: #000000; }
 .noon-theme { background: #feee00; color: #000000; }
 .payone-theme { background: #6366f1; color: #ffffff; }
+/* N-Genius KSA (Network International) — brand navy; the badge shows "N-Genius". */
+.ngenius-theme { background: #0e2a47; color: #ffffff; }
 
 .gw-country-pill {
   font-size: 0.72rem;

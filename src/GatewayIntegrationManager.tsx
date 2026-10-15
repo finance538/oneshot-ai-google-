@@ -249,7 +249,7 @@ export default function GatewayIntegrationManager({
           <p>
             سواء كنت تربط عبر <strong>تطبيقات الجوال (Mobile SDK)</strong>، أو عبر{' '}
             <strong>صفحة الدفع المستضافة (Hosted)</strong>، أو <strong>الإطار المدمج (iFrame)</strong>، أو{' '}
-            <strong>الربط المباشر للخوادم (Direct API)</strong>. اختر البوابة المطلوبة (تيلر، بيتابس، ماي فاتورة، بي زاتي، تابي، نون، بي وان)،
+            <strong>الربط المباشر للخوادم (Direct API)</strong>. اختر البوابة المطلوبة (تيلر، بيتابس، ماي فاتورة، بي زاتي، تابي، نون، بي وان، أو <strong>نيجنيس السعودية N-Genius KSA</strong> بطريقة ربطها الرسمية من الخمس)،
             أو أضف أي بوابة مخصصة جديدة لتسجيل تفاصيلها مباشرة لحسابك.
           </p>
 
@@ -306,7 +306,7 @@ export default function GatewayIntegrationManager({
                 <div className="gw-integration-badges-strip">
                   {gw.integrationTypes.map((it) => (
                     <span key={it.id} className="gw-it-badge">
-                      {it.id === 'mobile' ? '📱 جوال' : it.id === 'hosted' ? '🌐 هوست' : it.id === 'framed' ? '🖼️ مدمج' : '⚡ مباشر'}
+                      {it.id === 'mobile' ? '📱 جوال' : it.id === 'mobile_sdk' ? '📲 SDK' : it.id === 'hosted' ? '🌐 هوست' : it.id === 'hosted_session' ? '🔐 جلسة مستضافة' : it.id === 'plugins' ? '🧩 إضافات متاجر' : it.id === 'framed' ? '🖼️ مدمج' : '⚡ مباشر'}
                     </span>
                   ))}
                 </div>
