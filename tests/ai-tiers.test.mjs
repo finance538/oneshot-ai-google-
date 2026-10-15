@@ -127,3 +127,11 @@ gatewayTest('موديلات الطبقات المدفوعة تمر بلا توق
     assert.deepEqual(checkModel({ token, model, headers: {}, allow }), { ok: true }, model);
   }
 });
+
+gatewayTest('نسخة الحرس في المستودع مطابقة تماماً للمركّبة على بوابة السيرفر', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const repoCopy = await readFile(path.resolve(root, 'tools/gateway/tier-guard.mjs'), 'utf8');
+  const liveCopy = await readFile('/root/oneshot-agent-gateway/tier-guard.mjs', 'utf8').catch(() => null);
+  if (liveCopy === null) return; // لسنا على السيرفر
+  assert.equal(repoCopy, liveCopy, 'قوائم الموديلات انحرفت بين المستودع والبوابة — زامن tools/gateway/tier-guard.mjs');
+});
