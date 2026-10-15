@@ -305,3 +305,80 @@ test('administrators can see fulfillment contacts and complete paid wallet order
   const update = fixture.trace.find(entry => entry.operation === 'update');
   assert.equal(update.set.status, 'fulfilled');
 });
+
+// ---------- N-Genius KSA (hosted page) ----------
+const ngeniusKey = 'noncredential-test-fixture-value-1234567890abcd';
+const ngeniusOutlet = '50000000-0000-4000-8000-000000000010';
+const ngeniusReference = '60000000-0000-4000-8000-000000000011';
+const ngeniusEnv = { NG_API_KEY: ngeniusKey, NG_OUTLET: ngeniusOutlet };
+
+test('a connected N-Genius account is offered for site-wide top-ups', async () => {
+  const fixture = await harness({ env: ngeniusEnv, selections: { site_payment_gateways: [[{ gateway: 'ngenius', merchantId }]] } });
+  const { publicGateways } = await fixture.module('netlify/lib/wallet.ts');
+  const { defaultPolicy } = await fixture.module('shared/policy.ts');
+  const rows = await publicGateways(defaultPolicy);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].gateway, 'ngenius');
+});
+
+test('N-Genius stays out of public gateways when the account or the admin toggle is off', async () => {
+  const unconfigured = await harness({ selections: { site_payment_gateways: [[{ gateway: 'ngenius', merchantId }]] } });
+  const { publicGateways } = await unconfigured.module('netlify/lib/wallet.ts');
+  const { defaultPolicy } = await unconfigured.module('shared/policy.ts');
+  assert.equal((await publicGateways(defaultPolicy)).length, 0);
+
+  const paused = await harness({ env: ngeniusEnv, selections: { site_payment_gateways: [[{ gateway: 'ngenius', merchantId }]] } });
+  const pausedWallet = await paused.module('netlify/lib/wallet.ts');
+  const pausedPolicy = (await paused.module('shared/policy.ts')).defaultPolicy;
+  assert.equal((await pausedWallet.publicGateways({ ...pausedPolicy, gateways: { ...pausedPolicy.gateways, ngenius: false } })).length, 0);
+});
+
+test('customers can top up through a connected N-Genius account', async () => {
+  const fixture = await harness({ env: ngeniusEnv, selections: { site_payment_gateways: [[{ gateway: 'ngenius', merchantId }]] } });
+  const endpoint = await fixture.module('netlify/functions/wallet.mts');
+  const response = await endpoint.default(post({ action: 'topup', gateway: 'ngenius', amount: '100', requestId }));
+  assert.equal(response.status, 201);
+  const document = fixture.trace.find(entry => entry.operation === 'insert' && entry.table === 'payment_documents');
+  assert.equal(document.values.gateway, 'ngenius');
+  assert.equal(document.values.method, 'hosted');
+  assert.equal(fixture.trace.some(entry => entry.operation === 'insert' && entry.table === 'wallet_entries'), false);
+});
+
+test('only a captured N-Genius PURCHASE credits the wallet', async () => {
+  const base = () => ({ payment_attempts: [[{ id: requestId, merchantId, documentId, amount: 25025, status: 'pending', reference: ngeniusReference, period: 'initial:fixture' }]], payment_documents: [[{ id: documentId, gateway: 'ngenius' }], [{ id: documentId, method: 'hosted' }]], wallet_topups: [[{ documentId, walletId }], [{ documentId, walletId }]] });
+  const order = (state) => ({ access_token: 'fixture-token', reference: ngeniusReference, amount: { currencyCode: 'SAR', value: 25025 }, _embedded: { payment: [{ state }] } });
+
+  const paid = await harness({ env: ngeniusEnv, selections: base(), fetchResult: order('PURCHASED') });
+  const { confirmPayment } = await paid.module('netlify/lib/payments.ts');
+  assert.equal(await confirmPayment(requestId, ngeniusReference), 'paid');
+  assert.equal(paid.trace.find(entry => entry.operation === 'insert' && entry.table === 'wallet_entries').values.amount, 25025);
+
+  const authorised = await harness({ env: ngeniusEnv, selections: base(), fetchResult: order('AUTHORISED') });
+  const authorisedPayment = (await authorised.module('netlify/lib/payments.ts')).confirmPayment;
+  assert.equal(await authorisedPayment(requestId, ngeniusReference), 'pending');
+  assert.equal(authorised.trace.some(entry => entry.operation === 'insert' && entry.table === 'wallet_entries'), false);
+
+  const declined = await harness({ env: ngeniusEnv, selections: base(), fetchResult: order('DECLINED') });
+  const declinedPayment = (await declined.module('netlify/lib/payments.ts')).confirmPayment;
+  assert.equal(await declinedPayment(requestId, ngeniusReference), 'failed');
+  assert.equal(declined.trace.some(entry => entry.operation === 'insert' && entry.table === 'wallet_entries'), false);
+});
+
+test('an N-Genius amount mismatch can never settle the order', async () => {
+  const fixture = await harness({ env: ngeniusEnv, selections: { payment_attempts: [[{ id: requestId, merchantId, documentId, amount: 25025, status: 'pending', reference: ngeniusReference, period: 'initial:fixture' }]], payment_documents: [[{ id: documentId, gateway: 'ngenius' }]] }, fetchResult: { access_token: 'fixture-token', reference: ngeniusReference, amount: { currencyCode: 'SAR', value: 100 }, _embedded: { payment: [{ state: 'PURCHASED' }] } } });
+  const { confirmPayment } = await fixture.module('netlify/lib/payments.ts');
+  const failure = await confirmPayment(requestId, ngeniusReference).then(() => null, error => error);
+  assert.equal(failure?.status, 409);
+  assert.equal(fixture.trace.some(entry => entry.operation === 'insert' && entry.table === 'wallet_entries'), false);
+});
+
+test('the N-Genius hosted page is created with a PURCHASE action and a same-origin return', async () => {
+  const fixture = await harness({ env: ngeniusEnv, selections: { payment_documents: [[{ payment_documents: { id: documentId, merchantId, title: 'طلب دفع', customerEmail: customer.email, amount: 10000, method: 'hosted', gateway: 'ngenius', expiresAt: new Date(Date.now() + 3600000), status: 'pending' }, merchants: { id: merchantId, name: 'Store' } }]] }, fetchResult: { access_token: 'fixture-token', reference: ngeniusReference, _links: { payment: { href: 'https://paypage.ksa.ngenius-payments.com/checkout/fixture' } } } });
+  const endpoint = await fixture.module('netlify/functions/checkout.mts');
+  const response = await endpoint.default(new Request(`https://preview.example/.netlify/functions/checkout?id=${documentId}`, { method: 'POST', headers: { Origin: 'https://preview.example', 'Content-Type': 'application/json' }, body: JSON.stringify({}) }), { ip: 'fixture' });
+  const data = await response.json();
+  assert.equal(response.status, 200);
+  assert.equal(data.url, 'https://paypage.ksa.ngenius-payments.com/checkout/fixture');
+  const attempt = fixture.trace.find(entry => entry.operation === 'update' && entry.table === 'payment_attempts');
+  assert.equal(attempt.set.reference, ngeniusReference);
+});

@@ -15,7 +15,7 @@ export interface PublicSitePay {
   adminConnected: boolean;
 }
 
-const gatewayNames: Record<string, string> = { paytabs: 'PayTabs', telr: 'Telr' };
+const gatewayNames: Record<string, string> = { paytabs: 'PayTabs', telr: 'Telr', ngenius: 'N-Genius KSA' };
 
 export function sitePayLabel(choice: string, translate: (phrase: string) => string) {
   const [gateway, method] = choice.split(':');

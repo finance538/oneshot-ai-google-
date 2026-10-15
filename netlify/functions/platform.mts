@@ -5,9 +5,10 @@ import { cents, credentialPrefix, email, failure, HttpError, identifier, isAdmin
 import { isStaffTier, aiTiers } from '../../shared/ai-tiers.js';
 import { aiLicense, grantStaff, grantTier, revokeStaff } from '../lib/ai-license.js';
 import { enabledCapabilities, settings } from '../lib/policy.js';
-import { openLinkMethods } from '../../shared/policy.js';
+import { gateways, openLinkMethods, type Gateway } from '../../shared/policy.js';
 import { confirmPayment } from '../lib/payments.js';
 import { telrPrefix } from '../lib/telr.js';
+import { ngeniusPrefix } from '../lib/ngenius.js';
 import { captureOperation, captureVerifiedIdentity } from '../lib/operations.js';
 import { previewOnly } from '../../shared/operations.js';
 import { ensureWallet, syncAdminGateways } from '../lib/wallet.js';
@@ -79,8 +80,10 @@ export default async (req: Request) => {
         daily: daily.map(row => ({ ...row, amount: Number(row.amount) })),
         capabilities: enabledCapabilities(merchant.id, 'paytabs', policy),
         telrCapabilities: enabledCapabilities(merchant.id, 'telr', policy),
+        ngeniusCapabilities: enabledCapabilities(merchant.id, 'ngenius', policy),
         credentialPrefix: credentialPrefix(merchant.id),
         telrPrefix: telrPrefix(merchant.id),
+        ngeniusPrefix: ngeniusPrefix(merchant.id),
         gatewayRequests: myGatewayRequests,
         adminGatewayRequests
       });
@@ -127,7 +130,7 @@ export default async (req: Request) => {
     if (body.action === 'submit-gateway-request') {
       if (!userIsAdmin) throw new HttpError(403, 'ربط بوابات الدفع يتم من حساب مسؤول المنصة.');
       const targetGateway = text(body.gateway, 30);
-      if (!['paytabs', 'telr'].includes(targetGateway)) throw new HttpError(400, 'بوابة دفع غير مدعومة.');
+      if (!gateways.includes(targetGateway as Gateway)) throw new HttpError(400, 'بوابة دفع غير مدعومة.');
       const variables = body.variables;
       if (!variables || typeof variables !== 'object' || Array.isArray(variables)) throw new HttpError(400, 'بيانات الربط غير صحيحة.');
       
@@ -174,11 +177,11 @@ export default async (req: Request) => {
       const maximum = cents(body.maximum);
       if (maximum < minimum) throw new HttpError(400, 'الحد الأعلى أقل من الحد الأدنى.');
       if (!Array.isArray(body.allowedMethods) || !body.allowedMethods.length || body.allowedMethods.length > 16) throw new HttpError(400, 'اختر طريقة دفع متاحة.');
-      const available = { paytabs: enabledCapabilities(merchant.id, 'paytabs', policy), telr: enabledCapabilities(merchant.id, 'telr', policy) };
+      const linkAvailable = Object.fromEntries(gateways.map(gateway => [gateway, enabledCapabilities(merchant.id, gateway, policy)])) as Record<Gateway, Record<string, boolean>>;
       const selected = [...new Set(body.allowedMethods)].map(value => {
         if (typeof value !== 'string') throw new HttpError(400, 'اختر طريقة دفع متاحة.');
         const [gateway, method, extra] = value.split(':');
-        if (!['paytabs', 'telr'].includes(gateway) || extra || !openLinkMethods.includes(method as typeof openLinkMethods[number]) || !available[gateway as 'paytabs' | 'telr'][method]) throw new HttpError(409, 'طريقة الدفع غير مهيأة لهذا التاجر.');
+        if (!gateways.includes(gateway as Gateway) || extra || !openLinkMethods.includes(method as typeof openLinkMethods[number]) || !linkAvailable[gateway as Gateway][method]) throw new HttpError(409, 'طريقة الدفع غير مهيأة لهذا التاجر.');
         return value;
       });
       const [link] = await db.insert(openLinks).values({ merchantId: merchant.id, title: text(body.title), minimum, maximum, allowedMethods: selected }).returning();
@@ -197,7 +200,7 @@ export default async (req: Request) => {
     if (body.action === 'create') {
       if (!policy.requestsEnabled) throw new HttpError(409, 'هذه الميزة متوقفة بواسطة مسؤول المنصة.');
       const method = text(body.method, 30);
-      const selectedGateway = body.gateway === 'telr' ? 'telr' : 'paytabs';
+      const selectedGateway: Gateway = gateways.includes(body.gateway as Gateway) ? body.gateway as Gateway : 'paytabs';
       const supported = enabledCapabilities(merchant.id, selectedGateway, policy);
       if (!Object.hasOwn(supported, method) || method === 'connected' || !supported[method]) throw new HttpError(409, 'طريقة الدفع غير مهيأة لهذا التاجر.');
       const customerEmail = email(body.customerEmail);

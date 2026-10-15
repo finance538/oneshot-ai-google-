@@ -4,7 +4,7 @@ import { database } from '../../db/index.js';
 import { documents, merchants, openLinks } from '../../db/schema.js';
 import { cents, email, failure, HttpError, identifier, jsonBody, reply, sameOrigin, text, throttle } from '../lib/platform.js';
 import { enabledCapabilities, settings } from '../lib/policy.js';
-import { openLinkMethods, type Gateway } from '../../shared/policy.js';
+import { gateways, openLinkMethods, type Gateway } from '../../shared/policy.js';
 
 export default async (req: Request, context: Context) => {
   try {
@@ -15,10 +15,10 @@ export default async (req: Request, context: Context) => {
     if (!row) throw new HttpError(404, 'رابط الدفع غير موجود.');
     const link = row.open_payment_links;
     const { policy } = await settings();
-    const available = { paytabs: enabledCapabilities(link.merchantId, 'paytabs', policy), telr: enabledCapabilities(link.merchantId, 'telr', policy) };
+    const available = Object.fromEntries(gateways.map(gateway => [gateway, enabledCapabilities(link.merchantId, gateway, policy)])) as Record<Gateway, Record<string, boolean>>;
     const choices = link.allowedMethods.filter(value => {
       const [gateway, method] = value.split(':');
-      return ['paytabs', 'telr'].includes(gateway) && openLinkMethods.includes(method as typeof openLinkMethods[number]) && available[gateway as Gateway][method];
+      return gateways.includes(gateway as Gateway) && openLinkMethods.includes(method as typeof openLinkMethods[number]) && available[gateway as Gateway][method];
     });
     const enabled = link.enabled && policy.paymentsEnabled && policy.requestsEnabled && policy.openLinksEnabled;
     if (req.method === 'GET') return reply({ link: { id: link.id, title: link.title, minimum: link.minimum, maximum: link.maximum, merchantName: row.merchants.name }, choices: enabled ? choices : [], enabled, aiEnabled: enabled && policy.aiEnabled });

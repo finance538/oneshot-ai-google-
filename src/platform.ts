@@ -96,6 +96,8 @@ export interface Platform {
   credentialPrefix?: string;
   telrPrefix?: string;
   telrCapabilities?: Record<string, boolean>;
+  ngeniusPrefix?: string;
+  ngeniusCapabilities?: Record<string, boolean>;
   metrics?: { paidCount: number; totalPaid: number; pendingCount: number; customers: number };
   daily?: { day: string; amount: number }[];
   openLinks?: OpenLink[];

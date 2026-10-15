@@ -4,7 +4,7 @@ import { ArrowUpLeft, Plus, LayoutDashboard, Link2, FileText, Repeat2, Blocks, S
 import { api, date, methods, money, openPaymentLink, paymentLink, statuses, type InstallPrompt, type Method, type OpenLink, type PaymentDocument, type Platform } from './platform';
 import { AppearanceControls, Brand } from './Brand';
 import { appearanceLink, useAppearance } from './i18n';
-import { defaultPolicy, type PaymentPolicy } from '../shared/policy';
+import { defaultPolicy, gatewayName, type PaymentPolicy } from '../shared/policy';
 import Checkout from './Checkout';
 import OpenCheckout from './OpenCheckout';
 import Storefront from './Storefront';
@@ -105,7 +105,7 @@ function MerchantPlatform() {
   const [autoconfirm, setAutoconfirm] = useState(false);
   const [invite, setInvite] = useState<string | null>(null);
   const [create, setCreate] = useState<Method | null>(null);
-  const [gateway, setGateway] = useState<'paytabs' | 'telr'>('telr');
+  const [gateway, setGateway] = useState<'paytabs' | 'telr' | 'ngenius'>('telr');
   const [openBuilder, setOpenBuilder] = useState(false);
   const [openGatewayMode, setOpenGatewayMode] = useState<'all' | 'single'>('all');
   const [reviewAttempt, setReviewAttempt] = useState<string | null>(null);
@@ -290,8 +290,8 @@ function MerchantPlatform() {
 
   const policy = platform.policy ?? defaultPolicy;
   const merchant = platform.merchant;
-  const caps = gateway === 'telr' ? platform.telrCapabilities : platform.capabilities;
-  const choices = (['paytabs', 'telr'] as const).flatMap(provider => methods.filter(method => method.id !== 'recurring' && (provider === 'telr' ? platform.telrCapabilities : platform.capabilities)?.[method.id]).map(method => ({ value: `${provider}:${method.id}`, name: `${provider === 'telr' ? 'Telr' : 'PayTabs'} · ${t(method.name)}` })));
+  const caps = gateway === 'telr' ? platform.telrCapabilities : gateway === 'ngenius' ? platform.ngeniusCapabilities : platform.capabilities;
+  const choices = (['paytabs', 'telr', 'ngenius'] as const).flatMap(provider => methods.filter(method => method.id !== 'recurring' && (provider === 'telr' ? platform.telrCapabilities : provider === 'ngenius' ? platform.ngeniusCapabilities : platform.capabilities)?.[method.id]).map(method => ({ value: `${provider}:${method.id}`, name: `${gatewayName(provider)} · ${t(method.name)}` })));
   const filtered = platform.documents.filter(document => (view === 'invoices' ? document.method === 'invoice' : true) && `${document.title} ${document.customerName} ${document.customerEmail}`.toLowerCase().includes(search.toLowerCase()));
   const metrics = platform.metrics ?? { totalPaid: 0, paidCount: 0, pendingCount: 0, customers: 0 };
   const canCreate = !!merchant && policy.requestsEnabled && policy.paymentsEnabled;
@@ -307,7 +307,7 @@ function MerchantPlatform() {
     if (created.link) await copy(openPaymentLink(created.link.id));
   }
 
-  const readinessVariables = [`${platform.credentialPrefix ?? 'PAYTABS_<MERCHANT_ID>'}_SERVER_KEY`, `${platform.credentialPrefix ?? 'PAYTABS_<MERCHANT_ID>'}_PROFILE_ID`, `${platform.telrPrefix ?? 'TELR_<MERCHANT_ID>'}_STORE_ID`, `${platform.telrPrefix ?? 'TELR_<MERCHANT_ID>'}_SERVICE_API_KEY`];
+  const readinessVariables = [`${platform.credentialPrefix ?? 'PAYTABS_<MERCHANT_ID>'}_SERVER_KEY`, `${platform.credentialPrefix ?? 'PAYTABS_<MERCHANT_ID>'}_PROFILE_ID`, `${platform.telrPrefix ?? 'TELR_<MERCHANT_ID>'}_STORE_ID`, `${platform.telrPrefix ?? 'TELR_<MERCHANT_ID>'}_SERVICE_API_KEY`, `${platform.ngeniusPrefix ?? 'NGENIUS_<MERCHANT_ID>'}_API_KEY`, `${platform.ngeniusPrefix ?? 'NGENIUS_<MERCHANT_ID>'}_OUTLET`];
   const sitePayUrl = 'https://pay.1shotcam.com/';
   const liveGateways = choices.map(choice => choice.name.split(' · ')[0]).filter((value, index, all) => all.indexOf(value) === index);
   const testButton = <button className="primary-button" disabled={!canCreate || !policy.openLinksEnabled || busy} onClick={() => void testLink()}><Sparkles size={16} />{t('رابط تجربة ١٠ ر.س')}</button>;
@@ -482,7 +482,7 @@ function AdminControls({ onSave }: { onSave: () => Promise<void> }) {
     catch (caught) { setError(caught instanceof Error ? caught.message : 'تعذر إتمام الطلب.'); }
     finally { setBusy(false); }
   }
-  function all(enabled: boolean) { setPolicy({ paymentsEnabled: enabled, requestsEnabled: enabled, openLinksEnabled: enabled, aiEnabled: enabled, gateways: { paytabs: enabled, telr: enabled }, methods: Object.fromEntries(methods.map(method => [method.id, enabled])) as PaymentPolicy['methods'] }); }
+  function all(enabled: boolean) { setPolicy({ paymentsEnabled: enabled, requestsEnabled: enabled, openLinksEnabled: enabled, aiEnabled: enabled, gateways: { paytabs: enabled, telr: enabled, ngenius: enabled }, methods: Object.fromEntries(methods.map(method => [method.id, enabled])) as PaymentPolicy['methods'] }); }
 
   return (
     <div className="admin-wrapper" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
@@ -626,8 +626,8 @@ function AdminControls({ onSave }: { onSave: () => Promise<void> }) {
                 {([{ key: 'paymentsEnabled', label: 'استقبال المدفوعات' }, { key: 'requestsEnabled', label: 'إنشاء طلبات جديدة' }, { key: 'openLinksEnabled', label: 'الروابط المفتوحة' }, { key: 'aiEnabled', label: 'مساعد التعبئة الذكي' }] as const).map(flag => (
                   <Toggle key={flag.key} label={t(flag.label)} checked={policy[flag.key]} disabled={busy} onChange={value => setPolicy({ ...policy, [flag.key]: value })} onInspect={() => setInspectKey(flag.key)} />
                 ))}
-                {(['paytabs', 'telr'] as const).map(provider => (
-                  <Toggle key={provider} label={provider === 'telr' ? 'Telr' : 'PayTabs'} checked={policy.gateways[provider]} disabled={busy} onChange={value => setPolicy({ ...policy, gateways: { ...policy.gateways, [provider]: value } })} />
+                {(['paytabs', 'telr', 'ngenius'] as const).map(provider => (
+                  <Toggle key={provider} label={gatewayName(provider)} checked={policy.gateways[provider]} disabled={busy} onChange={value => setPolicy({ ...policy, gateways: { ...policy.gateways, [provider]: value } })} />
                 ))}
                 {methods.map(method => (
                   <Toggle key={method.id} label={t(method.name)} checked={policy.methods[method.id]} disabled={busy} onChange={value => setPolicy({ ...policy, methods: { ...policy.methods, [method.id]: value } })} />

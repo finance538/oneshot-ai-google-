@@ -5,8 +5,10 @@ import { attempts, documents, merchants, openLinks, walletTopups } from '../../d
 import { failure, HttpError, identifier, jsonBody, paytabs, reply, safeGatewayUrl, sameOrigin, text, throttle } from '../lib/platform.js';
 import { enabledCapabilities, settings } from '../lib/policy.js';
 import { confirmPayment } from '../lib/payments.js';
+import { ngeniusCreateOrder } from '../lib/ngenius.js';
 import { telrConfig, telrRequest, telrUrl } from '../lib/telr.js';
 import { publicGateways } from '../lib/wallet.js';
+import { gateways, type Gateway } from '../../shared/policy.js';
 
 export default async (req: Request, context: Context) => {
   try {
@@ -19,7 +21,7 @@ export default async (req: Request, context: Context) => {
     const document = row.payment_documents;
     const merchant = row.merchants;
     const { policy } = await settings();
-    const active = enabledCapabilities(merchant.id, document.gateway === 'telr' ? 'telr' : 'paytabs', policy);
+    const active = enabledCapabilities(merchant.id, gateways.includes(document.gateway as Gateway) ? document.gateway as Gateway : 'paytabs', policy);
     let sourceEnabled = true;
     const [topup] = await db.select().from(walletTopups).where(eq(walletTopups.documentId, document.id));
     if (topup) sourceEnabled = (await publicGateways(policy)).some(row => row.gateway === document.gateway && row.merchantId === document.merchantId);
@@ -73,6 +75,11 @@ export default async (req: Request, context: Context) => {
     const [attempt] = await db.insert(attempts).values({ documentId: document.id, merchantId: merchant.id, amount: document.amount, period: `initial:${document.id}:${previous?.id || 'first'}`, consent: recurring && body.consent === true }).onConflictDoNothing().returning();
     if (!attempt) throw new HttpError(409, 'توجد محاولة دفع أخرى قيد المعالجة.');
     const origin = url.origin;
+    if (document.gateway === 'ngenius') {
+      const order = await ngeniusCreateOrder(merchant.id, { amount: document.amount, description: document.title, email: document.customerEmail, origin, documentId: document.id });
+      await db.update(attempts).set({ reference: order.reference, gatewayUrl: order.url, status: 'pending' }).where(eq(attempts.id, attempt.id));
+      return reply({ url: order.url, status: 'pending' });
+    }
     if (document.gateway === 'telr') {
       const returnUrl = `${origin}/.netlify/functions/payment-return?id=${document.id}`;
       const result = await telrRequest(merchant.id, {

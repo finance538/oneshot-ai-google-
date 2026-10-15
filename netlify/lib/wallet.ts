@@ -3,8 +3,9 @@ import { database } from '../../db/index.js';
 import { siteGateways, walletEntries, wallets, walletTopups } from '../../db/schema.js';
 import { enabledCapabilities } from './policy.js';
 import { capabilities, HttpError } from './platform.js';
+import { ngeniusCapabilities, ngeniusConfig } from './ngenius.js';
 import { telrCapabilities, telrConfig } from './telr.js';
-import type { Gateway, PaymentPolicy } from '../../shared/policy.js';
+import { gateways, type Gateway, type PaymentPolicy } from '../../shared/policy.js';
 
 type Transaction = Parameters<Parameters<ReturnType<typeof database>['transaction']>[0]>[0];
 
@@ -18,8 +19,8 @@ export async function ensureWallet(ownerId: string) {
 
 export async function syncAdminGateways(adminId: string, merchantId: string) {
   const db = database();
-  for (const gateway of ['paytabs', 'telr'] as const) {
-    const connected = gateway === 'paytabs' ? capabilities(merchantId).connected : telrCapabilities(merchantId).connected;
+  for (const gateway of ['paytabs', 'telr', 'ngenius'] as const) {
+    const connected = gateway === 'paytabs' ? capabilities(merchantId).connected : gateway === 'ngenius' ? ngeniusCapabilities(merchantId).connected : telrCapabilities(merchantId).connected;
     if (connected) await db.insert(siteGateways).values({ gateway, merchantId, adminId }).onConflictDoUpdate({ target: siteGateways.gateway, set: { merchantId, adminId, updatedAt: new Date() } });
     else await db.delete(siteGateways).where(and(eq(siteGateways.gateway, gateway), eq(siteGateways.merchantId, merchantId)));
   }
@@ -27,7 +28,7 @@ export async function syncAdminGateways(adminId: string, merchantId: string) {
 
 export async function publicGateways(policy: PaymentPolicy) {
   const rows = await database().select().from(siteGateways);
-  return rows.filter(row => (row.gateway === 'paytabs' || row.gateway === 'telr') && enabledCapabilities(row.merchantId, row.gateway as Gateway, policy).hosted && (row.gateway !== 'telr' || telrConfig(row.merchantId).test === 0));
+  return rows.filter(row => gateways.includes(row.gateway as Gateway) && enabledCapabilities(row.merchantId, row.gateway as Gateway, policy).hosted && (row.gateway !== 'telr' || telrConfig(row.merchantId).test === 0) && (row.gateway !== 'ngenius' || ngeniusConfig(row.merchantId).test === false));
 }
 
 export async function creditTopup(tx: Transaction, documentId: string, amount: number) {
