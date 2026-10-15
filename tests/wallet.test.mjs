@@ -53,7 +53,8 @@ async function harness({ user = customer, selections = {}, updates = {}, inserts
       catch (error) { trace.push({ operation: 'rollback' }); throw error; }
     },
   };
-  const sandbox = vm.createContext({ Request, Response, URL, Buffer, Date, AbortSignal, process: { env }, fetch: async () => Response.json(fetchResult) });
+  const fetchTrace = [];
+  const sandbox = vm.createContext({ Request, Response, URL, Buffer, Date, AbortSignal, process: { env }, fetch: async (input, init) => { fetchTrace.push({ url: String(input), init }); return Response.json(fetchResult); } });
   const cache = new Map();
   async function synthetic(identifier, exports) {
     const module = new vm.SyntheticModule(Object.keys(exports), function () { for (const [name, value] of Object.entries(exports)) this.setExport(name, value); }, { context: sandbox, identifier });
@@ -76,7 +77,7 @@ async function harness({ user = customer, selections = {}, updates = {}, inserts
     if (target.status !== 'evaluated') await target.evaluate();
     return target.namespace;
   }
-  return { trace, db, module };
+  return { trace, db, module, fetchTrace };
 }
 
 function post(body, origin = 'https://preview.example') {
@@ -381,4 +382,24 @@ test('the N-Genius hosted page is created with a PURCHASE action and a same-orig
   assert.equal(data.url, 'https://paypage.ksa.ngenius-payments.com/checkout/fixture');
   const attempt = fixture.trace.find(entry => entry.operation === 'update' && entry.table === 'payment_attempts');
   assert.equal(attempt.set.reference, ngeniusReference);
+  // The money-critical payload: a PURCHASE order (authorise + capture) whose return
+  // URL points back at our own payment-return endpoint, never at the gateway page.
+  const order = fixture.fetchTrace.find(call => call.url.endsWith('/orders'));
+  const sent = JSON.parse(order.init.body);
+  assert.equal(sent.action, 'PURCHASE');
+  assert.equal(sent.amount.value, 10000);
+  assert.equal(sent.amount.currencyCode, 'SAR');
+  assert.ok(sent.merchantAttributes.redirectUrl.startsWith('https://preview.example/.netlify/functions/payment-return?id='));
+  assert.equal(sent.merchantAttributes.redirectUrl, sent.merchantAttributes.cancelUrl);
+  assert.ok(fixture.fetchTrace.every(call => call.url.startsWith('https://api-gateway.ksa.ngenius-payments.com/') || call.url.startsWith('https://paypage.ksa.ngenius-payments.com/')));
+});
+
+test('loading the admin dashboard registers a connected N-Genius account for site payments', async () => {
+  const fixture = await harness({ env: ngeniusEnv });
+  const { syncAdminGateways } = await fixture.module('netlify/lib/wallet.ts');
+  await syncAdminGateways(customer.id, merchantId);
+  const upsert = fixture.trace.find(entry => entry.operation === 'insert' && entry.table === 'site_payment_gateways');
+  assert.equal(upsert.values.gateway, 'ngenius');
+  assert.equal(upsert.values.merchantId, merchantId);
+  assert.equal(fixture.trace.some(entry => entry.operation === 'delete' && entry.table === 'site_payment_gateways'), true);
 });
