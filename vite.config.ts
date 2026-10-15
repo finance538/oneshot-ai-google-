@@ -1,7 +1,7 @@
 import { defineConfig, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 
-const OLLAMA_KEY = process.env.OLLAMA_API_KEY || '67fa2a979e184fbb95a91222066cea5b.px1z6ZsmTzV3lFvimZQ3AebK'
+const OLLAMA_KEY = process.env.OLLAMA_API_KEY || ''
 
 async function queryOllama(prompt: string, history: any[] = [], systemPrompt?: string): Promise<string | null> {
   if (!OLLAMA_KEY) return null

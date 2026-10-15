@@ -5,7 +5,7 @@ import path from 'node:path';
 import vm from 'node:vm';
 import { test } from 'node:test';
 
-const root = path.resolve('/opt/build/repo');
+const root = path.resolve('.');
 
 function sqlText(value) {
   if (!value) return '';
