@@ -23,7 +23,7 @@ export const FEATURE_PROPERTIES_CATALOG: Record<string, FeatureProperty> = {
     whatHappensWhenEnabled: 'تعمل جميع بوابات الدفع المرخصة بشكل طبيعي وتستقبل طلبات الشراء.',
     whatHappensWhenDisabled: 'يتم حظر أي محاولة دفع جديدة فوراً مع إرجاع رسالة صيانة بنكية، دون إيقاف الجلسات التي تم تأكيدها مسبقاً.',
     securityImpactScore: 'حرج (إلزامي)',
-    supportedGateways: ['بيتابس (PayTabs)', 'تيلر (Telr)', 'ماي فاتورة', 'تابي', 'بي زاتي', 'نون', 'بي وان'],
+    supportedGateways: ['PayTabs', 'تيلر (Telr)', 'ماي فاتورة', 'تابي', 'بي زاتي', 'نون', 'بي وان'],
     bestPractices: 'يُفضل إيقافه مؤقتاً فقط أثناء الترقية الشاملة أو حدوث طوارئ بنكية حرجة.'
   },
   requestsEnabled: {

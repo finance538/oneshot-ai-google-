@@ -20,7 +20,7 @@ const SAMPLE_EVENTS: VirtualEvent[] = [
     timestamp: 'منذ لحظات',
     source: 'order_stream',
     title: 'طلب دفع جديد قيد المعالجة (SAR 450.00)',
-    detail: 'العميل: سارة القحطاني · وسيلة الدفع: مدى / 3DS Verified · البوابة: بيتابس KSA',
+    detail: 'العميل: سارة القحطاني · وسيلة الدفع: مدى / 3DS Verified · البوابة: PayTabs',
     status: 'completed',
   },
   {
@@ -239,7 +239,7 @@ export default function VirtualMerchantStation() {
                     </div>
                     <div className="term-lines" dir="ltr">
                       <code>&gt; [AI_DISPATCHER] Polling inbox notifications: 0 unhandled alerts.</code>
-                      <code>&gt; [ROUTING_ENGINE] Selected primary provider: PayTabs KSA (Latency: 190ms).</code>
+                      <code>&gt; [ROUTING_ENGINE] Selected primary provider: PayTabs (Latency: 190ms).</code>
                       <code>&gt; [FRAUD_MONITOR] BIN check SA: Alinma Mada verified. 3DS 2.0 passed.</code>
                       <code>&gt; [ORDER_EXEC] Invoice #ONESHOT-1048 settled. Webhook dispatched.</code>
                       <code>&gt; [AUTO_CEO] Conversion optimization matrix updated. Ready for next query.</code>

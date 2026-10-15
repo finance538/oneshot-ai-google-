@@ -1,3 +1,4 @@
+import { gatewayName, gatewayNames } from '../shared/policy';
 // paymentFailuresData.ts
 // Intelligent Failure Analytics & Programmatic Reason Categorization Engine for Payment Gateways
 
@@ -304,9 +305,9 @@ export const GATEWAYS_FAILURE_STATS: GatewayFailureStats[] = [
   },
   {
     gatewayId: 'paytabs',
-    gatewayName: 'PayTabs (بيتابس)',
+    gatewayName: gatewayNames.paytabs,
     brandColor: '#2b78ff',
-    logoText: 'PAYTABS',
+    logoText: gatewayNames.paytabs,
     totalAttempts: 2150,
     failedCount: 204,
     failureRate: 9.5,
@@ -498,7 +499,7 @@ export const INITIAL_SPIKE_ALERTS: FailureSpikeAlert[] = [
   {
     id: 'alert-spike-paytabs-funds',
     gatewayId: 'paytabs',
-    gatewayName: 'PayTabs (بيتابس)',
+    gatewayName: gatewayNames.paytabs,
     brandColor: '#2b78ff',
     severity: 'warning',
     timestamp: 'منذ 18 دقيقة',
@@ -577,7 +578,7 @@ export const INITIAL_SPIKE_ALERTS: FailureSpikeAlert[] = [
       {
         id: 'act-8',
         titleAr: 'فحص البطاقة في أداة التشخيص',
-        descriptionAr: 'اختبار بطاقة الإنماء مدى (588845) ومقارنة قبولها بين سترايب وبيتابس.',
+        descriptionAr: 'اختبار بطاقة الإنماء مدى (588845) ومقارنة قبولها بين سترايب و PayTabs.',
         actionType: 'inspect_card'
       }
     ],
@@ -1022,7 +1023,7 @@ export function diagnoseCardDecline(
     actionSteps.push('أرسل رسالة فورية لطيفة للعميل تتيح له خيار تجزئة المبلغ أو شحن الحساب.');
     actionSteps.push('وفّر له وسيلة دفع سريعة بديلة مثل Apple Pay أو STC Pay إذا كانت مفعلة لديك.');
   } else if (matchedCategory.id === 'GATEWAY_BIN') {
-    actionSteps.push(`حوّل مسار العملية فوراً إلى بوابة ${alternativeGateway.toUpperCase()} التي تدعم بطاقات ${bankName} بنسبة ${altConfidence}%.`);
+    actionSteps.push(`حوّل مسار العملية فوراً إلى بوابة ${gatewayName(alternativeGateway)} التي تدعم بطاقات ${bankName} بنسبة ${altConfidence}%.`);
     actionSteps.push('فعّل خاصية "التوجيه الذكي التلقائي (Smart Fallback Routing)" في إعدادات المنصة لتفادي تكرار هذا الرفض.');
   } else if (matchedCategory.id === 'TECH_PROCESSOR') {
     actionSteps.push('المشكلة في مقسم البنك المصدر (Network Switch Downtime) وليست من بطاقة العميل.');
@@ -1048,10 +1049,10 @@ export function diagnoseCardDecline(
     isKnownBin: isKnown,
     rawResponseSimulated: {
       code: matchedReason.rawCodes[0] || 'ERR_DECLINE',
-      message: `${matchedReason.titleEn} - Processed by ${gateway.toUpperCase()}`,
+      message: `${matchedReason.titleEn} - Processed by ${gatewayName(gateway)}`,
       httpStatus: 402
     },
-    aiExplanation: `تم تحليل رفض البطاقة على بوابة ${gateway.toUpperCase()}: ${matchedReason.explanationAr} ${matchedCategory.descriptionAr}`,
+    aiExplanation: `تم تحليل رفض البطاقة على بوابة ${gatewayName(gateway)}: ${matchedReason.explanationAr} ${matchedCategory.descriptionAr}`,
     actionableRoadmap: actionSteps,
     suggestedCustomerMessage: customerMsg,
     recommendedAlternativeGateway: alternativeGateway,
