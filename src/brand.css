@@ -149,6 +149,11 @@ tbody tr:hover { background: var(--surface-raised); }
 .readiness.ready > span { background: #71c9a1; }
 .settings-panel p, .helper-note, .modal-description { color: var(--muted); line-height: 1.9; font-size: 12px; }
 .settings-panel label, .modal label, .checkout-card label { color: var(--text); font-size: 12px; }
+/* The .consent rows keep a fixed cream background (#fbf8f0) in every theme, so their text
+   must stay dark: the generic `label { color: var(--text) }` above turns it near-white
+   (#f5f5f2) in the dark theme and the labels become invisible (contrast 1.03:1). */
+.modal label.consent, .settings-panel label.consent, .checkout-card label.consent, .assist-body > label.consent { color: #4a4034; }
+.modal label.consent span, .assist-body > label.consent span { flex: 1; }
 .settings-panel h3 { font-size: 15px; margin: 20px 0 9px; }
 .config-list code { background: var(--input); border-color: var(--border); color: var(--muted); overflow-wrap: anywhere; }
 .divider { border-color: var(--border); }
