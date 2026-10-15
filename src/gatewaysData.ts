@@ -479,4 +479,71 @@ export const KNOWN_GATEWAYS: GatewayDefinition[] = [
       },
     ],
   },
+  {
+    id: 'tap',
+    name: 'تاب للمدفوعات (Tap Payments)',
+    english: 'Tap Payments Gateway',
+    country: 'الكويت / السعودية (مرخّصة في الخليج)',
+    logoTheme: 'tap-theme',
+    website: 'https://www.tap.company',
+    description:
+      'بوابة إقليمية واحدة تجمع البطاقات (مدى/فيزا/ماستركارد) وApple Pay وSamsung Pay وGoogle Pay وOmanNet في صفحة دفع واحدة (Tap Checkout). الربط العامل الآن: شحنة عبر POST /v2/charges على api.tap.company ثم توجيه العميل إلى checkout.tap.company، وتأكيد الحالة بقراءة الشحنة حيًّا من البوابة عند العودة أو وصول الويب هوك (GET /v2/charges/{id}). المصدر: developers.tap.company',
+    supportedMethods: ['مدى (Cards)', 'Apple Pay', 'Samsung Pay', 'Google Pay', 'STC Pay'],
+    securityFeatures: ['PCI-DSS', '3D Secure 2.0', 'Webhook Signature (hashstring)', 'Tokenisation / Saved Cards'],
+    integrationTypes: [
+      {
+        id: 'hosted',
+        name: 'صفحة الدفع المستضافة (Tap Checkout)',
+        english: 'Tap Hosted Checkout',
+        badge: 'المرتبطة فعليًا بحساب المنصة',
+        description:
+          'شحنة واحدة عبر dالة tapCreateCharge إلى api.tap.company/v2/charges بعملة SAR ثم توجيه العميل إلى صفحة Tap المستضافة؛ يظهر فيها Card وApple Pay وSamsung Pay حسب جهاز العميل. تعود النتيجة إلى payment-return ويُبلَّغ الحالة إلى tap-webhook، والحالة لا تُؤخذ من الإشعار بل تُقرأ حيًّا من Tap.',
+        suitableFor: 'المتاجر الإلكترونية وصفحات الدفع العامة دون رفع مسؤولية PCI.',
+        requiredFields: [
+          { key: 'SECRET_KEY', label: 'المفتاح السري (Secret Key)', placeholder: 'sk_live_... / sk_test_...', isSecret: true },
+          { key: 'PUBLIC_KEY', label: 'المفتاح العام (Public Key)', placeholder: 'pk_live_... / pk_test_...' },
+          { key: 'MERCHANT_ID', label: 'معرّف التاجر (Merchant ID) — اختياري', placeholder: 'merchant_...' },
+        ],
+      },
+      {
+        id: 'mada_applepay',
+        name: 'مدى وApple Pay وSamsung Pay',
+        english: 'mada · Apple Pay · Samsung Pay',
+        badge: 'جاهزة في صفحة Tap',
+        description:
+          'طرق الدفع الخليجية الثلاث تُفعَّل من لوحة Tap دون كود إضافي: البطاقات (مدى/فيزا/ماستركارد) وApple Pay على Safari وأجهزة Apple، وSamsung Pay على أجهزة سامسونج. تُمرَّر عبر حقل source في الشحنة (src_all / src_card / src_apple_pay / src_samsung_pay).',
+        suitableFor: 'السوق السعودي والخليجي حيث المدى وApple Pay أوسع طرق الدفع.',
+        requiredFields: [
+          { key: 'PUBLIC_KEY', label: 'المفتاح العام (Public Key)', placeholder: 'pk_live_...' },
+          { key: 'APPLE_MERCHANT_ID', label: 'معرّف تاجر Apple Pay', placeholder: 'merchant.com.oneshotcam' },
+        ],
+      },
+      {
+        id: 'own',
+        name: 'ربط الخوادم المباشر (Direct API · Charges)',
+        english: 'Direct Server API',
+        badge: 'تحكم كامل بالعمليات',
+        description:
+          'واجهة REST كاملة: إنشاء الشحنة، الاسترجاع (Refund)، الحفظ (Authorize ثم Capture)، والاستعلام عن الشحنة. تُرسل بيانات البطاقة من خادمك، ويلزم التزام PCI-DSS.',
+        suitableFor: 'المنصات والشركات الحاصلة على متطلبات PCI-DSS والمعالجة الخلفية.',
+        requiredFields: [
+          { key: 'SECRET_KEY', label: 'المفتاح السري (Secret Key)', placeholder: 'sk_live_...', isSecret: true },
+          { key: 'WEBHOOK_SECRET', label: 'مفتاح توقيع الويب هوك (hashstring)', placeholder: 'يُنسخ من لوحة Tap', isSecret: true },
+        ],
+      },
+      {
+        id: 'plugins',
+        name: 'إضافات المتاجر والأكشاك (Plugins · Shopify / WooCommerce / Tap Kiosk)',
+        english: 'Tap Plugins & Kiosk',
+        badge: 'تركيب بلا برمجة',
+        description:
+          'إضافات رسمية للمتاجر الجاهزة (Shopify، WooCommerce، Magento) وربط Tap Go/أجهزة الكاشير بالمفتاح نفسه، مع بوابة موحّدة لكل القنوات.',
+        suitableFor: 'المتاجر المبنية على منصات جاهزة دون تطوير مخصص.',
+        requiredFields: [
+          { key: 'PUBLIC_KEY', label: 'المفتاح العام (Public Key)', placeholder: 'pk_live_...' },
+          { key: 'SECRET_KEY', label: 'المفتاح السري (Secret Key)', placeholder: 'sk_live_...', isSecret: true },
+        ],
+      },
+    ],
+  },
 ];

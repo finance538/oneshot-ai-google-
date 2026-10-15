@@ -9,6 +9,7 @@ import { gateways, openLinkMethods, type Gateway } from '../../shared/policy.js'
 import { confirmPayment } from '../lib/payments.js';
 import { telrPrefix } from '../lib/telr.js';
 import { ngeniusPrefix } from '../lib/ngenius.js';
+import { tapCapabilities, tapPrefix } from '../lib/tap.js';
 import { captureOperation, captureVerifiedIdentity } from '../lib/operations.js';
 import { previewOnly } from '../../shared/operations.js';
 import { ensureWallet, syncAdminGateways } from '../lib/wallet.js';
@@ -81,9 +82,11 @@ export default async (req: Request) => {
         capabilities: enabledCapabilities(merchant.id, 'paytabs', policy),
         telrCapabilities: enabledCapabilities(merchant.id, 'telr', policy),
         ngeniusCapabilities: enabledCapabilities(merchant.id, 'ngenius', policy),
+        tapCapabilities: enabledCapabilities(merchant.id, 'tap', policy),
         credentialPrefix: credentialPrefix(merchant.id),
         telrPrefix: telrPrefix(merchant.id),
         ngeniusPrefix: ngeniusPrefix(merchant.id),
+        tapPrefix: tapPrefix(merchant.id),
         gatewayRequests: myGatewayRequests,
         adminGatewayRequests
       });

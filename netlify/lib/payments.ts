@@ -4,6 +4,7 @@ import { attempts, documents, subscriptions, walletTopups } from '../../db/schem
 import { encryptToken, HttpError, nextDate, paytabs } from './platform.js';
 import { ngeniusConfig, ngeniusOrder, ngeniusStatus, type NgeniusSavedCard } from './ngenius.js';
 import { telrConfig, telrRequest } from './telr.js';
+import { tapChargeAmount, tapChargeCurrency, tapChargeId, tapChargeStatus, tapConfig, tapRetrieveCharge, tapState } from './tap.js';
 import { rememberSavedCard } from './saved-cards.js';
 import { creditTopup } from './wallet.js';
 
@@ -31,6 +32,16 @@ export async function confirmPayment(attemptId: string, reference: string, callb
     if (!order || order.ref !== reference || order.cartid !== attempt.id || order.currency !== 'SAR' || Math.round(Number(order.amount) * 100) !== attempt.amount) throw new HttpError(409, 'تأكيد Telr لا يطابق الطلب.');
     const code = Number((order.status as Record<string, unknown> | undefined)?.code);
     status = code === 3 ? 'paid' : code < 0 ? 'failed' : 'pending';
+  } else if (targetDocument.gateway === 'tap') {
+    const [topup] = await db.select().from(walletTopups).where(eq(walletTopups.documentId, targetDocument.id));
+    if (topup && tapConfig(attempt.merchantId).test) throw new HttpError(409, 'لا يمكن شحن المحفظة من بوابة في وضع الاختبار.');
+    // The charge is only ever read back from Tap — never taken from the webhook body — and its
+    // reference, amount and currency are checked against this attempt before it settles.
+    const charge = await tapRetrieveCharge(attempt.merchantId, reference);
+    if (tapChargeId(charge) !== reference || tapChargeCurrency(charge) !== 'SAR' || Math.round(Number(tapChargeAmount(charge)) * 100) !== attempt.amount) throw new HttpError(409, 'تأكيد Tap لا يطابق الطلب.');
+    const state = tapState(tapChargeStatus(charge));
+    // AUTHORIZED is only a hold, so it stays pending: the site credits on capture, never on a hold.
+    status = state === 'paid' ? 'paid' : state === 'failed' ? 'failed' : 'pending';
   } else {
     const result = await paytabs(attempt.merchantId, '/payment/query', { tran_ref: reference }, timeoutMs);
     if (result.tran_ref !== reference || result.cart_id !== attempt.id || result.cart_currency !== 'SAR' || Math.round(Number(result.cart_amount) * 100) !== attempt.amount || String(result.tran_type).toLowerCase() !== 'sale') throw new HttpError(409, 'بيانات التأكيد لا تطابق طلب الدفع.');

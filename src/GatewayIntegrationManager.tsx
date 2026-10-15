@@ -71,9 +71,12 @@ export default function GatewayIntegrationManager({
   // Payment gateways are provisioned from the platform administrator account only:
   // every connected gateway runs under that account, so other dashboard users get a read-only view.
   if (!isAdmin) {
-    const platformGateways: { id: 'paytabs' | 'telr'; label: string; english: string }[] = [
+    // البوابات المنصّبية الأربع مرتبطة بحساب المسؤول؛ القائمة تعرض حالة كل واحدة من سياسة المنصة.
+    const platformGateways: { id: 'paytabs' | 'telr' | 'ngenius' | 'tap'; label: string; english: string }[] = [
       { id: 'paytabs', label: 'بيتابس (PayTabs)', english: 'PayTabs Gateway' },
       { id: 'telr', label: 'تيلر (Telr)', english: 'Telr Gateway' },
+      { id: 'ngenius', label: 'نيجنيس السعودية (N-Genius KSA)', english: 'N-Genius KSA Gateway' },
+      { id: 'tap', label: 'تاب للمدفوعات (Tap Payments)', english: 'Tap Payments Gateway' },
     ];
     return (
       <div className="gateway-integration-hub">

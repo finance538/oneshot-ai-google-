@@ -8,6 +8,7 @@ import { confirmPayment } from '../lib/payments.js';
 import { ngeniusCreateOrder, ngeniusSavedCardMethods, ngeniusSlim } from '../lib/ngenius.js';
 import { savedCardFor } from '../lib/saved-cards.js';
 import { telrConfig, telrRequest, telrUrl } from '../lib/telr.js';
+import { tapChargeId, tapChargeUrl, tapConfig, tapCreateCharge, tapSource, type TapChargeInput } from '../lib/tap.js';
 import { publicGateways } from '../lib/wallet.js';
 import { gateways, type Gateway } from '../../shared/policy.js';
 
@@ -104,6 +105,39 @@ export default async (req: Request, context: Context) => {
       if (!order || typeof order.ref !== 'string') throw new HttpError(502, 'لم تصل بيانات جلسة Telr.');
       const redirectUrl = telrUrl(order.url, merchant.id);
       await db.update(attempts).set({ reference: order.ref, gatewayUrl: redirectUrl, status: 'pending' }).where(eq(attempts.id, attempt.id));
+      return reply({ url: redirectUrl, status: 'pending' });
+    }
+    if (document.gateway === 'tap') {
+      // Tap: صفحة دفع مستضافة واحدة (Card/Apple Pay/Samsung Pay) يُعاد منها العميل إلى payment-return،
+      // ويُبلَّغ الحالة إلى tap-webhook. المرجع الوحيد هو معرّف الشحنة chg_… المخزَّن في المحاولة،
+      // ولا يُصدَّق محتوى الإشعار أبدًا — الحالة تُقرأ حيّة من Tap.
+      const returnUrl = `${origin}/.netlify/functions/payment-return?id=${document.id}`;
+      const postUrl = `${origin}/.netlify/functions/tap-webhook?merchant=${merchant.id}`;
+      const parts = String(document.customerName || '').trim().split(/\s+/).filter(Boolean);
+      const digits = (typeof customer.phone === 'string' ? customer.phone : '').replace(/\D/g, '').replace(/^(966|0)/, '');
+      const billTo: TapChargeInput['customer'] = { email: document.customerEmail };
+      if (parts[0]) billTo.first_name = parts[0].slice(0, 50);
+      if (parts.length > 1) billTo.last_name = parts.slice(1).join(' ').slice(0, 50);
+      if (digits) billTo.phone = { country_code: '+966', number: digits.slice(0, 20) };
+      const charge = await tapCreateCharge(tapConfig(merchant.id), {
+        amount: document.amount / 100,
+        currency: 'SAR',
+        reference: attempt.id,
+        redirectUrl: returnUrl,
+        postUrl,
+        source: tapSource(document.method),
+        description: document.title,
+        customer: billTo,
+      });
+      const chargeId = tapChargeId(charge);
+      if (!chargeId) throw new HttpError(502, 'لم تصل بيانات عملية Tap.');
+      const redirectUrl = tapChargeUrl(charge);
+      await db.update(attempts).set({ reference: chargeId, gatewayUrl: redirectUrl, status: 'pending' }).where(eq(attempts.id, attempt.id));
+      // paylink/invoice: العميل يدفع من الرابط لاحقًا، فيبقى الرابط على المستند كما تفعل بقية البوابات.
+      if (document.method === 'paylink' || document.method === 'invoice') {
+        await db.update(documents).set({ gatewayUrl: redirectUrl, gatewayId: chargeId, status: 'published' }).where(eq(documents.id, document.id));
+        return reply({ url: redirectUrl, status: 'published' });
+      }
       return reply({ url: redirectUrl, status: 'pending' });
     }
     const payload: Record<string, unknown> = {

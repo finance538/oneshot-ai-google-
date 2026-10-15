@@ -20,7 +20,7 @@ export interface PaymentDocument {
   customerEmail: string;
   amount: number;
   method: Method;
-  gateway: 'paytabs' | 'telr' | 'ngenius';
+  gateway: 'paytabs' | 'telr' | 'ngenius' | 'tap';
   interval: string;
   status: string;
   createdAt: string;
@@ -99,6 +99,8 @@ export interface Platform {
   telrCapabilities?: Record<string, boolean>;
   ngeniusPrefix?: string;
   ngeniusCapabilities?: Record<string, boolean>;
+  tapPrefix?: string;
+  tapCapabilities?: Record<string, boolean>;
   metrics?: { paidCount: number; totalPaid: number; pendingCount: number; customers: number };
   daily?: { day: string; amount: number }[];
   openLinks?: OpenLink[];

@@ -5,6 +5,7 @@ import { defaultPolicy, gateways, methodAllowed, paymentMethods, type Gateway, t
 import { capabilities, HttpError } from './platform.js';
 import { ngeniusCapabilities } from './ngenius.js';
 import { telrCapabilities } from './telr.js';
+import { tapCapabilities } from './tap.js';
 
 // A stored policy may predate a gateway, so it is always merged over the defaults.
 export function normalizePolicy(stored: PaymentPolicy | undefined | null): PaymentPolicy {
@@ -22,7 +23,7 @@ export async function settings() {
 }
 
 export function enabledCapabilities(merchantId: string, gateway: Gateway, policy: PaymentPolicy): Record<string, boolean> {
-  const available: Record<string, boolean> = gateway === 'telr' ? telrCapabilities(merchantId) : gateway === 'ngenius' ? ngeniusCapabilities(merchantId) : capabilities(merchantId);
+  const available: Record<string, boolean> = gateway === 'telr' ? telrCapabilities(merchantId) : gateway === 'ngenius' ? ngeniusCapabilities(merchantId) : gateway === 'tap' ? tapCapabilities(merchantId) : capabilities(merchantId);
   return Object.fromEntries(Object.entries(available).map(([method, active]) => [method, method === 'connected' ? active : active && methodAllowed(policy, gateway, method)]));
 }
 

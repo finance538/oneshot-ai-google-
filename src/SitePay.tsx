@@ -3,6 +3,7 @@ import { ArrowUpLeft, CreditCard, LockKeyhole, ShieldCheck } from 'lucide-react'
 import { AppearanceControls, Brand } from './Brand';
 import { api, methods, money, paymentLink } from './platform';
 import { useAppearance } from './i18n';
+import { gatewayName } from '../shared/policy';
 import LoadingPanel from './LoadingPanel';
 
 export interface PublicSitePay {
@@ -15,12 +16,10 @@ export interface PublicSitePay {
   adminConnected: boolean;
 }
 
-const gatewayNames: Record<string, string> = { paytabs: 'PayTabs', telr: 'Telr', ngenius: 'N-Genius KSA' };
-
 export function sitePayLabel(choice: string, translate: (phrase: string) => string) {
   const [gateway, method] = choice.split(':');
   const known = methods.find(item => item.id === method);
-  return `${gatewayNames[gateway] || gateway} · ${known ? translate(known.name) : method}`;
+  return `${gatewayName(gateway)} · ${known ? translate(known.name) : method}`;
 }
 
 export default function SitePay() {
