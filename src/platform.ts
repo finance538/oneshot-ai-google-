@@ -88,8 +88,47 @@ export interface AiAdminView {
   staffGrants: AiStaffGrantView[];
 }
 
+export type AccountRole = 'admin' | 'merchant' | 'marketer';
+export type AccountStatus = 'pending' | 'approved' | 'rejected';
+
+export interface MarketerAccount {
+  id: string;
+  ownerId: string;
+  email: string;
+  fullName: string;
+  role: 'merchant' | 'marketer';
+  status: AccountStatus;
+  referralCode: string | null;
+  commissionRate: number;
+  notes: string | null;
+  reviewedBy: string | null;
+  reviewedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MarketerCampaign {
+  id: string;
+  marketerId: string;
+  ownerId: string;
+  title: string;
+  targetProductSku: string;
+  utmCampaign: string;
+  channel: string;
+  clicks: number;
+  conversions: number;
+  earnedCommission: number;
+  enabled: boolean;
+  createdAt: string;
+}
+
 export interface Platform {
-  merchant: { id: string; name: string } | null;
+  merchant: { id: string; name: string; accountId?: string | null } | null;
+  accountRole?: AccountRole;
+  registrationStatus?: AccountStatus;
+  marketerAccount?: MarketerAccount | null;
+  marketerCampaigns?: MarketerCampaign[];
+  adminMarketers?: MarketerAccount[];
   documents: PaymentDocument[];
   subscriptions: Subscription[];
   attempts: PaymentAttempt[];

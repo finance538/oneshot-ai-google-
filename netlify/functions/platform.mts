@@ -1,7 +1,19 @@
 import { and, desc, eq, sql } from 'drizzle-orm';
 import { database } from '../../db/index.js';
-import { aiEntitlements, aiStaffGrants, attempts, documents, gatewayRequests, merchants, openLinks, subscriptions } from '../../db/schema.js';
+import {
+  accountRegistrations,
+  aiEntitlements,
+  aiStaffGrants,
+  attempts,
+  documents,
+  gatewayRequests,
+  marketerCampaigns,
+  merchants,
+  openLinks,
+  subscriptions,
+} from '../../db/schema.js';
 import { cents, credentialPrefix, email, failure, HttpError, identifier, isAdmin, jsonBody, owner, reply, sameOrigin, tenant, text, throttle } from '../lib/platform.js';
+import { ensureAccountProvisioned, registerUserAccount, requireApprovedMarketer } from '../lib/accounts.js';
 import { isStaffTier, aiTiers } from '../../shared/ai-tiers.js';
 import { aiLicense, grantStaff, grantTier, revokeStaff } from '../lib/ai-license.js';
 import { enabledCapabilities, settings } from '../lib/policy.js';
@@ -22,24 +34,21 @@ export default async (req: Request) => {
     const db = database();
     const { policy } = await settings();
     const userIsAdmin = isAdmin(user);
+
     if (req.method === 'GET') {
-      const [merchant] = await db.select().from(merchants).where(eq(merchants.ownerId, user.id));
+      const provisioned = await ensureAccountProvisioned(user);
+      const { accountRole, registrationStatus, merchant, marketerAccount, marketerCampaigns: campaigns } = provisioned;
+
       if (merchant && userIsAdmin) await syncAdminGateways(user.id, merchant.id);
       if (previewOnly(process.env.CONTEXT)) {
         try { await db.transaction(tx => captureVerifiedIdentity(tx, user, merchant?.id ?? null)); }
         catch { console.error('Preview operations session capture failed; dashboard access was not modified.'); }
       }
-      if (!merchant) return reply({ merchant: null, documents: [], subscriptions: [], attempts: [], openLinks: [], policy, isAdmin: userIsAdmin, aiLicense: await aiLicense(user) });
-      const reusableLinks = await db.select().from(openLinks).where(eq(openLinks.merchantId, merchant.id)).orderBy(desc(openLinks.createdAt)).limit(200);
-      const docs = await db.select().from(documents).where(eq(documents.merchantId, merchant.id)).orderBy(desc(documents.createdAt)).limit(200);
-      const recurring = await db.select({ id: subscriptions.id, documentId: subscriptions.documentId, status: subscriptions.status, nextChargeAt: subscriptions.nextChargeAt }).from(subscriptions).where(eq(subscriptions.merchantId, merchant.id));
-      const payments = await db.select({ id: attempts.id, documentId: attempts.documentId, amount: attempts.amount, reference: attempts.reference, status: attempts.status, createdAt: attempts.createdAt }).from(attempts).where(eq(attempts.merchantId, merchant.id)).orderBy(desc(attempts.createdAt)).limit(200);
-      const [paymentMetrics] = await db.select({ paidCount: sql<number>`count(*)::integer`, totalPaid: sql<number>`coalesce(sum(${attempts.amount}), 0)::bigint` }).from(attempts).where(and(eq(attempts.merchantId, merchant.id), eq(attempts.status, 'paid')));
-      const [documentMetrics] = await db.select({ pendingCount: sql<number>`count(*) filter (where ${documents.status} in ('pending', 'published'))::integer`, customers: sql<number>`count(distinct lower(${documents.customerEmail}))::integer` }).from(documents).where(eq(documents.merchantId, merchant.id));
-      const daily = await db.select({ day: sql<string>`to_char(${attempts.createdAt} at time zone 'UTC', 'YYYY-MM-DD')`, amount: sql<number>`sum(${attempts.amount})::bigint` }).from(attempts).where(and(eq(attempts.merchantId, merchant.id), eq(attempts.status, 'paid'), sql`${attempts.createdAt} >= date_trunc('day', now() at time zone 'UTC') at time zone 'UTC' - interval '6 days'`)).groupBy(sql`to_char(${attempts.createdAt} at time zone 'UTC', 'YYYY-MM-DD')`);
-      
-      const myGatewayRequests = await db.select().from(gatewayRequests).where(eq(gatewayRequests.merchantId, merchant.id)).orderBy(desc(gatewayRequests.createdAt)).limit(50);
-      let adminGatewayRequests: any[] = [];
+
+      let adminGatewayRequests: unknown[] = [];
+      let adminMarketers: unknown[] = [];
+      let aiAdminData: unknown = null;
+
       if (userIsAdmin) {
         adminGatewayRequests = await db.select({
           id: gatewayRequests.id,
@@ -56,10 +65,57 @@ export default async (req: Request) => {
           .leftJoin(merchants, eq(gatewayRequests.merchantId, merchants.id))
           .orderBy(desc(gatewayRequests.createdAt))
           .limit(100);
+
+        adminMarketers = await db
+          .select()
+          .from(accountRegistrations)
+          .where(eq(accountRegistrations.role, 'marketer'))
+          .orderBy(desc(accountRegistrations.createdAt))
+          .limit(200);
+
+        aiAdminData = {
+          tiers: Object.values(aiTiers).map(tier => ({ id: tier.id, label: tier.label, pricePerQuestionSar: tier.pricePerQuestionSar, selectable: tier.selectable })),
+          entitlements: await db.select().from(aiEntitlements).orderBy(desc(aiEntitlements.updatedAt)).limit(200),
+          staffGrants: await db.select().from(aiStaffGrants).orderBy(desc(aiStaffGrants.createdAt)).limit(500),
+        };
       }
+
+      if (!merchant) {
+        return reply({
+          merchant: null,
+          accountRole,
+          registrationStatus,
+          marketerAccount,
+          marketerCampaigns: campaigns,
+          documents: [],
+          subscriptions: [],
+          attempts: [],
+          openLinks: [],
+          policy,
+          isAdmin: userIsAdmin,
+          aiLicense: await aiLicense(user),
+          aiAdmin: aiAdminData,
+          adminGatewayRequests,
+          adminMarketers,
+        });
+      }
+
+      const reusableLinks = await db.select().from(openLinks).where(eq(openLinks.merchantId, merchant.id)).orderBy(desc(openLinks.createdAt)).limit(200);
+      const docs = await db.select().from(documents).where(eq(documents.merchantId, merchant.id)).orderBy(desc(documents.createdAt)).limit(200);
+      const recurring = await db.select({ id: subscriptions.id, documentId: subscriptions.documentId, status: subscriptions.status, nextChargeAt: subscriptions.nextChargeAt }).from(subscriptions).where(eq(subscriptions.merchantId, merchant.id));
+      const payments = await db.select({ id: attempts.id, documentId: attempts.documentId, amount: attempts.amount, reference: attempts.reference, status: attempts.status, createdAt: attempts.createdAt }).from(attempts).where(eq(attempts.merchantId, merchant.id)).orderBy(desc(attempts.createdAt)).limit(200);
+      const [paymentMetrics] = await db.select({ paidCount: sql<number>`count(*)::integer`, totalPaid: sql<number>`coalesce(sum(${attempts.amount}), 0)::bigint` }).from(attempts).where(and(eq(attempts.merchantId, merchant.id), eq(attempts.status, 'paid')));
+      const [documentMetrics] = await db.select({ pendingCount: sql<number>`count(*) filter (where ${documents.status} in ('pending', 'published'))::integer`, customers: sql<number>`count(distinct lower(${documents.customerEmail}))::integer` }).from(documents).where(eq(documents.merchantId, merchant.id));
+      const daily = await db.select({ day: sql<string>`to_char(${attempts.createdAt} at time zone 'UTC', 'YYYY-MM-DD')`, amount: sql<number>`sum(${attempts.amount})::bigint` }).from(attempts).where(and(eq(attempts.merchantId, merchant.id), eq(attempts.status, 'paid'), sql`${attempts.createdAt} >= date_trunc('day', now() at time zone 'UTC') at time zone 'UTC' - interval '6 days'`)).groupBy(sql`to_char(${attempts.createdAt} at time zone 'UTC', 'YYYY-MM-DD')`);
+
+      const myGatewayRequests = await db.select().from(gatewayRequests).where(eq(gatewayRequests.merchantId, merchant.id)).orderBy(desc(gatewayRequests.createdAt)).limit(50);
 
       return reply({
         merchant,
+        accountRole,
+        registrationStatus,
+        marketerAccount,
+        marketerCampaigns: campaigns,
         documents: docs,
         subscriptions: recurring,
         attempts: payments,
@@ -67,16 +123,12 @@ export default async (req: Request) => {
         policy,
         isAdmin: userIsAdmin,
         aiLicense: await aiLicense(user),
-        aiAdmin: userIsAdmin ? {
-          tiers: Object.values(aiTiers).map(tier => ({ id: tier.id, label: tier.label, pricePerQuestionSar: tier.pricePerQuestionSar, selectable: tier.selectable })),
-          entitlements: (await db.select().from(aiEntitlements).orderBy(desc(aiEntitlements.updatedAt)).limit(200)),
-          staffGrants: (await db.select().from(aiStaffGrants).orderBy(desc(aiStaffGrants.createdAt)).limit(500)),
-        } : null,
+        aiAdmin: aiAdminData,
         metrics: {
           paidCount: Number(paymentMetrics.paidCount),
           totalPaid: Number(paymentMetrics.totalPaid),
           pendingCount: Number(documentMetrics.pendingCount),
-          customers: Number(documentMetrics.customers)
+          customers: Number(documentMetrics.customers),
         },
         daily: daily.map(row => ({ ...row, amount: Number(row.amount) })),
         capabilities: enabledCapabilities(merchant.id, 'paytabs', policy),
@@ -88,27 +140,40 @@ export default async (req: Request) => {
         ngeniusPrefix: ngeniusPrefix(merchant.id),
         tapPrefix: tapPrefix(merchant.id),
         gatewayRequests: myGatewayRequests,
-        adminGatewayRequests
+        adminGatewayRequests,
+        adminMarketers,
       });
     }
+
     sameOrigin(req);
     await throttle(`owner:${user.id}`, 120);
     const body = await jsonBody(req);
-    if (body.action === 'onboard') {
-      const name = text(body.name, 100);
-      await db.transaction(async tx => {
-        const [created] = await tx.insert(merchants).values({ name, ownerId: user.id }).onConflictDoNothing().returning({ id: merchants.id });
-        if (created) await captureOperation(tx, { sourceKey: `merchant:${created.id}`, kind: 'merchant_registration', subjectId: created.id, merchantId: created.id });
-      });
-      return reply({ ok: true }, 201);
+
+    // ===== تسجيل الحساب (تاجر تلقائي أو مسوّق يتطلب موافقة الإدارة) — منفصل تماماً عن حساب الإدارة =====
+    if (body.action === 'register-account') {
+      if (userIsAdmin) throw new HttpError(403, 'حساب الإدارة منفصل تماماً عن قسم تسجيل التجار والمسوّقين.');
+      const role = body.role === 'marketer' ? 'marketer' : body.role === 'merchant' ? 'merchant' : null;
+      if (!role) throw new HttpError(400, 'اختر نوع الحساب: تاجر (merchant) أو مسوّق (marketer).');
+      const name = typeof body.name === 'string' && body.name.trim() ? text(body.name, 100) : undefined;
+      const storeName = typeof body.storeName === 'string' && body.storeName.trim() ? text(body.storeName, 100) : undefined;
+      const notes = typeof body.notes === 'string' && body.notes.trim() ? text(body.notes, 400) : null;
+      const result = await registerUserAccount(user, { role, name, storeName, notes });
+      return reply({ ok: true, ...result }, 201);
     }
-    // ===== تراخيص الذكاء الاصطناعي: من الإدارة فقط، ولا تحتاج مساحة تاجر =====
+
+    if (body.action === 'onboard') {
+      if (userIsAdmin) throw new HttpError(403, 'حساب الإدارة منفصل تماماً عن قسم تسجيل التجار.');
+      const name = text(body.name, 100);
+      const result = await registerUserAccount(user, { role: 'merchant', name, storeName: name });
+      return reply({ ok: true, ...result }, 201);
+    }
+
+    // ===== إجراءات الإدارة فقط (منفصلة تماماً عن المسوّقين والتجار، ولا تتطلب مساحة تاجر) =====
     if (body.action === 'grant-tier' || body.action === 'grant-staff' || body.action === 'revoke-staff') {
       if (!userIsAdmin) throw new HttpError(403, 'تراخيص طبقات الذكاء الاصطناعي تُمنح من إدارة المنصة فقط.');
       const targetOwner = text(body.ownerId, 64);
       if (body.action === 'grant-tier') {
         const rawTier = body.tier;
-        // «tier-x» تُقبل كاختصار لمنحة المستوى الرابع (غير معروضة للبيع).
         const tierX = body.tierX === true || rawTier === 'tier-x';
         if (rawTier !== undefined && rawTier !== 'tier-x' && !isStaffTier(rawTier)) throw new HttpError(400, 'طبقة غير صالحة. المتاح: tier-1 أو tier-2 أو tier-3.');
         if (rawTier === undefined && body.tierX === undefined) throw new HttpError(400, 'حدّد الطبقة أو ترخيص المستوى الرابع X.');
@@ -129,38 +194,39 @@ export default async (req: Request) => {
       await revokeStaff({ ownerId: targetOwner, staffId });
       return reply({ ok: true });
     }
-    const merchant = await tenant();
-    if (body.action === 'submit-gateway-request') {
-      if (!userIsAdmin) throw new HttpError(403, 'ربط بوابات الدفع يتم من حساب مسؤول المنصة.');
-      const targetGateway = text(body.gateway, 30);
-      if (!gateways.includes(targetGateway as Gateway)) throw new HttpError(400, 'بوابة دفع غير مدعومة.');
-      const variables = body.variables;
-      if (!variables || typeof variables !== 'object' || Array.isArray(variables)) throw new HttpError(400, 'بيانات الربط غير صحيحة.');
-      
-      // Clean and sanitize keys/values
-      const sanitizedVariables: Record<string, string> = {};
-      for (const [key, value] of Object.entries(variables)) {
-        if (typeof key === 'string' && key.length <= 60 && typeof value === 'string' && value.trim().length > 0) {
-          sanitizedVariables[key.trim()] = value.trim().slice(0, 500);
-        }
+
+    if (body.action === 'review-marketer') {
+      if (!userIsAdmin) throw new HttpError(403, 'اعتماد ومراجعة حسابات المسوّقين متاحة لإدارة المنصة فقط.');
+      const marketerId = identifier(body.id);
+      const nextStatus = text(body.status, 20);
+      if (!['approved', 'rejected', 'pending'].includes(nextStatus)) {
+        throw new HttpError(400, 'حالة الاعتماد غير صالحة.');
       }
-      if (Object.keys(sanitizedVariables).length === 0) throw new HttpError(400, 'يرجى إدخال متغير واحد على الأقل للربط.');
-      
-      const notes = body.notes ? text(body.notes, 500) : null;
-      const reqRecord = await db.transaction(async tx => {
-        const [created] = await tx.insert(gatewayRequests).values({
-          merchantId: merchant.id,
-          gateway: targetGateway,
-          status: 'pending',
-          variables: sanitizedVariables,
-          notes,
-          submittedBy: user.email || user.id,
-        }).returning();
-        await captureOperation(tx, { sourceKey: `gateway:${created.id}`, kind: 'gateway_request', subjectId: created.id, merchantId: merchant.id, provider: targetGateway });
-        return created;
-      });
-      return reply({ request: reqRecord }, 201);
+      let commissionRate = 10;
+      if (body.commissionRate !== undefined) {
+        const parsedRate = Number(body.commissionRate);
+        if (!Number.isInteger(parsedRate) || parsedRate < 1 || parsedRate > 80) {
+          throw new HttpError(400, 'نسبة العمولة يجب أن تكون رقماً صحيحاً بين 1% و 80%.');
+        }
+        commissionRate = parsedRate;
+      }
+      const notes = typeof body.notes === 'string' && body.notes.trim() ? text(body.notes, 300) : null;
+      const [updated] = await db
+        .update(accountRegistrations)
+        .set({
+          status: nextStatus,
+          commissionRate,
+          ...(notes !== null ? { notes } : {}),
+          reviewedBy: String(user.email || user.id),
+          reviewedAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(and(eq(accountRegistrations.id, marketerId), eq(accountRegistrations.role, 'marketer')))
+        .returning();
+      if (!updated) throw new HttpError(404, 'طلب حساب المسوّق غير موجود.');
+      return reply({ ok: true, marketer: updated });
     }
+
     if (body.action === 'update-gateway-request') {
       if (!userIsAdmin) throw new HttpError(403, 'هذا الإجراء لمسؤول المنصة فقط.');
       const requestId = identifier(body.id);
@@ -168,13 +234,139 @@ export default async (req: Request) => {
       if (!['pending', 'configured', 'rejected'].includes(newStatus)) throw new HttpError(400, 'حالة غير صالحة.');
       const [updated] = await db.update(gatewayRequests).set({
         status: newStatus,
-        updatedAt: new Date()
+        updatedAt: new Date(),
       }).where(eq(gatewayRequests.id, requestId)).returning();
       if (!updated) throw new HttpError(404, 'طلب الربط غير موجود.');
       return reply({ ok: true });
     }
-    if (body.action === 'create-open-link') {
 
+    if (body.action === 'submit-gateway-request') {
+      if (!userIsAdmin) throw new HttpError(403, 'ربط بوابات الدفع يتم من حساب مسؤول المنصة.');
+      const targetGateway = text(body.gateway, 30);
+      if (!gateways.includes(targetGateway as Gateway) && !targetGateway.startsWith('custom_')) {
+        throw new HttpError(400, 'بوابة دفع غير مدعومة.');
+      }
+      const variables = body.variables;
+      if (!variables || typeof variables !== 'object' || Array.isArray(variables)) throw new HttpError(400, 'بيانات الربط غير صحيحة.');
+
+      const sanitizedVariables: Record<string, string> = {};
+      for (const [key, value] of Object.entries(variables)) {
+        if (typeof key === 'string' && key.length <= 60 && typeof value === 'string' && value.trim().length > 0) {
+          sanitizedVariables[key.trim()] = value.trim().slice(0, 500);
+        }
+      }
+      if (Object.keys(sanitizedVariables).length === 0) throw new HttpError(400, 'يرجى إدخال متغير واحد على الأقل للربط.');
+
+      let [adminMerchant] = await db.select().from(merchants).where(eq(merchants.ownerId, user.id));
+      if (!adminMerchant) {
+        [adminMerchant] = await db
+          .insert(merchants)
+          .values({ ownerId: user.id, name: 'OneShot Platform' })
+          .onConflictDoNothing()
+          .returning();
+        if (!adminMerchant) {
+          [adminMerchant] = await db.select().from(merchants).where(eq(merchants.ownerId, user.id));
+        }
+      }
+      const notes = body.notes ? text(body.notes, 500) : null;
+      const reqRecord = await db.transaction(async tx => {
+        const [created] = await tx.insert(gatewayRequests).values({
+          merchantId: adminMerchant.id,
+          gateway: targetGateway,
+          status: 'pending',
+          variables: sanitizedVariables,
+          notes,
+          submittedBy: user.email || user.id,
+        }).returning();
+        await captureOperation(tx, { sourceKey: `gateway:${created.id}`, kind: 'gateway_request', subjectId: created.id, merchantId: adminMerchant.id, provider: targetGateway });
+        return created;
+      });
+      return reply({ request: reqRecord }, 201);
+    }
+
+    // ===== إجراءات المسوّق المعتمد فقط (منفصلة تماماً عن صلاحيات الإدارة والتاجر) =====
+    if (
+      body.action === 'create-marketer-campaign' ||
+      body.action === 'toggle-marketer-campaign' ||
+      body.action === 'delete-marketer-campaign' ||
+      body.action === 'update-marketer-profile'
+    ) {
+      const marketer = await requireApprovedMarketer(user);
+
+      if (body.action === 'create-marketer-campaign') {
+        const title = text(body.title, 100);
+        const targetProductSku = typeof body.targetProductSku === 'string' && body.targetProductSku.trim()
+          ? text(body.targetProductSku, 60)
+          : 'ALL';
+        const rawUtm = text(body.utmCampaign, 60)
+          .replace(/[^a-zA-Z0-9_-]/g, '-')
+          .replace(/-+/g, '-')
+          .replace(/^-|-$/g, '');
+        if (!rawUtm) throw new HttpError(400, 'أدخل معرّف حملة (UTM) صالحاً بالرموز الإنجليزية أو الأرقام.');
+        const allowedChannels = ['social', 'google_ads', 'whatsapp', 'content', 'direct'];
+        const channel = allowedChannels.includes(String(body.channel)) ? String(body.channel) : 'social';
+
+        const [campaign] = await db
+          .insert(marketerCampaigns)
+          .values({
+            marketerId: marketer.id,
+            ownerId: user.id,
+            title,
+            targetProductSku,
+            utmCampaign: rawUtm,
+            channel,
+          })
+          .returning();
+        return reply({ campaign }, 201);
+      }
+
+      if (body.action === 'toggle-marketer-campaign') {
+        if (typeof body.enabled !== 'boolean') throw new HttpError(400, 'إعدادات الحملة غير صالحة.');
+        const [updated] = await db
+          .update(marketerCampaigns)
+          .set({ enabled: body.enabled })
+          .where(and(eq(marketerCampaigns.id, identifier(body.id)), eq(marketerCampaigns.ownerId, user.id)))
+          .returning();
+        if (!updated) throw new HttpError(404, 'الحملة التسويقية غير موجودة.');
+        return reply({ ok: true });
+      }
+
+      if (body.action === 'delete-marketer-campaign') {
+        const [deleted] = await db
+          .delete(marketerCampaigns)
+          .where(and(eq(marketerCampaigns.id, identifier(body.id)), eq(marketerCampaigns.ownerId, user.id)))
+          .returning();
+        if (!deleted) throw new HttpError(404, 'الحملة التسويقية غير موجودة.');
+        return reply({ ok: true });
+      }
+
+      if (body.action === 'update-marketer-profile') {
+        const fullName = text(body.fullName, 100);
+        const notes = typeof body.notes === 'string' && body.notes.trim() ? text(body.notes, 400) : null;
+        const [updated] = await db
+          .update(accountRegistrations)
+          .set({
+            fullName,
+            notes,
+            updatedAt: new Date(),
+          })
+          .where(and(eq(accountRegistrations.id, marketer.id), eq(accountRegistrations.ownerId, user.id)))
+          .returning();
+        return reply({ ok: true, marketerAccount: updated });
+      }
+    }
+
+    // ===== إجراءات التاجر (يُمنع المسوّقون من تنفيذها) =====
+    const [existingReg] = await db
+      .select()
+      .from(accountRegistrations)
+      .where(eq(accountRegistrations.ownerId, user.id));
+    if (existingReg?.role === 'marketer') {
+      throw new HttpError(403, 'هذا الإجراء مخصص لحسابات التجار فقط ولا يتوفر لحسابات المسوّقين.');
+    }
+
+    const merchant = await tenant();
+    if (body.action === 'create-open-link') {
       if (!policy.requestsEnabled || !policy.openLinksEnabled || !policy.paymentsEnabled) throw new HttpError(409, 'هذه الميزة متوقفة بواسطة مسؤول المنصة.');
       const minimum = cents(body.minimum);
       const maximum = cents(body.maximum);
