@@ -378,6 +378,7 @@ export default function AdminAssistant({ onRefresh, initialPrompt }: { onRefresh
                 saveOllamaConfig(newCfg);
               }}
               onClose={() => setActiveTool(null)}
+              license={{ tier: 'tier-3', tierX: true, staff: [], admin: true, tiers: ['tier-1', 'tier-2', 'tier-3', 'tier-x'], source: 'admin' }}
             />
           </div>
         )}

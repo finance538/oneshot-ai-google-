@@ -3,6 +3,8 @@ import { generateText } from 'ai';
 import { assertAssistantText } from '../../shared/admin-assistant.js';
 import { anthropicGatewayBaseURL, parseChatHistory } from '../../shared/assistant-chat.js';
 import { findStaff, staffRoster, staffSystemPrompt } from '../../shared/staff-roster.js';
+import { aiTiers, isAiTierId, isAbliterated, routeTier, tierOfModel, tierPriceSar } from '../../shared/ai-tiers.js';
+import { aiLicense, licenseAllowsStaff, recordUsage, tierGrantSignature } from '../lib/ai-license.js';
 import { chatWithOllama, readOllamaCloud } from '../lib/ollama.js';
 import { settings } from '../lib/policy.js';
 import { failure, HttpError, jsonBody, owner, reply, sameOrigin, text, throttle } from '../lib/platform.js';
@@ -47,7 +49,23 @@ async function availableModels() {
 export default async (req: Request) => {
   try {
     const user = await owner();
-    if (req.method === 'GET') return reply({ staff: staffRoster.map(member => ({ id: member.id, name: member.name, arabicRole: member.arabicRole })), ...(await availableModels()) });
+    const license = await aiLicense(user);
+    if (req.method === 'GET') {
+      return reply({
+        staff: staffRoster.map(member => ({ id: member.id, name: member.name, arabicRole: member.arabicRole, granted: licenseAllowsStaff(license, member.id) })),
+        license: { tier: license.tier, tierX: license.tierX, staff: license.staff, admin: license.admin, tiers: license.tiers },
+        tiers: Object.values(aiTiers).map(tier => ({
+          id: tier.id,
+          badge: tier.badge,
+          label: tier.label,
+          summary: tier.summary,
+          pricePerQuestionSar: tier.pricePerQuestionSar,
+          selectable: tier.selectable,
+          licensed: license.tiers.includes(tier.id),
+        })),
+        ...(await availableModels()),
+      });
+    }
     if (req.method !== 'POST') return reply({ error: 'طريقة الطلب غير مسموحة.' }, 405);
     sameOrigin(req);
     const { policy } = await settings();
@@ -56,6 +74,10 @@ export default async (req: Request) => {
     if (body.consent !== true) throw new HttpError(400, 'الموافقة على استخدام الذكاء الاصطناعي مطلوبة.');
     const member = findStaff(body.staffId);
     if (!member) throw new HttpError(400, 'اختر موظفاً من طاقم ونشوت.');
+    // ترخيص الكادر: صلاحية لكل خدمة، لا مفتاح عام واحد.
+    if (!licenseAllowsStaff(license, member.id)) {
+      throw new HttpError(402, `الكادر «${member.name}» يحتاج ترخيصاً من إدارة المنصة. خدمة العملاء والمرشد متاحان لكل حساب.`);
+    }
     let history;
     try { history = parseChatHistory(body.history); }
     catch (error) { throw new HttpError(400, error instanceof Error ? error.message : 'سياق المحادثة غير صالح.'); }
@@ -69,25 +91,42 @@ export default async (req: Request) => {
     const requested = typeof body.modelId === 'string' && (modelIds as readonly string[]).includes(body.modelId) ? body.modelId as ModelId : undefined;
     const requestedModel: ModelId = (requested && available.includes(requested) ? requested : available[0]) ?? 'hermes-3-vps';
     if (!available.length) throw new HttpError(503, 'لا يوجد نموذج مفعّل للموظفين حالياً. أضف بوابة السيرفر (ONESHOT_VPS_AGENT_URL) أو ANTHROPIC_API_KEY في متغيرات بيئة Netlify ثم أعد النشر.');
-    const system = staffSystemPrompt(member);
+
+    // قرار الطبقة والموديل: على السيرفر، مقيّداً بترخيص الحساب (لا ثقة بما يرسله المتصفح).
+    const requestedTier = body.tier === 'auto' || isAiTierId(body.tier) ? body.tier : undefined;
+    const tagHint = typeof body.modelId === 'string' && tierOfModel(body.modelId) ? body.modelId : undefined;
+    const decision = routeTier(prompt, { tierX: license.tierX, licenseTier: license.tier, requested: requestedTier, modelId: tagHint });
+    const tierLabel = aiTiers[decision.tier].label.ar;
+    const system = staffSystemPrompt(member, { tierLabel });
 
     if (requestedModel === 'ollama-cloud') {
       const result = await chatWithOllama(body.ollamaModel, history, prompt, system);
-      return reply({ ...result, staffId: member.id, staffName: member.name });
+      await recordUsage(user.id, license.tier, `ollama-cloud:${String(body.ollamaModel || 'default')}`, member.id);
+      return reply({ ...result, staffId: member.id, staffName: member.name, tier: license.tier, tierX: false, tierLabel, tierReason: decision.reason, tierPriceSar: tierPriceSar(license.tier) });
     }
 
     if (requestedModel === 'hermes-3-vps') {
       const base = gatewayUrl();
       if (!base) throw new HttpError(503, 'بوابة السيرفر غير مضبوطة. أضف ONESHOT_VPS_AGENT_URL في متغيرات بيئة Netlify ثم أعد النشر.');
       const token = process.env.ONESHOT_VPS_AGENT_TOKEN;
+      // Tier X: البوابة تقبل نماذج abliterated فقط بتوقيع ترخيص لحظي مشتق من توكن البوابة.
+      const abliterated = isAbliterated(decision.modelId);
+      const grantTimestamp = Math.floor(Date.now() / 1000);
       try {
         const vpsRes = await fetch(`${base}/api/agent/chat`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            ...(abliterated
+              ? {
+                  'X-OneShot-Tier': 'tier-x',
+                  'X-OneShot-Grant-Ts': String(grantTimestamp),
+                  'X-OneShot-Grant': tierGrantSignature(decision.modelId, grantTimestamp),
+                }
+              : {}),
           },
-          body: JSON.stringify({ system, prompt, history, staff: member.id }),
+          body: JSON.stringify({ system, prompt, history, staff: member.id, tier: decision.tier, model: decision.modelId }),
           signal: AbortSignal.timeout(60000),
         });
         if (vpsRes.ok) {
@@ -96,16 +135,26 @@ export default async (req: Request) => {
             const safeAnswer = vpsData.answer.slice(0, 6000);
             try { assertAssistantText(safeAnswer); }
             catch { throw new HttpError(502, 'تم حجب إجابة قد تحتوي على بيانات حساسة.'); }
+            await recordUsage(user.id, decision.tier, decision.modelId, member.id);
             return reply({
               answer: safeAnswer,
               routedTo: 'hermes-3-vps',
-              model: typeof vpsData.model === 'string' ? vpsData.model : undefined,
+              model: typeof vpsData.model === 'string' ? vpsData.model : decision.modelId,
               staffId: member.id,
               staffName: member.name,
+              tier: decision.tier,
+              tierX: decision.tier === 'tier-x',
+              tierLabel,
+              tierReason: decision.reason,
+              tierPriceSar: tierPriceSar(decision.tier),
             });
           }
         } else if (vpsRes.status === 401) {
           throw new HttpError(502, 'بوابة السيرفر رفضت الطلب (مفتاح غير مطابق). حدّث ONESHOT_VPS_AGENT_TOKEN.');
+        } else if (vpsRes.status === 403) {
+          throw new HttpError(403, 'البوابة رفضت هذا الموديل: ترخيص المستوى الرابع X غير ساري من الإدارة.');
+        } else if (vpsRes.status === 400) {
+          throw new HttpError(400, 'الموديل المطلوب غير مسموح على بوابة السيرفر.');
         }
       } catch (error) {
         if (error instanceof HttpError) throw error;
@@ -131,6 +180,7 @@ export default async (req: Request) => {
     if (!safeAnswer.trim()) throw new HttpError(502, 'تعذر الحصول على إجابة. أعد صياغة الطلب.');
     try { assertAssistantText(safeAnswer); }
     catch { throw new HttpError(502, 'تم حجب إجابة قد تحتوي على بيانات حساسة.'); }
-    return reply({ answer: safeAnswer, routedTo: anthropicModel, staffId: member.id, staffName: member.name });
+    await recordUsage(user.id, license.tier, anthropicModel, member.id);
+    return reply({ answer: safeAnswer, routedTo: anthropicModel, staffId: member.id, staffName: member.name, tier: license.tier, tierX: false, tierLabel, tierReason: decision.reason, tierPriceSar: tierPriceSar(license.tier) });
   } catch (error) { return failure(error); }
 };

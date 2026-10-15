@@ -56,6 +56,37 @@ export interface GatewayRequest {
   updatedAt: string;
 }
 
+export interface AiLicenseView {
+  tier: 'tier-1' | 'tier-2' | 'tier-3';
+  tierX: boolean;
+  staff: string[];
+  admin: boolean;
+  tiers: string[];
+  source: 'default' | 'grant' | 'admin';
+}
+
+export interface AiEntitlementView {
+  ownerId: string;
+  tier: string;
+  tierX: boolean;
+  grantedBy: string | null;
+  note: string | null;
+  updatedAt: string;
+}
+
+export interface AiStaffGrantView {
+  ownerId: string;
+  staffId: string;
+  grantedBy: string;
+  createdAt: string;
+}
+
+export interface AiAdminView {
+  tiers: { id: string; label: { ar: string; en: string }; pricePerQuestionSar: number | null; selectable: boolean }[];
+  entitlements: AiEntitlementView[];
+  staffGrants: AiStaffGrantView[];
+}
+
 export interface Platform {
   merchant: { id: string; name: string } | null;
   documents: PaymentDocument[];
@@ -70,6 +101,10 @@ export interface Platform {
   openLinks?: OpenLink[];
   policy?: PaymentPolicy;
   isAdmin?: boolean;
+  /** ترخيص الذكاء الاصطناعي لهذا الحساب (منحة إدارية / افتراضي). */
+  aiLicense?: AiLicenseView;
+  /** للمسؤول فقط: كل منح الطبقات وتراخيص الكوادر. */
+  aiAdmin?: AiAdminView | null;
   gatewayRequests?: GatewayRequest[];
   adminGatewayRequests?: GatewayRequest[];
 }

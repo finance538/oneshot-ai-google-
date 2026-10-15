@@ -27,6 +27,8 @@ import AiBinIntelligenceCenter from './AiBinIntelligenceCenter';
 import MultiBinAcceptanceTool from './MultiBinAcceptanceTool';
 import PaymentFailuresDashboard from './PaymentFailuresDashboard';
 import AiTierManager from './AiTierManager';
+import AiLicenseAdmin from './AiLicenseAdmin';
+import OnboardingGuide, { tourCompleted } from './OnboardingGuide';
 import { getSavedOllamaConfig, saveOllamaConfig, type OllamaServerConfig } from './aiModelsData';
 import { isStorefrontPath } from './storefront/routes';
 import { Shield, FlaskConical, UserPlus, ShieldAlert, BrainCircuit, BarChart3 } from 'lucide-react';
@@ -108,6 +110,7 @@ function MerchantPlatform() {
   const [openGatewayMode, setOpenGatewayMode] = useState<'all' | 'single'>('all');
   const [reviewAttempt, setReviewAttempt] = useState<string | null>(null);
   const [sidebar, setSidebar] = useState(false);
+  const [tour, setTour] = useState(false);
   const [search, setSearch] = useState('');
   const [installPrompt, setInstallPrompt] = useState<InstallPrompt | null>(null);
 
@@ -133,6 +136,8 @@ function MerchantPlatform() {
         platformError = caught instanceof Error ? caught.message : 'خطأ غير معروف';
       }
       setPlatform(result);
+      // مرشد أول تسجيل: يفتح مرة واحدة لكل حساب (المفتاح باسم المستخدم).
+      if (current && !tourCompleted(current.id)) setTour(true);
       if (current && !result.merchant) setView(previous => previous === 'overview' ? 'wallet' : previous);
       setError(platformError ? `تعذر تحميل بيانات مساحة التاجر — الأرقام المعروضة غير محدّثة. (${platformError})` : '');
     }
@@ -308,6 +313,7 @@ function MerchantPlatform() {
   const testButton = <button className="primary-button" disabled={!canCreate || !policy.openLinksEnabled || busy} onClick={() => void testLink()}><Sparkles size={16} />{t('رابط تجربة ١٠ ر.س')}</button>;
 
   return <div className="app-shell">
+    {tour && user && <OnboardingGuide userId={user.id} onNavigate={next => setView(next as View)} onOpenChat={() => setView('staff')} onClose={() => setTour(false)} />}
     {sidebar && <button className="sidebar-scrim" aria-label={t('إغلاق')} onClick={() => setSidebar(false)} />}
     <aside className={`sidebar ${sidebar ? 'is-open' : ''}`}><Brand /><span className="workspace-label">{t('مساحة التاجر')}</span>
       <nav>{navigation.filter(item => user ? (!['admin', 'assistant'].includes(item.id) || platform.isAdmin) : guestNavigation.includes(item.id)).map(item => <button key={item.id} className={`nav-item ${view === item.id ? 'active' : ''}`} aria-current={view === item.id ? 'page' : undefined} onClick={() => { setView(item.id); setSidebar(false); }}><item.icon size={19} /><span>{t(item.name)}</span>{view === item.id && <span className="nav-active-dot" />}</button>)}</nav>
@@ -569,8 +575,11 @@ function AdminControls({ onSave }: { onSave: () => Promise<void> }) {
             setOllamaConfig(newCfg);
             saveOllamaConfig(newCfg);
           }}
+          license={{ tier: 'tier-3', tierX: true, staff: [], admin: true, tiers: ['tier-1', 'tier-2', 'tier-3', 'tier-x'], source: 'admin' }}
         />
       )}
+
+      {adminTab === 'ai_tiers' && <AiLicenseAdmin />}
 
       {adminTab === 'failures_dashboard' && (
         <PaymentFailuresDashboard />

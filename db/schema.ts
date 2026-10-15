@@ -186,3 +186,36 @@ export const operationsAudit = pgTable('operations_audit', {
   action: text().notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 }, table => [index('operations_audit_actor_created').on(table.actorId, table.createdAt)]);
+
+/**
+ * ترخيص طبقة الذكاء الاصطناعي لكل مستخدم (بمفتاح هوية Netlify).
+ * الافتراضي: tier-1، و tier-x ممنوعة حتى تُمنح صراحةً من الإدارة.
+ * لا تُقرأ هذه القيم من المتصفح أبداً — القرار على السيرفر.
+ */
+export const aiEntitlements = pgTable('ai_tier_entitlements', {
+  ownerId: text('owner_id').primaryKey(),
+  tier: text().notNull().default('tier-1'),
+  tierX: boolean('tier_x').notNull().default(false),
+  grantedBy: text('granted_by'),
+  note: text(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+}, table => [check('ai_tier_valid', sql`${table.tier} in ('tier-1', 'tier-2', 'tier-3')`)]);
+
+/** ترخيص كادر ذكاء اصطناعي لكل مستخدم: صلاحية **لكل خدمة** لا مفتاح عام واحد. */
+export const aiStaffGrants = pgTable('ai_staff_grants', {
+  ownerId: text('owner_id').notNull(),
+  staffId: text('staff_id').notNull(),
+  grantedBy: text('granted_by').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+}, table => [primaryKey({ columns: [table.ownerId, table.staffId] })]);
+
+/** سجل استهلاك لكل سؤال: أي طبقة/موديل استُخدم لحساب أي مستخدم (أساس التسعير بالاستخدام). */
+export const aiUsage = pgTable('ai_usage_events', {
+  id: uuid().defaultRandom().primaryKey(),
+  ownerId: text('owner_id').notNull(),
+  tier: text().notNull(),
+  modelId: text('model_id').notNull(),
+  staffId: text('staff_id'),
+  outcome: text().notNull().default('ok'),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+}, table => [index('ai_usage_owner_created').on(table.ownerId, table.createdAt)]);

@@ -1,7 +1,9 @@
 import { and, desc, eq, sql } from 'drizzle-orm';
 import { database } from '../../db/index.js';
-import { attempts, documents, gatewayRequests, merchants, openLinks, subscriptions } from '../../db/schema.js';
+import { aiEntitlements, aiStaffGrants, attempts, documents, gatewayRequests, merchants, openLinks, subscriptions } from '../../db/schema.js';
 import { cents, credentialPrefix, email, failure, HttpError, identifier, isAdmin, jsonBody, owner, reply, sameOrigin, tenant, text, throttle } from '../lib/platform.js';
+import { isStaffTier, aiTiers } from '../../shared/ai-tiers.js';
+import { aiLicense, grantStaff, grantTier, revokeStaff } from '../lib/ai-license.js';
 import { enabledCapabilities, settings } from '../lib/policy.js';
 import { openLinkMethods } from '../../shared/policy.js';
 import { confirmPayment } from '../lib/payments.js';
@@ -25,7 +27,7 @@ export default async (req: Request) => {
         try { await db.transaction(tx => captureVerifiedIdentity(tx, user, merchant?.id ?? null)); }
         catch { console.error('Preview operations session capture failed; dashboard access was not modified.'); }
       }
-      if (!merchant) return reply({ merchant: null, documents: [], subscriptions: [], attempts: [], openLinks: [], policy, isAdmin: userIsAdmin });
+      if (!merchant) return reply({ merchant: null, documents: [], subscriptions: [], attempts: [], openLinks: [], policy, isAdmin: userIsAdmin, aiLicense: await aiLicense(user) });
       const reusableLinks = await db.select().from(openLinks).where(eq(openLinks.merchantId, merchant.id)).orderBy(desc(openLinks.createdAt)).limit(200);
       const docs = await db.select().from(documents).where(eq(documents.merchantId, merchant.id)).orderBy(desc(documents.createdAt)).limit(200);
       const recurring = await db.select({ id: subscriptions.id, documentId: subscriptions.documentId, status: subscriptions.status, nextChargeAt: subscriptions.nextChargeAt }).from(subscriptions).where(eq(subscriptions.merchantId, merchant.id));
@@ -62,6 +64,12 @@ export default async (req: Request) => {
         openLinks: reusableLinks,
         policy,
         isAdmin: userIsAdmin,
+        aiLicense: await aiLicense(user),
+        aiAdmin: userIsAdmin ? {
+          tiers: Object.values(aiTiers).map(tier => ({ id: tier.id, label: tier.label, pricePerQuestionSar: tier.pricePerQuestionSar, selectable: tier.selectable })),
+          entitlements: (await db.select().from(aiEntitlements).orderBy(desc(aiEntitlements.updatedAt)).limit(200)),
+          staffGrants: (await db.select().from(aiStaffGrants).orderBy(desc(aiStaffGrants.createdAt)).limit(500)),
+        } : null,
         metrics: {
           paidCount: Number(paymentMetrics.paidCount),
           totalPaid: Number(paymentMetrics.totalPaid),
@@ -87,6 +95,33 @@ export default async (req: Request) => {
         if (created) await captureOperation(tx, { sourceKey: `merchant:${created.id}`, kind: 'merchant_registration', subjectId: created.id, merchantId: created.id });
       });
       return reply({ ok: true }, 201);
+    }
+    // ===== تراخيص الذكاء الاصطناعي: من الإدارة فقط، ولا تحتاج مساحة تاجر =====
+    if (body.action === 'grant-tier' || body.action === 'grant-staff' || body.action === 'revoke-staff') {
+      if (!userIsAdmin) throw new HttpError(403, 'تراخيص طبقات الذكاء الاصطناعي تُمنح من إدارة المنصة فقط.');
+      const targetOwner = text(body.ownerId, 64);
+      if (body.action === 'grant-tier') {
+        const rawTier = body.tier;
+        // «tier-x» تُقبل كاختصار لمنحة المستوى الرابع (غير معروضة للبيع).
+        const tierX = body.tierX === true || rawTier === 'tier-x';
+        if (rawTier !== undefined && rawTier !== 'tier-x' && !isStaffTier(rawTier)) throw new HttpError(400, 'طبقة غير صالحة. المتاح: tier-1 أو tier-2 أو tier-3.');
+        if (rawTier === undefined && body.tierX === undefined) throw new HttpError(400, 'حدّد الطبقة أو ترخيص المستوى الرابع X.');
+        const record = await grantTier({
+          ownerId: targetOwner,
+          tier: isStaffTier(rawTier) ? rawTier : undefined,
+          tierX,
+          actor: String(user.email || user.id),
+          note: body.note ? text(body.note, 200) : null,
+        });
+        return reply({ ok: true, entitlement: record }, 201);
+      }
+      const staffId = text(body.staffId, 40);
+      if (body.action === 'grant-staff') {
+        const record = await grantStaff({ ownerId: targetOwner, staffId, actor: String(user.email || user.id) });
+        return reply({ ok: true, grant: record }, 201);
+      }
+      await revokeStaff({ ownerId: targetOwner, staffId });
+      return reply({ ok: true });
     }
     const merchant = await tenant();
     if (body.action === 'submit-gateway-request') {

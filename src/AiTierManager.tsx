@@ -1,23 +1,17 @@
 // AiTierManager.tsx
-// Interactive 4-Tier AI Control Panel & Ollama Model Selector
-// Supports Tier 1 (Fast), Tier 2 (Pro), Tier 3 (Reasoning), and Tier X (Admin-Only Abliterated / Uncensored, behind an admin passcode)
-// ملاحظة: بوابة Tier X هنا حاجز واجهة فقط — أي تنفيذ فعلي مقيّد يجب أن يتحقق من الدور على الخادم.
-// With Intelligent Auto-Router and Server Credentials Configuration
+// لوحة طبقات الذكاء الاصطناعي — الواجهة تعرض فقط، والقرار على السيرفر.
+// الترتيب: 4 طبقات. الثلاث المدفوعة تُختار بترخيص الحساب، و Tier X (Abliterated)
+// لا يُفتح هنا أبداً: يظهر مقفلاً بنص «بترخيص من الإدارة» ويُفعّل فقط عندما يكون
+// الترخيص صادراً فعلاً من السيرفر (`aiLicense.tierX`). لا باسورد واجهة بعد الآن.
 
 import React, { useState } from 'react';
 import {
   Zap, Cpu, BrainCircuit, Flame, Lock, Unlock, ShieldAlert,
-  Server, KeyRound, Check, Sparkles, X, AlertTriangle,
-  Compass, Activity
+  Server, Check, Sparkles, X, AlertTriangle, Compass, Activity
 } from 'lucide-react';
-import {
-  AI_TIERS,
-  ADMIN_TIER_X_SECRET,
-  type AiTierId,
-  type OllamaModelDefinition,
-  type OllamaServerConfig,
-  saveOllamaConfig
-} from './aiModelsData';
+import { aiTiers, tierModels, tierOrder, type AiTierId } from '../shared/ai-tiers';
+import { saveOllamaConfig, type OllamaServerConfig } from './aiModelsData';
+import type { AiLicenseView } from './platform';
 import { useAppearance } from './i18n';
 import './AiTierManager.css';
 
@@ -25,126 +19,82 @@ interface AiTierManagerProps {
   config: OllamaServerConfig;
   onConfigChange: (newConfig: OllamaServerConfig) => void;
   onClose?: () => void;
+  /** ترخيص الحساب كما أرجعه السيرفر. غيابه = أعلى طبقة مجانية فقط. */
+  license?: AiLicenseView;
 }
+
+const tierIcons: Record<AiTierId, React.ReactNode> = {
+  'tier-1': <Zap className="tier-tab-icon" size={18} />,
+  'tier-2': <Cpu className="tier-tab-icon" size={18} />,
+  'tier-3': <BrainCircuit className="tier-tab-icon" size={18} />,
+  'tier-x': <Flame className="tier-tab-icon" size={18} />,
+};
 
 export const AiTierManager: React.FC<AiTierManagerProps> = ({
   config,
   onConfigChange,
   onClose,
+  license,
 }) => {
   const { language, dir } = useAppearance();
-  const [selectedTierTab, setSelectedTierTab] = useState<AiTierId>(
-    config.activeTier === 'auto' ? 'tier-3' : config.activeTier
+  const langKey = (['ar', 'en', 'zh', 'ru', 'fr'].includes(language) ? language : 'ar') as 'ar' | 'en' | 'zh' | 'ru' | 'fr';
+  const ar = langKey === 'ar';
+  // الكتالوج المشترك يحمل نصين (عربي/إنجليزي) فقط؛ بقية اللغات تعرض العربي.
+  const tx = (text: { ar: string; en: string }) => (langKey === 'en' ? text.en : text.ar);
+
+  const activeLicense: AiLicenseView = license ?? { tier: 'tier-1', tierX: false, staff: [], admin: false, tiers: ['tier-1'], source: 'default' };
+  const licensedTiers = activeLicense.tiers.length ? activeLicense.tiers : ['tier-1'];
+
+  const [selectedTier, setSelectedTier] = useState<AiTierId>(
+    config.activeTier === 'auto' ? 'tier-3' : (config.activeTier as AiTierId)
   );
-  const [showAdminModal, setShowAdminModal] = useState(false);
-  const [adminPasswordInput, setAdminPasswordInput] = useState('');
-  const [adminError, setAdminError] = useState('');
-  const [adminSuccessNotice, setAdminSuccessNotice] = useState('');
+  const [notice, setNotice] = useState('');
   const [serverHostInput, setServerHostInput] = useState(config.host);
   const [serverNotice, setServerNotice] = useState('');
   const [showServerSettings, setShowServerSettings] = useState(false);
 
-  const langKey = (['ar', 'en', 'zh', 'ru', 'fr'].includes(language) ? language : 'ar') as 'ar' | 'en' | 'zh' | 'ru' | 'fr';
+  const isLicensed = (tier: AiTierId) => licensedTiers.includes(tier);
+  const currentTier = aiTiers[selectedTier];
+  const currentModels = tierModels[selectedTier];
 
-  // Handle Tier X unlock attempt
-  const handleUnlockTierX = (e: React.FormEvent) => {
-    e.preventDefault();
-    setAdminError('');
-    setAdminSuccessNotice('');
-
-    if (adminPasswordInput.trim() === ADMIN_TIER_X_SECRET) {
-      const updated: OllamaServerConfig = {
-        ...config,
-        isTierXUnlocked: true,
-        adminSecret: adminPasswordInput.trim(),
-        unlockedAt: new Date().toISOString(),
-      };
-      onConfigChange(updated);
-      saveOllamaConfig(updated);
-      setAdminSuccessNotice(
-        langKey === 'ar'
-          ? 'تم التحقق من كلمة مرور المسؤول بنجاح! تم فتح المستوى الرابع (Tier X: Abliterated Models) بالكامل.'
-          : 'Admin secret verified successfully! Tier X (Abliterated Models) is now fully unlocked.'
-      );
-      setTimeout(() => {
-        setShowAdminModal(false);
-        setSelectedTierTab('tier-x');
-      }, 1200);
-    } else {
-      setAdminError(
-        langKey === 'ar'
-          ? 'كلمة المرور غير صحيحة. يرجى إدخال كلمة سر الخادم المعتمدة للمسؤول.'
-          : 'Invalid admin secret. Please provide the authorized server password.'
-      );
-    }
-  };
-
-  const handleLockTierX = () => {
-    const updated: OllamaServerConfig = {
-      ...config,
-      isTierXUnlocked: false,
-      activeTier: config.activeTier === 'tier-x' ? 'tier-3' : config.activeTier,
-      selectedModelId: config.selectedModelId.includes('abliterated') ? 'deepseek-r1:70b' : config.selectedModelId,
-    };
+  const save = (updated: OllamaServerConfig) => {
     onConfigChange(updated);
     saveOllamaConfig(updated);
-    if (selectedTierTab === 'tier-x') {
-      setSelectedTierTab('tier-3');
-    }
   };
 
-  const handleSelectModel = (model: OllamaModelDefinition) => {
-    const updated: OllamaServerConfig = {
-      ...config,
-      activeTier: model.tier,
-      selectedModelId: model.id,
-      isAutoRouterEnabled: false,
-    };
-    onConfigChange(updated);
-    saveOllamaConfig(updated);
+  const handleSelectTier = (tier: AiTierId) => {
+    setNotice('');
+    if (!isLicensed(tier)) {
+      setNotice(
+        tier === 'tier-x'
+          ? (ar ? 'المستوى الرابع X لا يُفتح من هنا: يُمنح من إدارة المنصة للحساب، ونماذجه تحتاج توقيع ترخيص على البوابة.' : 'Tier X is granted by the platform admin; its models require a gateway licence signature.')
+          : (ar ? `الطبقة ${aiTiers[tier].label.ar} غير مرخّصة لحسابك. راسل إدارة المنصة لتفعيلها.` : `${tier} is not licensed for this account.`)
+      );
+      return;
+    }
+    setSelectedTier(tier);
+  };
+
+  const handleSelectModel = (modelId: string, tier: AiTierId) => {
+    setNotice('');
+    if (!isLicensed(tier)) { setNotice(ar ? 'هذه الطبقة غير مرخّصة لحسابك.' : 'This tier is not licensed for your account.'); return; }
+    save({ ...config, activeTier: tier, selectedModelId: modelId, isAutoRouterEnabled: false });
   };
 
   const handleToggleAutoRouter = () => {
-    const nextState = !config.isAutoRouterEnabled;
-    const updated: OllamaServerConfig = {
-      ...config,
-      isAutoRouterEnabled: nextState,
-      activeTier: nextState ? 'auto' : selectedTierTab,
-    };
-    onConfigChange(updated);
-    saveOllamaConfig(updated);
+    const next = !config.isAutoRouterEnabled;
+    save({ ...config, isAutoRouterEnabled: next, activeTier: next ? 'auto' : selectedTier });
   };
 
   const handleSaveServerSettings = (e: React.FormEvent) => {
     e.preventDefault();
-    const updated: OllamaServerConfig = {
-      ...config,
-      host: serverHostInput.trim() || 'http://localhost:11434',
-    };
-    onConfigChange(updated);
-    saveOllamaConfig(updated);
-    setServerNotice(
-      langKey === 'ar'
-        ? 'تم حفظ عنوان خادم Ollama بنجاح.'
-        : 'Ollama server endpoint saved successfully.'
-    );
+    save({ ...config, host: serverHostInput.trim() || 'http://localhost:11434' });
+    setServerNotice(ar ? 'تم حفظ عنوان الخادم.' : 'Endpoint saved.');
     setTimeout(() => setServerNotice(''), 3000);
   };
 
-  const getTierIcon = (tierId: AiTierId) => {
-    switch (tierId) {
-      case 'tier-1': return <Zap className="tier-tab-icon" size={18} />;
-      case 'tier-2': return <Cpu className="tier-tab-icon" size={18} />;
-      case 'tier-3': return <BrainCircuit className="tier-tab-icon" size={18} />;
-      case 'tier-x': return <Flame className="tier-tab-icon" size={18} />;
-    }
-  };
-
-  const currentTier = AI_TIERS[selectedTierTab];
-
   return (
     <div className="ai-tier-manager-container" dir={dir}>
-      {/* Header bar */}
       <div className="ai-tier-header">
         <div className="ai-tier-title-group">
           <div className="ai-tier-logo-badge">
@@ -152,19 +102,17 @@ export const AiTierManager: React.FC<AiTierManagerProps> = ({
           </div>
           <div>
             <div className="ai-tier-badge-pill">
-              <span>{langKey === 'ar' ? 'منظومة Ollama السحابية والمحلية' : 'Ollama Core Engine'}</span>
+              <span>{ar ? 'طبقات الذكاء الاصطناعي' : 'AI Tiers'}</span>
               <span className="ai-tier-dot" />
-              <span>4 Tiers Architecture</span>
+              <span>{ar ? 'ترخيص لكل حساب' : 'Per-account licence'}</span>
             </div>
             <h2 className="ai-tier-main-title">
-              {langKey === 'ar'
-                ? 'مستويات الذكاء الاصطناعي ونظام التوجيه الذكي'
-                : 'AI Model Tiers & Smart Intelligent Router'}
+              {ar ? 'المستويات ونظام التوجيه الذكي' : 'AI Model Tiers & Smart Router'}
             </h2>
             <p className="ai-tier-subtitle">
-              {langKey === 'ar'
-                ? '3 مستويات ذكاء معتمدة + المستوى الرابع (X: Abliterated) للمسؤول مع خوارزمية التوجيه الذاتي التلقائي.'
-                : '3 Standard Intelligence Tiers + Admin Tier X (Abliterated Core) with Auto Smart Router.'}
+              {ar
+                ? `ترخيص حسابك: ${aiTiers[activeLicense.tier].label.ar}${activeLicense.tierX ? ' + المستوى الرابع X' : ''} — كل سؤال يُحاسب على الطبقة التي نُفّذ بها فعلاً.`
+                : `Your licence: ${aiTiers[activeLicense.tier].label.en}${activeLicense.tierX ? ' + Tier X' : ''}.`}
             </p>
           </div>
         </div>
@@ -174,89 +122,62 @@ export const AiTierManager: React.FC<AiTierManagerProps> = ({
             type="button"
             className={`auto-router-toggle-btn ${config.isAutoRouterEnabled ? 'active' : ''}`}
             onClick={handleToggleAutoRouter}
-            title={langKey === 'ar' ? 'تفعيل أو تعطيل التوجيه التلقائي الذكي' : 'Toggle Auto Smart Router'}
+            title={ar ? 'تفعيل أو تعطيل التوجيه التلقائي' : 'Toggle auto router'}
           >
             <Compass size={16} />
             <span>
               {config.isAutoRouterEnabled
-                ? (langKey === 'ar' ? 'التوجيه الذكي: نشط 🎯' : 'Smart Router: Active 🎯')
-                : (langKey === 'ar' ? 'تحديد يدوي للنموذج' : 'Manual Model Selection')}
+                ? (ar ? 'التوجيه الذكي: نشط' : 'Smart Router: Active')
+                : (ar ? 'تحديد يدوي' : 'Manual selection')}
             </span>
           </button>
 
-          <button
-            type="button"
-            className="server-settings-toggle-btn"
-            onClick={() => setShowServerSettings(!showServerSettings)}
-          >
+          <button type="button" className="server-settings-toggle-btn" onClick={() => setShowServerSettings(!showServerSettings)}>
             <Server size={16} />
-            <span>{langKey === 'ar' ? 'إعدادات السيرفر' : 'Server Config'}</span>
+            <span>{ar ? 'إعدادات السيرفر' : 'Server config'}</span>
           </button>
 
           {onClose && (
-            <button
-              type="button"
-              className="ai-tier-close-btn"
-              onClick={onClose}
-              aria-label="Close"
-            >
+            <button type="button" className="ai-tier-close-btn" onClick={onClose} aria-label="Close">
               <X size={20} />
             </button>
           )}
         </div>
       </div>
 
-      {/* Auto Router Status Ribbon */}
       {config.isAutoRouterEnabled && (
         <div className="auto-router-ribbon">
           <Activity size={18} className="pulse-icon" />
           <div>
-            <strong>
-              {langKey === 'ar'
-                ? 'نظام التوجيه الذكي يحلل كل استفسار تلقائياً:'
-                : 'Intelligent Router Analyzes Queries Automatically:'}
-            </strong>{' '}
+            <strong>{ar ? 'التوجيه الذكي يقرأ كل سؤال ويختار الطبقة على السيرفر:' : 'The router picks the tier server-side:'}</strong>{' '}
             <span>
-              {langKey === 'ar'
-                ? 'يوجه المحادثات اليومية لـ Tier 1، الأسئلة الفنية لـ Tier 2، المعضلات والاستدلال لـ Tier 3، والفحوصات الأمنية لـ Tier X (عند التفعيل).'
-                : 'Routes everyday chats to Tier 1, technical questions to Tier 2, reasoning to Tier 3, and deep audits to Tier X.'}
+              {ar
+                ? 'سؤال عام → المستوى الأول، سياق تقني أو برمجي → الثاني، تحليل ومخاطر → الثالث، ولا يتجاوز أبداً طبقة ترخيصك.'
+                : 'General → Tier 1, technical/coding → Tier 2, analysis/risk → Tier 3 — never above your licence.'}
             </span>
           </div>
         </div>
       )}
 
-      {/* Server Settings Drawer */}
       {showServerSettings && (
         <div className="server-config-card">
           <div className="server-config-header">
             <Server size={18} />
-            <h4>{langKey === 'ar' ? 'بيانات اتصال خادم Ollama والاعتماد' : 'Ollama Host & Server Credentials'}</h4>
+            <h4>{ar ? 'عنوان خادم Ollama' : 'Ollama host'}</h4>
           </div>
           <form onSubmit={handleSaveServerSettings} className="server-config-form">
             <div className="server-input-row">
               <label>
-                <span>{langKey === 'ar' ? 'عنوان خادم Ollama (Host Endpoint):' : 'Ollama Host Endpoint:'}</span>
-                <input
-                  type="text"
-                  value={serverHostInput}
-                  onChange={(e) => setServerHostInput(e.target.value)}
-                  placeholder="http://localhost:11434 أو عنوان الـ VPS"
-                  dir="ltr"
-                />
+                <span>{ar ? 'عنوان الخادم:' : 'Endpoint:'}</span>
+                <input type="text" value={serverHostInput} onChange={(e) => setServerHostInput(e.target.value)} placeholder="http://127.0.0.1:11434" dir="ltr" />
               </label>
               <label>
-                <span>{langKey === 'ar' ? 'كلمة سر السيرفر الإدارية (Server Key):' : 'Server Admin Secret:'}</span>
-                <input
-                  type="password"
-                  value={config.adminSecret ? '••••••••••••••••' : ''}
-                  placeholder="•••••••• (يُدخل من إعدادات الإدارة)"
-                  readOnly
-                  dir="ltr"
-                />
+                <span>{ar ? 'ترخيص الحساب:' : 'Account licence:'}</span>
+                <input type="text" value={`${activeLicense.tier}${activeLicense.tierX ? ' + tier-x' : ''}`} readOnly dir="ltr" />
               </label>
               <button type="submit" className="save-server-btn">
                 <Check size={16} />
-                <span>{langKey === 'ar' ? 'حفظ الربط' : 'Save Endpoint'}</span>
+                <span>{ar ? 'حفظ' : 'Save'}</span>
               </button>
             </div>
             {serverNotice && <p className="server-notice-text">{serverNotice}</p>}
@@ -264,253 +185,132 @@ export const AiTierManager: React.FC<AiTierManagerProps> = ({
         </div>
       )}
 
-      {/* Tiers Navigation Tabs */}
       <div className="tiers-tabs-nav">
-        {(['tier-1', 'tier-2', 'tier-3', 'tier-x'] as AiTierId[]).map((tierId) => {
-          const tier = AI_TIERS[tierId];
-          const isSelected = selectedTierTab === tierId;
+        {tierOrder.map((tierId) => {
+          const tier = aiTiers[tierId];
+          const isSelected = selectedTier === tierId;
+          const licensed = isLicensed(tierId);
           const isTierX = tierId === 'tier-x';
-          const isLocked = isTierX && !config.isTierXUnlocked;
-
           return (
             <button
               key={tierId}
               type="button"
-              className={`tier-tab-btn ${isSelected ? 'active' : ''} ${isTierX ? 'tier-x-tab' : ''} ${isLocked ? 'locked' : ''}`}
-              onClick={() => {
-                if (isLocked) {
-                  setShowAdminModal(true);
-                } else {
-                  setSelectedTierTab(tierId);
-                }
-              }}
+              className={`tier-tab-btn ${isSelected ? 'active' : ''} ${isTierX ? 'tier-x-tab' : ''} ${licensed ? '' : 'locked'}`}
+              onClick={() => handleSelectTier(tierId)}
             >
               <div className="tier-tab-top">
-                {getTierIcon(tierId)}
+                {tierIcons[tierId]}
                 <span className="tier-badge-label">{tier.badge}</span>
-                {isTierX && (
-                  config.isTierXUnlocked ? (
-                    <span className="unlocked-pill">
-                      <Unlock size={12} /> {langKey === 'ar' ? 'مفعل' : 'Unlocked'}
-                    </span>
-                  ) : (
-                    <span className="locked-pill">
-                      <Lock size={12} /> {langKey === 'ar' ? 'للمسؤول فقط' : 'Admin Only'}
-                    </span>
-                  )
+                {licensed ? (
+                  <span className="unlocked-pill">
+                    <Unlock size={12} /> {ar ? 'مرخّص' : 'Licensed'}
+                  </span>
+                ) : (
+                  <span className="locked-pill">
+                    <Lock size={12} /> {isTierX ? (ar ? 'بترخيص من الإدارة' : 'Admin grant') : (ar ? 'غير مرخّص' : 'Not licensed')}
+                  </span>
                 )}
               </div>
-              <h3 className="tier-tab-name">
-                {tier.title[langKey] || tier.title.ar}
-              </h3>
+              <h3 className="tier-tab-name">{tx(tier.label)}</h3>
               <p className="tier-tab-summary">
-                {tier.models.length} {langKey === 'ar' ? 'نماذج Ollama مدمجة' : 'Ollama Models'}
+                {tier.pricePerQuestionSar === null
+                  ? (ar ? 'غير معروض للبيع — منحة إدارية' : 'Not for sale — admin grant')
+                  : `${tier.pricePerQuestionSar} ${ar ? 'ر.س / سؤال' : 'SAR / question'}`}
               </p>
             </button>
           );
         })}
       </div>
 
-      {/* Active Tier Overview Banner */}
       <div
-        className={`active-tier-banner ${selectedTierTab === 'tier-x' ? 'tier-x-banner' : ''}`}
-        style={{
-          borderLeftColor: currentTier.accentColor,
-          borderRightColor: currentTier.accentColor,
-        }}
+        className={`active-tier-banner ${selectedTier === 'tier-x' ? 'tier-x-banner' : ''}`}
+        style={{ borderLeftColor: currentTier.accent, borderRightColor: currentTier.accent }}
       >
         <div className="tier-banner-header">
           <div className="tier-banner-left">
-            <span
-              className="tier-level-indicator"
-              style={{ background: currentTier.accentColor }}
-            >
-              {currentTier.badge}
-            </span>
-            <h3>{currentTier.title[langKey] || currentTier.title.ar}</h3>
+            <span className="tier-level-indicator" style={{ background: currentTier.accent }}>{currentTier.badge}</span>
+            <h3>{tx(currentTier.label)}</h3>
           </div>
-
-          {selectedTierTab === 'tier-x' && config.isTierXUnlocked && (
-            <button
-              type="button"
-              className="lock-tier-x-btn"
-              onClick={handleLockTierX}
-              title={langKey === 'ar' ? 'إعادة قفل المستوى الرابع لأسباب أمنية' : 'Re-lock Tier X'}
-            >
-              <Lock size={14} />
-              <span>{langKey === 'ar' ? 'إعادة القفل الأمني' : 'Lock Tier X'}</span>
-            </button>
+          {isLicensed(selectedTier) ? (
+            <span className="unlocked-pill"><Check size={13} /> {ar ? 'مفعّل على حسابك' : 'Active on your account'}</span>
+          ) : (
+            <span className="locked-pill"><Lock size={13} /> {ar ? 'يحتاج ترخيصاً' : 'Licence required'}</span>
           )}
         </div>
 
-        <p className="tier-banner-desc">
-          {currentTier.subtitle[langKey] || currentTier.subtitle.ar}
-        </p>
+        <p className="tier-banner-desc">{tx(currentTier.summary)}</p>
 
-        {selectedTierTab === 'tier-x' && (
+        <div className="model-meta-info">
+          <div className="meta-row">
+            <span className="meta-label">{ar ? 'التسعير:' : 'Pricing:'}</span>
+            <span className="meta-val">
+              {currentTier.pricePerQuestionSar === null
+                ? (ar ? 'ليست للبيع — تُمنح من الإدارة لحسابات محددة' : 'Not for sale — granted per account')
+                : `${currentTier.pricePerQuestionSar} ${ar ? 'ر.س لكل سؤال يُنفَّذ على هذه الطبقة' : 'SAR per question executed on this tier'}`}
+            </span>
+          </div>
+          <div className="meta-row">
+            <span className="meta-label">{ar ? 'الموديلات الفعلية على السيرفر:' : 'Real server models:'}</span>
+            <span className="meta-val" dir="ltr">{currentModels.map(model => model.id).join(' · ')}</span>
+          </div>
+        </div>
+
+        {(selectedTier === 'tier-x' || !isLicensed(selectedTier)) && (
           <div className="tier-x-warning-box">
-            <ShieldAlert size={20} className="warning-icon" />
+            {selectedTier === 'tier-x' ? <ShieldAlert size={20} className="warning-icon" /> : <AlertTriangle size={20} className="warning-icon" />}
             <div>
               <strong>
-                {langKey === 'ar'
-                  ? 'تنبيه أمني شديد الأهمية (Abliterated Models):'
-                  : 'High Security Notice (Abliterated Models):'}
+                {selectedTier === 'tier-x'
+                  ? (ar ? 'المستوى الرابع X — بترخيص من الإدارة:' : 'Tier X — admin grant:')
+                  : (ar ? 'طبقة غير مرخّصة:' : 'Unlicensed tier:')}
               </strong>
               <p>
-                {langKey === 'ar'
-                  ? 'تم إلغاء أوزان التوافق ومرشحات الرقابة الصناعية (Censorship Guardrails) في هذه النماذج لتمكين المسؤول من التحليل الجنائي الواقعي واختبار اختراق أنظمة الحماية وتجاوز الـ Blacklists بدون أي حجب.'
-                  : 'De-aligned and abliterated weights allow direct vulnerability analysis, bypass simulation, and raw penetration testing without safety refusals.'}
+                {selectedTier === 'tier-x'
+                  ? (ar
+                    ? 'نماذج مفرغة من المرشحات (Abliterated) وغير معروضة للبيع. لا يوجد باسورد لفتحها من الواجهة: تُفعّل فقط عندما يمنحها مسؤول المنصة لحسابك، وعندها توقّع البوابة كل طلب ترخيص لحظي. أي محاولة لطلبها بلا ترخيص تُرفض على السيرفر.'
+                    : 'Abliterated models, not for sale. No UI password unlocks them: the platform admin grants them per account, and the gateway signs each request.')
+                  : (ar
+                    ? 'هذه الطبقة تحتاج ترخيصاً من إدارة المنصة. الترتيب والاستخدام لا يعتمدان على المتصفح — التنفيذ يُرفض على السيرفر إن لم يكن الترخيص صادراً.'
+                    : 'This tier needs a platform grant. Enforcement is server-side.')}
               </p>
             </div>
           </div>
         )}
+
+        {notice && <div className="modal-error-alert"><AlertTriangle size={16} /><span>{notice}</span></div>}
       </div>
 
-      {/* Models Grid in Active Tier */}
       <div className="tier-models-grid">
-        {currentTier.models.map((model) => {
+        {currentModels.map((model) => {
           const isSelected = config.selectedModelId === model.id && !config.isAutoRouterEnabled;
-          const isModelAbliterated = model.isAbliterated;
-
           return (
-            <div
-              key={model.id}
-              className={`model-card ${isSelected ? 'selected' : ''} ${isModelAbliterated ? 'abliterated-card' : ''}`}
-            >
+            <div key={model.id} className={`model-card ${isSelected ? 'selected' : ''} ${model.abliterated ? 'abliterated-card' : ''}`}>
               <div className="model-card-top">
                 <div className="model-identity">
-                  <span className="model-family-tag">{model.family}</span>
-                  <span className="model-param-tag">{model.parameterSize}</span>
-                  {isModelAbliterated && (
-                    <span className="abliterated-badge">
-                      <Flame size={12} /> ABLITERATED
-                    </span>
-                  )}
+                  <span className="model-family-tag">{model.id.split(':')[0]}</span>
+                  {model.abliterated && <span className="abliterated-badge"><Flame size={12} /> ABLITERATED</span>}
                 </div>
                 <button
                   type="button"
                   className={`model-select-btn ${isSelected ? 'is-active' : ''}`}
-                  onClick={() => handleSelectModel(model)}
+                  onClick={() => handleSelectModel(model.id, model.tier)}
+                  disabled={!isLicensed(model.tier)}
                 >
-                  {isSelected ? (
-                    <>
-                      <Check size={14} />
-                      <span>{langKey === 'ar' ? 'النموذج النشط' : 'Active'}</span>
-                    </>
-                  ) : (
-                    <span>{langKey === 'ar' ? 'اختيار' : 'Select'}</span>
-                  )}
+                  {isSelected ? <><Check size={14} /><span>{ar ? 'النشط' : 'Active'}</span></> : <span>{ar ? 'اختيار' : 'Select'}</span>}
                 </button>
               </div>
-
-              <h4 className="model-card-name">{model.name}</h4>
-              <p className="model-card-desc">
-                {model.description[langKey] || model.description.ar}
-              </p>
-
+              <h4 className="model-card-name">{tx(model.label)}</h4>
+              <p className="model-card-desc">{tx(model.note)}</p>
               <div className="model-meta-info">
                 <div className="meta-row">
-                  <span className="meta-label">{langKey === 'ar' ? 'سياق الذاكرة:' : 'Context Window:'}</span>
-                  <span className="meta-val" dir="ltr">{model.contextWindow.toLocaleString()} tokens</span>
+                  <span className="meta-label">{ar ? 'اسم الموديل على السيرفر:' : 'Server model id:'}</span>
+                  <span className="meta-val" dir="ltr">{model.id}</span>
                 </div>
-              </div>
-
-              <div className="model-strengths-box">
-                <span className="strengths-title">
-                  {langKey === 'ar' ? 'نقاط القوة البارزة:' : 'Key Strengths:'}
-                </span>
-                <ul className="strengths-list">
-                  {model.strengths.map((strength, idx) => (
-                    <li key={idx}>
-                      <Check size={12} className="check-bullet" />
-                      <span>{strength}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-
-              <div className="model-tags-footer">
-                {model.recommendedFor.map((rec, rIdx) => (
-                  <span key={rIdx} className="recommendation-tag">{rec}</span>
-                ))}
               </div>
             </div>
           );
         })}
       </div>
-
-      {/* Admin Unlock Modal for Tier X */}
-      {showAdminModal && (
-        <div className="admin-modal-backdrop" onClick={() => setShowAdminModal(false)}>
-          <div className="admin-modal-box" onClick={(e) => e.stopPropagation()}>
-            <div className="admin-modal-header">
-              <div className="admin-modal-icon-badge">
-                <Flame size={24} />
-              </div>
-              <div>
-                <h3>{langKey === 'ar' ? 'تفعيل المستوى الرابع X (نماذج ABLITERATED)' : 'Unlock Tier X (Abliterated Core)'}</h3>
-                <span className="admin-only-tag">{langKey === 'ar' ? 'خاص بالمسؤول فقط' : 'ADMIN CREDENTIAL REQUIRED'}</span>
-              </div>
-              <button
-                type="button"
-                className="modal-close-icon"
-                onClick={() => setShowAdminModal(false)}
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            <p className="admin-modal-desc">
-              {langKey === 'ar'
-                ? 'يتطلب فتح نماذج المستوى الرابع X (النماذج الحرة المفرغة من القيود الصناعية) إدخال كلمة سر الخادم المعتمدة للمسؤول:'
-                : 'Unlocking Tier X abliterated uncensored models requires the authorized server administrator password:'}
-            </p>
-
-            <form onSubmit={handleUnlockTierX} className="admin-unlock-form">
-              <div className="password-input-group">
-                <KeyRound size={18} className="input-key-icon" />
-                <input
-                  type="password"
-                  value={adminPasswordInput}
-                  onChange={(e) => setAdminPasswordInput(e.target.value)}
-                  placeholder={langKey === 'ar' ? 'أدخل رمز فتح Tier X...' : 'Enter the Tier X passcode...'}
-                  required
-                  autoFocus
-                  dir="ltr"
-                />
-              </div>
-
-              {adminError && (
-                <div className="modal-error-alert">
-                  <AlertTriangle size={16} />
-                  <span>{adminError}</span>
-                </div>
-              )}
-
-              {adminSuccessNotice && (
-                <div className="modal-success-alert">
-                  <Check size={16} />
-                  <span>{adminSuccessNotice}</span>
-                </div>
-              )}
-
-              <div className="modal-actions-row">
-                <button
-                  type="button"
-                  className="cancel-btn"
-                  onClick={() => setShowAdminModal(false)}
-                >
-                  {langKey === 'ar' ? 'إلغاء' : 'Cancel'}
-                </button>
-                <button type="submit" className="unlock-submit-btn">
-                  <Unlock size={16} />
-                  <span>{langKey === 'ar' ? 'تأكيد وفتح المستوى X' : 'Authenticate & Unlock Tier X'}</span>
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
