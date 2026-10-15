@@ -19,7 +19,7 @@ export interface PaymentDocument {
   customerEmail: string;
   amount: number;
   method: Method;
-  gateway: 'paytabs' | 'telr';
+  gateway: 'paytabs' | 'telr' | 'ngenius';
   interval: string;
   status: string;
   createdAt: string;

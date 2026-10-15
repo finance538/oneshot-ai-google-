@@ -404,21 +404,65 @@ test('loading the admin dashboard registers a connected N-Genius account for sit
   assert.equal(fixture.trace.some(entry => entry.operation === 'delete' && entry.table === 'site_payment_gateways'), true);
 });
 
-test('a connected N-Genius account offers the hosted page plus its mobile and Mada/Apple Pay variants only', async () => {
+test('a connected N-Genius account offers every method that runs on its hosted page', async () => {
   const fixture = await harness({ env: ngeniusEnv });
   const { enabledCapabilities } = await fixture.module('netlify/lib/policy.ts');
   const { defaultPolicy } = await fixture.module('shared/policy.ts');
   const caps = enabledCapabilities(merchantId, 'ngenius', defaultPolicy);
   const offered = Object.entries(caps).filter(([key, value]) => !['connected', 'platform'].includes(key) && value).map(([key]) => key).sort();
-  assert.deepEqual(offered, ['hosted', 'mada_applepay', 'mobile']);
+  assert.deepEqual(offered, ['framed', 'hosted', 'invoice', 'mada_applepay', 'mobile', 'paylink']);
 });
 
 test('N-Genius never advertises a card form or stored-credential method it does not run', async () => {
-  for (const method of ['own', 'managed', 'recurring', 'framed', 'paylink', 'invoice']) {
+  for (const method of ['own', 'managed', 'recurring']) {
     const fixture = await harness({ env: ngeniusEnv, selections: { payment_documents: [[{ payment_documents: { id: documentId, merchantId, title: 'طلب دفع', customerEmail: customer.email, amount: 10000, method, gateway: 'ngenius', expiresAt: new Date(Date.now() + 3600000), status: 'pending' }, merchants: { id: merchantId, name: 'Store' } }]] } });
     const endpoint = await fixture.module('netlify/functions/checkout.mts');
     const response = await endpoint.default(new Request(`https://preview.example/.netlify/functions/checkout?id=${documentId}`, { method: 'POST', headers: { Origin: 'https://preview.example', 'Content-Type': 'application/json' }, body: JSON.stringify({}) }), { ip: 'fixture' });
     assert.equal(response.status, 409, `${method} must be refused`);
     assert.equal(fixture.fetchTrace.length, 0, `${method} must never reach the gateway`);
+  }
+});
+
+const ngeniusDocument = (method) => ({
+  payment_documents: [[{ payment_documents: { id: documentId, merchantId, title: 'طلب دفع', customerEmail: customer.email, amount: 10000, method, gateway: 'ngenius', expiresAt: new Date(Date.now() + 3600000), status: 'pending' }, merchants: { id: merchantId, name: 'Store' } }]],
+});
+const ngeniusOrderResult = { access_token: 'fixture-token', reference: ngeniusReference, _links: { payment: { href: 'https://paypage.ksa.ngenius-payments.com/checkout/fixture' } } };
+const ngeniusPay = async (method) => {
+  const fixture = await harness({ env: ngeniusEnv, selections: ngeniusDocument(method), fetchResult: ngeniusOrderResult });
+  const endpoint = await fixture.module('netlify/functions/checkout.mts');
+  const response = await endpoint.default(new Request(`https://preview.example/.netlify/functions/checkout?id=${documentId}`, { method: 'POST', headers: { Origin: 'https://preview.example', 'Content-Type': 'application/json' }, body: JSON.stringify({}) }), { ip: 'fixture' });
+  return { fixture, response, data: await response.json() };
+};
+
+test('an N-Genius framed request opens the same page in slim mode for our own checkout iframe', async () => {
+  const { fixture, response, data } = await ngeniusPay('framed');
+  assert.equal(response.status, 200);
+  assert.equal(data.url, 'https://paypage.ksa.ngenius-payments.com/checkout/fixture?slim=true');
+  assert.equal(data.status, 'pending');
+  const attempt = fixture.trace.find(entry => entry.operation === 'update' && entry.table === 'payment_attempts');
+  assert.equal(attempt.set.gatewayUrl, 'https://paypage.ksa.ngenius-payments.com/checkout/fixture?slim=true');
+  const sent = JSON.parse(fixture.fetchTrace.find(call => call.url.endsWith('/orders')).init.body);
+  assert.equal(sent.merchantAttributes.offerOnly, undefined);
+});
+
+test('an N-Genius Mada/Apple Pay request limits the hosted page to exactly those schemes', async () => {
+  const { fixture, response, data } = await ngeniusPay('mada_applepay');
+  assert.equal(response.status, 200);
+  assert.equal(data.url, 'https://paypage.ksa.ngenius-payments.com/checkout/fixture');
+  assert.equal(data.status, 'pending');
+  const sent = JSON.parse(fixture.fetchTrace.find(call => call.url.endsWith('/orders')).init.body);
+  assert.equal(sent.merchantAttributes.offerOnly, 'MADA,APPLE_PAY');
+});
+
+test('an N-Genius pay link or invoice stores a reusable payment link on the document', async () => {
+  for (const method of ['paylink', 'invoice']) {
+    const { fixture, response, data } = await ngeniusPay(method);
+    assert.equal(response.status, 200, `${method} must be accepted`);
+    assert.equal(data.url, 'https://paypage.ksa.ngenius-payments.com/checkout/fixture', `${method} keeps the shareable top-level link`);
+    assert.equal(data.status, 'published', `${method} must publish the link`);
+    const document = fixture.trace.find(entry => entry.operation === 'update' && entry.table === 'payment_documents');
+    assert.equal(document.set.gatewayUrl, 'https://paypage.ksa.ngenius-payments.com/checkout/fixture');
+    assert.equal(document.set.gatewayId, ngeniusReference);
+    assert.equal(document.set.status, 'published');
   }
 });

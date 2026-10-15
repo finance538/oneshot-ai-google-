@@ -5,7 +5,7 @@ import { attempts, documents, merchants, openLinks, walletTopups } from '../../d
 import { failure, HttpError, identifier, jsonBody, paytabs, reply, safeGatewayUrl, sameOrigin, text, throttle } from '../lib/platform.js';
 import { enabledCapabilities, settings } from '../lib/policy.js';
 import { confirmPayment } from '../lib/payments.js';
-import { ngeniusCreateOrder } from '../lib/ngenius.js';
+import { ngeniusCreateOrder, ngeniusSlim } from '../lib/ngenius.js';
 import { telrConfig, telrRequest, telrUrl } from '../lib/telr.js';
 import { publicGateways } from '../lib/wallet.js';
 import { gateways, type Gateway } from '../../shared/policy.js';
@@ -76,9 +76,17 @@ export default async (req: Request, context: Context) => {
     if (!attempt) throw new HttpError(409, 'توجد محاولة دفع أخرى قيد المعالجة.');
     const origin = url.origin;
     if (document.gateway === 'ngenius') {
-      const order = await ngeniusCreateOrder(merchant.id, { amount: document.amount, description: document.title, email: document.customerEmail, origin, documentId: document.id });
-      await db.update(attempts).set({ reference: order.reference, gatewayUrl: order.url, status: 'pending' }).where(eq(attempts.id, attempt.id));
-      return reply({ url: order.url, status: 'pending' });
+      const order = await ngeniusCreateOrder(merchant.id, { amount: document.amount, description: document.title, email: document.customerEmail, origin, documentId: document.id, method: document.method });
+      // framed: our own checkout embeds this page, so ask for the vendor's bare slim layout.
+      const paymentUrl = document.method === 'framed' ? ngeniusSlim(order.url) : order.url;
+      await db.update(attempts).set({ reference: order.reference, gatewayUrl: paymentUrl, status: 'pending' }).where(eq(attempts.id, attempt.id));
+      // paylink/invoice: the customer pays from the stored link later, so keep it on the
+      // document exactly like the PayTabs branches do.
+      if (document.method === 'paylink' || document.method === 'invoice') {
+        await db.update(documents).set({ gatewayUrl: paymentUrl, gatewayId: order.reference, status: 'published' }).where(eq(documents.id, document.id));
+        return reply({ url: paymentUrl, status: 'published' });
+      }
+      return reply({ url: paymentUrl, status: 'pending' });
     }
     if (document.gateway === 'telr') {
       const returnUrl = `${origin}/.netlify/functions/payment-return?id=${document.id}`;

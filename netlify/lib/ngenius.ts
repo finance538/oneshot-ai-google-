@@ -37,11 +37,19 @@ export function ngeniusConfig(merchantId: string) {
 }
 
 export function ngeniusCapabilities(merchantId: string) {
-  // The hosted payment page is the only server-side integration we run, and it is the
-  // same page for desktop and mobile. The KSA outlet takes Mada + Apple Pay on that page.
-  // Every other method (embedded iframe, direct API, tokenisation, Pay by Link, invoices,
-  // store plugins) is catalog-only until its code is actually written.
-  try { return { connected: true, hosted: true, framed: false, mobile: true, mada_applepay: true, paylink: false, invoice: false, managed: false, own: false, recurring: false, platform: ngeniusConfig(merchantId).platform }; }
+  // All six of these run on the same N-Genius hosted pay page:
+  //   hosted        the page itself, opened at the top level
+  //   framed        the same page in slim mode inside our checkout iframe (the pay page
+  //                 sends no X-Frame-Options and no CSP frame-ancestors, so it embeds)
+  //   mobile        the same page on a phone
+  //   mada_applepay the page limited to Mada + Apple Pay (offerOnly on the order)
+  //   paylink       the pay link is stored on the document and shared with the customer
+  //   invoice       that same stored link, titled as an invoice for one customer
+  // Not written yet, so never advertised: managed (Web SDK card fields need a Hosted
+  // Session SDK session, which the KSA docs we hold do not publish), own (a Direct API
+  // card form would put the merchant in PCI SAQ D scope), recurring (needs tokenisation
+  // plus merchant-initiated transactions enabled on the outlet).
+  try { return { connected: true, hosted: true, framed: true, mobile: true, mada_applepay: true, paylink: true, invoice: true, managed: false, own: false, recurring: false, platform: ngeniusConfig(merchantId).platform }; }
   catch { return { connected: false, hosted: false, framed: false, mobile: false, mada_applepay: false, paylink: false, invoice: false, managed: false, own: false, recurring: false, platform: false }; }
 }
 
@@ -75,12 +83,26 @@ function orderReference(description: string) {
   return `OS-${stamp}${slug ? `-${slug}` : ''}`.slice(0, 37);
 }
 
+// Methods that run on the same hosted page but must be offered on their own: the page
+// then shows only these, so a customer sent a Mada/Apple Pay request cannot pay by another scheme.
+const methodOffers: Record<string, string> = { mada_applepay: 'MADA,APPLE_PAY' };
+const methodOffer = (method?: string) => (method ? methodOffers[method] : undefined);
+
+// The pay page carries no X-Frame-Options and no CSP frame-ancestors, so our checkout can
+// embed it; slim=true is the vendor's own bare layout for exactly that (no header, no chrome).
+export function ngeniusSlim(url: string) {
+  const target = new URL(url);
+  target.searchParams.set('slim', 'true');
+  return target.href;
+}
+
 // Creates a PURCHASE order: a successful authorisation is captured immediately,
 // which is what a wallet top-up or a site payment needs.
-export async function ngeniusCreateOrder(merchantId: string, input: { amount: number; description: string; email?: string; origin: string; documentId: string }) {
+export async function ngeniusCreateOrder(merchantId: string, input: { amount: number; description: string; email?: string; origin: string; documentId: string; method?: string }) {
   const config = ngeniusConfig(merchantId);
   const token = await accessToken(config.key);
   const returnUrl = `${input.origin}/.netlify/functions/payment-return?id=${input.documentId}`;
+  const offer = methodOffer(input.method);
   const response = await fetch(`${ngeniusIdentity}/transactions/outlets/${config.outlet}/orders`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/vnd.ni-payment.v2+json', Accept: 'application/vnd.ni-payment.v2+json', ...browserHeaders },
@@ -89,7 +111,7 @@ export async function ngeniusCreateOrder(merchantId: string, input: { amount: nu
       amount: { currencyCode: 'SAR', value: input.amount },
       merchantOrderReference: orderReference(input.description),
       ...(input.email ? { emailAddress: input.email } : {}),
-      merchantAttributes: { redirectUrl: returnUrl, cancelUrl: returnUrl, skipConfirmationPage: true },
+      merchantAttributes: { redirectUrl: returnUrl, cancelUrl: returnUrl, skipConfirmationPage: true, ...(offer ? { offerOnly: offer } : {}) },
     }),
     redirect: 'error',
     signal: AbortSignal.timeout(20000),
