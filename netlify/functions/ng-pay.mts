@@ -8,6 +8,11 @@ const paypage = 'https://paypage.ksa.ngenius-payments.com';
 const minimum = Number(process.env.NG_PAY_MINIMUM || 100);
 const maximum = Number(process.env.NG_PAY_MAXIMUM || 500000);
 
+const browserHeaders = {
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36',
+  'Accept-Language': 'ar-SA,ar;q=0.9,en;q=0.8',
+};
+
 function config() {
   const key = process.env.NG_API_KEY;
   const outlet = process.env.NG_OUTLET;
@@ -25,11 +30,12 @@ async function accessToken(key: string) {
       Authorization: `Basic ${key}`,
       'Content-Type': 'application/vnd.ni-identity.v1+json',
       Accept: 'application/vnd.ni-identity.v1+json',
+      ...browserHeaders,
     },
     redirect: 'error',
     signal: AbortSignal.timeout(20000),
   });
-  if (!response.ok) throw new HttpError(502, 'تعذر الاتصال ببوابة N-Genius. تحقق من حالة الدفع قبل التكرار.');
+  if (!response.ok) throw new HttpError(502, `تعذر الاتصال ببوابة N-Genius (رمز ${response.status}). تحقق من حالة الدفع قبل التكرار.`);
   const result: unknown = await response.json();
   if (!result || typeof result !== 'object' || Array.isArray(result) || typeof (result as Record<string, unknown>).access_token !== 'string') {
     throw new HttpError(502, 'لم يصل رمز الوصول من N-Genius.');
@@ -68,6 +74,7 @@ export default async (req: Request, context: Context) => {
         Authorization: `Bearer ${token}`,
         'Content-Type': 'application/vnd.ni-payment.v2+json',
         Accept: 'application/vnd.ni-payment.v2+json',
+        ...browserHeaders,
       },
       body: JSON.stringify({
         action: 'AUTH',
@@ -83,7 +90,11 @@ export default async (req: Request, context: Context) => {
       redirect: 'error',
       signal: AbortSignal.timeout(20000),
     });
-    if (!response.ok) throw new HttpError(502, 'تعذر إنشاء جلسة الدفع في N-Genius.');
+    if (!response.ok) {
+      const detail = await response.text().catch(() => '');
+      const reason = (() => { try { const parsed = JSON.parse(detail) as { errors?: Array<{ code?: string; message?: string }> }; const first = parsed?.errors?.[0]; return [first?.code, first?.message].filter(Boolean).join(' ').slice(0, 160); } catch { return ''; } })();
+      throw new HttpError(502, `تعذر إنشاء جلسة الدفع في N-Genius (رمز ${response.status}${reason ? ` — ${reason}` : ''}).`);
+    }
     const order: unknown = await response.json();
     if (!order || typeof order !== 'object' || Array.isArray(order)) throw new HttpError(502, 'لم تصل بيانات جلسة الدفع.');
     const record = order as Record<string, unknown>;
