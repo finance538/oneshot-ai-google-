@@ -579,26 +579,34 @@ test('a shareable N-Genius pay link never carries somebody else card', async () 
   assert.equal(fixture.trace.some(entry => entry.operation === 'select' && entry.table === 'saved_cards'), false, 'the stored token is not even read for a link');
 });
 
-test('the N-Genius webhook receiver ignores unsigned callers and never trusts the payload', async () => {
+test('the N-Genius webhook receiver trusts the gateway, never the payload', async () => {
   const url = 'https://preview.example/.netlify/functions/ngenius-webhook';
   const body = JSON.stringify({ event: 'CAPTURED', order: { reference: ngeniusReference } });
   const fixture = await harness({ env: { ...ngeniusEnv, NG_WEBHOOK_SECRET: 'fixture-secret' }, inserts: { gateway_events: [[{ id: requestId }]] }, selections: { payment_attempts: [] }, fetchResult: ngeniusOrderResult });
   const hook = await fixture.module('netlify/functions/ngenius-webhook.mts');
 
-  const unconfigured = await (await harness({ env: ngeniusEnv })).module('netlify/functions/ngenius-webhook.mts');
-  assert.equal((await unconfigured.default(new Request(url, { method: 'POST', body }))).status, 503, 'no shared secret means the door stays shut');
+  const unconfigured = await harness({ env: ngeniusEnv, inserts: { gateway_events: [[{ id: requestId }]] }, selections: { payment_attempts: [] }, fetchResult: ngeniusOrderResult });
+  const open = await unconfigured.module('netlify/functions/ngenius-webhook.mts');
+  const unsigned = await open.default(new Request(url, { method: 'POST', body }));
+  assert.equal(unsigned.status, 200, 'with no shared secret on the platform the door stays open on purpose');
+  assert.equal((await unsigned.json()).authenticated, false);
+  const unsignedLog = unconfigured.trace.find(entry => entry.operation === 'insert' && entry.table === 'gateway_events');
+  assert.equal(unsignedLog.values.payload.authenticated, false, 'an unsigned caller is fingerprinted in the audit trail');
+  assert.equal(unsignedLog.values.payload.notification.order.reference, ngeniusReference, 'the raw notification is kept verbatim');
+  assert.equal(unconfigured.fetchTrace.length, 0, 'and a reference we do not know moves nothing');
 
   assert.equal((await hook.default(new Request(url, { method: 'GET' }))).status, 405);
-  assert.equal((await hook.default(new Request(url, { method: 'POST', body }))).status, 401, 'an unsigned notification is refused');
+  assert.equal((await hook.default(new Request(url, { method: 'POST', body }))).status, 401, 'an unsigned notification is refused once the secret is configured');
   assert.equal((await hook.default(new Request(url, { method: 'POST', headers: { 'x-webhook-token': 'guess' }, body }))).status, 401);
   assert.equal(fixture.trace.length, 0, 'an unauthenticated caller never reaches the database');
 
   const accepted = await hook.default(new Request(url, { method: 'POST', headers: { 'x-webhook-token': 'fixture-secret', 'Content-Type': 'application/json' }, body }));
   assert.equal(accepted.status, 200);
-  assert.deepEqual(await accepted.json(), { received: true, event: 'CAPTURED', stored: true });
+  assert.deepEqual(await accepted.json(), { received: true, event: 'CAPTURED', stored: true, authenticated: true });
   const logged = fixture.trace.find(entry => entry.operation === 'insert' && entry.table === 'gateway_events');
   assert.equal(logged.values.event, 'CAPTURED');
   assert.equal(logged.values.reference, ngeniusReference);
+  assert.equal(logged.values.payload.authenticated, true);
   assert.equal(fixture.fetchTrace.length, 0, 'the payload alone never triggers a gateway call for a reference we do not know');
 
   assert.equal((await hook.default(new Request(url, { method: 'POST', headers: { 'x-webhook-token': 'fixture-secret' }, body: 'not json' }))).status, 400);

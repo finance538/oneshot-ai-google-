@@ -7,16 +7,18 @@ import { reply } from '../lib/platform.js';
 // مستلم Webhooks لبوابة N-Genius KSA — هذا هو الرابط الذي يُسجَّل في Settings ← Integrations ← Webhooks.
 // البوابة تُرسل إشعارًا واحدًا لكل حدث ولا تعيد المحاولة، لذلك لا نصدّق محتوى الإشعار أبدًا: نحفظه
 // للسجل فقط ثم نطالب البوابة بالحالة الحيّة عبر confirmPayment — المرجع هو الوسيط، ولا إعلان دفع من هنا.
-// الإشعار غير موقّع من البوابة، فالباب مغلق بقيمة مشتركة يرسلها التاجر في هيدر يضبطه في اللوحة،
-// والغياب يعني الرفض: رابط مكشوف يستطيع أي أحد أن يقذف فيه إشعارات مزيّفة.
+// الإشعار غير موقّع من البوابة، فالباب يُغلق بقيمة مشتركة يرسلها التاجر في هيدر يضبطه في اللوحة.
+// وإن لم تُضبط القيمة على المنصة يبقى الباب مفتوحًا عن قصد: الإشعار لا يُعلن دفعًا ولا يغيّر حالة
+// أي أمر، ودوره الوحيد أن يوقظنا على مرجع — والحالة تُقرأ من البوابة، وكل قذفة تُسجَّل مع بصمة
+// التوثيق، فأسوأ ما يفعله مزوّر يعرف مرجعًا هو أن يجعلنا نعيد سؤال البوابة عن الحقيقة.
 const header = process.env.NG_WEBHOOK_HEADER || 'x-webhook-token';
 
 export default async (req: Request) => {
   if (req.method !== 'POST') return reply({ error: 'طريقة الطلب غير مسموحة.' }, 405);
   const secret = process.env.NG_WEBHOOK_SECRET;
-  if (!secret) return reply({ error: 'مستلم الإشعارات غير مهيأ على المنصة (NG_WEBHOOK_SECRET).' }, 503);
   const supplied = req.headers.get(header) || new URL(req.url).searchParams.get('token');
-  if (!supplied || supplied !== secret) return reply({ error: 'الإشعار غير موثوق.' }, 401);
+  if (secret && supplied !== secret) return reply({ error: 'الإشعار غير موثوق.' }, 401);
+  const authenticated = Boolean(secret);
   let parsed: Record<string, unknown>;
   try {
     parsed = JSON.parse((await req.text()).slice(0, 20000)) as Record<string, unknown>;
@@ -30,7 +32,7 @@ export default async (req: Request) => {
   let stored = false;
   try {
     const db = database();
-    await db.insert(gatewayEvents).values({ gateway: 'ngenius', event, reference, payload: parsed });
+    await db.insert(gatewayEvents).values({ gateway: 'ngenius', event, reference, payload: { authenticated, notification: parsed } });
     stored = true;
   } catch {
     // تعذّر الحفظ: نُبلّغ بالحقيقة بدل ادّعاء الاستلام، ولا نوقف الردّ — البوابة لا تعيد المحاولة.
@@ -45,5 +47,5 @@ export default async (req: Request) => {
   } catch {
     // الحالة الحيّة تُقرأ أيضًا عند عودة العميل إلى /pay/return، فلا نُفشل الإشعار لهذا السبب.
   }
-  return reply({ received: true, event, stored });
+  return reply({ received: true, event, stored, authenticated });
 };
