@@ -1133,6 +1133,21 @@ function Catalog({ onOrder }: { onOrder: (item: Inquiry) => void }) {
           <div className="store-product-grid">
             {filtered.slice(0, limit).map((item) => (
               <article className="store-product-card" key={item.sku}>
+                <a
+                  className="store-product-media"
+                  href={appearanceLink(`/products/${item.sku}`)}
+                  aria-hidden="true"
+                  tabIndex={-1}
+                >
+                  <img
+                    src={`/images/products/${item.sku}.jpg`}
+                    alt=""
+                    width={1280}
+                    height={800}
+                    loading="lazy"
+                    decoding="async"
+                  />
+                </a>
                 <div className="store-product-meta">
                   <span className="store-sku">{item.sku}</span>
                   <span>
@@ -1278,6 +1293,15 @@ function ProductDetails({
       </a>
       <div className="store-detail-layout">
         <div className="store-document-body">
+          <figure className="store-detail-media">
+            <img
+              src={`/images/products/${product.sku}.jpg`}
+              alt={title}
+              width={1280}
+              height={800}
+              decoding="async"
+            />
+          </figure>
           <span className="store-kicker">{product.sku} · ONESHOT 2026</span>
           <h1>{title}</h1>
           <p className="store-detail-subcategory" dir="rtl" lang="ar">
