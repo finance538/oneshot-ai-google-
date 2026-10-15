@@ -11,7 +11,8 @@ const maximum = Number(process.env.NG_PAY_MAXIMUM || 500000);
 function config() {
   const key = process.env.NG_API_KEY;
   const outlet = process.env.NG_OUTLET;
-  if (!key || !outlet) throw new HttpError(409, 'بوابة N-Genius غير مهيأة على المنصة.');
+  if (!key) throw new HttpError(409, 'مفتاح N-Genius غير مضبوط على المنصة (NG_API_KEY).');
+  if (!outlet) throw new HttpError(409, 'منفذ N-Genius غير مضبوط على المنصة (NG_OUTLET).');
   if (!/^[A-Za-z0-9+/=_-]{40,200}$/.test(key)) throw new HttpError(409, 'مفتاح بوابة N-Genius غير صالح.');
   if (!/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(outlet)) throw new HttpError(409, 'معرّف منفذ N-Genius غير صالح.');
   return { key, outlet };
