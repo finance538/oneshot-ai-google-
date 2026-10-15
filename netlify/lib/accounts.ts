@@ -6,7 +6,7 @@ import { accountRegistrations, marketerCampaigns, merchants } from '../../db/sch
 import { captureOperation } from './operations.js';
 import { HttpError, isAdmin } from './platform.js';
 
-export type AccountRole = 'admin' | 'merchant' | 'marketer';
+export type AccountRole = 'admin' | 'merchant' | 'marketer' | 'loader';
 export type AccountStatus = 'pending' | 'approved' | 'rejected';
 
 export function generateAccountId(ownerId: string): string {
@@ -59,10 +59,20 @@ export async function ensureAccountProvisioned(user: User) {
     .where(eq(merchants.ownerId, user.id));
 
   const meta = readUserMetadata(user);
-  const metaRole = meta.account_type === 'marketer' ? 'marketer' : 'merchant';
+  const metaRole = ['marketer', 'loader', 'admin'].includes(String(meta.account_type)) ? String(meta.account_type) : 'merchant';
   const metaNotes = typeof meta.marketing_notes === 'string' ? meta.marketing_notes.trim().slice(0, 400) : null;
   const fullName = deriveDisplayName(user);
   const userEmail = String(user.email || `${user.id}@oneshot.local`).trim().toLowerCase();
+
+  const requestedRole = existingRegistration?.role ?? (!existingMerchant ? metaRole : 'merchant');
+  if (requestedRole === 'loader' || requestedRole === 'admin') {
+    if (!existingRegistration) {
+      await db.insert(accountRegistrations).values({ ownerId: user.id, email: userEmail, fullName,
+        role: requestedRole, status: requestedRole === 'admin' ? 'pending' : 'approved' }).onConflictDoNothing();
+    }
+    return { accountRole: requestedRole as AccountRole, registrationStatus: (existingRegistration?.status ?? (requestedRole === 'admin' ? 'pending' : 'approved')) as AccountStatus,
+      merchant: null, marketerAccount: null, marketerCampaigns: [] };
+  }
 
   // إذا كان مسجلاً كمسوّق (أو اختار مسوّق أثناء التسجيل ولم ينشأ له متجر سابقاً)
   if (existingRegistration?.role === 'marketer' || (!existingRegistration && !existingMerchant && metaRole === 'marketer')) {
@@ -76,7 +86,7 @@ export async function ensureAccountProvisioned(user: User) {
           email: userEmail,
           fullName,
           role: 'marketer',
-          status: 'pending',
+          status: 'approved',
           referralCode,
           commissionRate: 10,
           notes: metaNotes,
@@ -163,7 +173,7 @@ export async function ensureAccountProvisioned(user: User) {
 
 export async function registerUserAccount(
   user: User,
-  params: { role: 'merchant' | 'marketer'; name?: string; storeName?: string; notes?: string | null },
+  params: { role: 'merchant' | 'marketer' | 'loader' | 'admin'; name?: string; storeName?: string; notes?: string | null },
 ) {
   if (isAdmin(user)) {
     throw new HttpError(403, 'حساب الإدارة منفصل تماماً عن قسم تسجيل التجار والمسوّقين.');
@@ -180,6 +190,13 @@ export async function registerUserAccount(
     .from(accountRegistrations)
     .where(eq(accountRegistrations.ownerId, user.id));
 
+  if (existing && existing.role !== params.role) throw new HttpError(409, 'نوع الحساب مسجّل مسبقاً ولا يمكن تغييره.');
+  if (params.role === 'loader' || params.role === 'admin') {
+    if (!existing) await db.insert(accountRegistrations).values({ ownerId: user.id, email: userEmail, fullName,
+      role: params.role, status: params.role === 'admin' ? 'pending' : 'approved' }).onConflictDoNothing();
+    return ensureAccountProvisioned(user);
+  }
+
   if (params.role === 'marketer') {
     const referralCode = existing?.referralCode || generateReferralCode(user.id);
     if (!existing) {
@@ -190,7 +207,7 @@ export async function registerUserAccount(
           email: userEmail,
           fullName,
           role: 'marketer',
-          status: 'pending',
+          status: 'approved',
           referralCode,
           commissionRate: 10,
           notes,

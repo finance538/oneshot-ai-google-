@@ -258,7 +258,7 @@ export const accountRegistrations = pgTable('account_registrations', {
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 }, table => [
-  check('account_registration_role_valid', sql`${table.role} in ('merchant', 'marketer')`),
+  check('account_registration_role_valid', sql`${table.role} in ('merchant', 'marketer', 'loader', 'admin')`),
   check('account_registration_status_valid', sql`${table.status} in ('pending', 'approved', 'rejected')`),
   index('account_registrations_role_status').on(table.role, table.status),
 ]);

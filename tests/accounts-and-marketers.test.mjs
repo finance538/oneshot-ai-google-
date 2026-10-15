@@ -42,6 +42,10 @@ function createPlatformHarness({ user, env = {} }) {
             targetTable = tableName(table);
             return this;
           },
+          innerJoin() {
+            this._joined = true;
+            return this;
+          },
           leftJoin() {
             return this;
           },
@@ -60,6 +64,16 @@ function createPlatformHarness({ user, env = {} }) {
           },
           then(resolve, reject) {
             try {
+              if (targetTable === 'merchants' && this._joined) {
+                const rows = state.merchants.filter(m => state.accountRegistrations.some(r =>
+                  r.ownerId === m.ownerId && r.role === 'merchant' && r.status === 'approved' &&
+                  (this._condition.includes(r.email.toLowerCase()) || this._condition.includes(m.accountId))));
+                return Promise.resolve(rows.map(({ id, name, accountId }) => ({ id, name, accountId }))).then(resolve, reject);
+              }
+              if (targetTable === 'open_payment_links') {
+                return Promise.resolve(state.openLinks.filter(l => l.enabled && this._condition.includes(l.merchantId))
+                  .map(({ id, title }) => ({ id, title }))).then(resolve, reject);
+              }
               if (targetTable === 'merchants') {
                 return Promise.resolve(state.merchants.filter(m => m.ownerId === user?.id)).then(resolve, reject);
               }
@@ -366,7 +380,7 @@ test('Merchant account registration automatically provisions the merchant worksp
   assert.equal(harness.state.accountRegistrations[0].status, 'approved');
 });
 
-test('Marketer registration requires Admin approval and isolates Marketer permissions from Admin and Merchant', async () => {
+test('Marketer registration activates automatically and isolates permissions from Admin and Merchant', async () => {
   const marketerUser = {
     id: 'marketer-user-1',
     email: 'marketer@example.sa',
@@ -377,23 +391,17 @@ test('Marketer registration requires Admin approval and isolates Marketer permis
   const harness = createPlatformHarness({ user: marketerUser });
   const endpoint = await harness.module('netlify/functions/platform.mts');
 
-  // 1) Marketer registers -> status is 'pending' and NO merchant workspace is created
+  // 1) Marketer registers -> status is 'approved' and NO merchant workspace is created
   const regRes = await endpoint.default(
     postRequest({ action: 'register-account', role: 'marketer', name: 'خالد المسوّق', notes: 'سناب شات وجوجل آدز' }),
   );
   assert.equal(regRes.status, 201);
   const regData = await regRes.json();
   assert.equal(regData.accountRole, 'marketer');
-  assert.equal(regData.registrationStatus, 'pending');
+  assert.equal(regData.registrationStatus, 'approved');
   assert.equal(regData.merchant, null);
   assert.equal(harness.state.merchants.length, 0);
   assert.ok(regData.marketerAccount.referralCode.startsWith('MKT-'));
-
-  // 2) While pending, marketer cannot create campaigns
-  const pendingCampRes = await endpoint.default(
-    postRequest({ action: 'create-marketer-campaign', title: 'حملة 1', utmCampaign: 'snap-1', channel: 'social' }),
-  );
-  assert.equal(pendingCampRes.status, 403);
 
   // 3) Marketer cannot approve themselves or perform Admin actions
   const selfApproveRes = await endpoint.default(
@@ -417,9 +425,7 @@ test('Marketer registration requires Admin approval and isolates Marketer permis
   );
   assert.equal(merchantActionRes.status, 403);
 
-  // 5) Admin approves the marketer account -> status becomes 'approved'
-  harness.state.accountRegistrations[0].status = 'approved';
-  harness.state.accountRegistrations[0].commissionRate = 15;
+  // No administrator approval is needed.
 
   // 6) Now approved marketer can create, toggle, and delete their marketing campaigns
   const createCampRes = await endpoint.default(
@@ -476,4 +482,50 @@ test('Admin can review and approve or reject marketer registrations via review-m
   assert.equal(body.marketer.status, 'approved');
   assert.equal(body.marketer.commissionRate, 20);
   assert.equal(body.marketer.reviewedBy, 'admin@1shotcam.com');
+});
+
+for (const role of ['loader', 'admin']) {
+  test(`${role} selection does not provision a merchant or grant administrator permissions`, async () => {
+    const user = { id: `${role}-user`, email: `${role}@example.sa`, userMetadata: { account_type: role }, appMetadata: { roles: [] } };
+    const harness = createPlatformHarness({ user });
+    const endpoint = await harness.module('netlify/functions/platform.mts');
+    const response = await endpoint.default(postRequest({ action: 'register-account', role, name: 'New account' }));
+    assert.equal(response.status, 201);
+    const result = await response.json();
+    assert.equal(result.accountRole, role);
+    assert.equal(result.registrationStatus, role === 'admin' ? 'pending' : 'approved');
+    assert.equal(harness.state.merchants.length, 0);
+    assert.equal((await endpoint.default(postRequest({ action: 'rename', name: 'Not allowed' }))).status, 403);
+    assert.equal((await endpoint.default(postRequest({ action: 'lookup-merchant-gateways', lookup: 'merchant@example.sa' }))).status, 403);
+    assert.equal((await endpoint.default(postRequest({ action: 'grant-tier', ownerId: user.id, tier: 'tier-3' }))).status, 403);
+  });
+}
+
+test('Rejected marketer cannot reactivate through registration or retrieve gateways', async () => {
+  const user = { id: 'rejected-marketer', email: 'blocked@example.sa', appMetadata: { roles: [] } };
+  const harness = createPlatformHarness({ user });
+  harness.state.accountRegistrations.push({ id: 'registration', ownerId: user.id, role: 'marketer', status: 'rejected' });
+  const endpoint = await harness.module('netlify/functions/platform.mts');
+  const response = await endpoint.default(postRequest({ action: 'register-account', role: 'marketer' }));
+  assert.equal((await response.json()).registrationStatus, 'rejected');
+  assert.equal((await endpoint.default(postRequest({ action: 'lookup-merchant-gateways', lookup: 'merchant@example.sa' }))).status, 403);
+});
+
+test('Marketer retrieves the same merchant by normalized email and account number without credentials', async () => {
+  const user = { id: 'lookup-marketer', email: 'marketer@example.sa', appMetadata: { roles: [] } };
+  const harness = createPlatformHarness({ user });
+  harness.state.accountRegistrations.push(
+    { ownerId: user.id, role: 'marketer', status: 'approved' },
+    { ownerId: 'merchant-owner', email: 'Merchant@Example.sa', role: 'merchant', status: 'approved' },
+  );
+  harness.state.merchants.push({ id: 'merchant-id', ownerId: 'merchant-owner', name: 'Merchant store', accountId: '1234567' });
+  const endpoint = await harness.module('netlify/functions/platform.mts');
+  for (const lookup of [' MERCHANT@example.sa ', '1234567']) {
+    const response = await endpoint.default(postRequest({ action: 'lookup-merchant-gateways', lookup }));
+    assert.equal(response.status, 200);
+    const result = await response.json();
+    assert.deepEqual(result.merchant, { name: 'Merchant store', accountId: '1234567' });
+    assert.deepEqual(Object.keys(result).sort(), ['gateways', 'links', 'merchant']);
+  }
+  assert.equal((await endpoint.default(postRequest({ action: 'lookup-merchant-gateways', lookup: 'missing@example.sa' }))).status, 404);
 });

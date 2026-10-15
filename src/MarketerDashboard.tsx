@@ -184,7 +184,7 @@ export function MarketerDashboard({
             <span className={`status-badge ${isRejected ? 'status-failed' : 'status-pending'}`}>
               {isRejected
                 ? tr('تم رفض أو تعليق الطلب', 'Application Rejected / Suspended')
-                : tr('بانتظار موافقة الإدارة', 'Pending Admin Approval')}
+                : tr('جارٍ تفعيل الحساب', 'Account activation pending')}
             </span>
             <h2 style={{ margin: '10px 0 6px' }}>
               {isRejected
@@ -198,8 +198,8 @@ export function MarketerDashboard({
                     'Your marketer account application was reviewed by the platform administrator and is currently not approved.',
                   )
                 : tr(
-                    'بخلاف حسابات التجار التي تُنشأ تلقائياً، تتطلب حسابات المسوّقين موافقة واعتماد مسؤول المنصة أولاً لتفعيل كود الإحالة، نسب العمولة، ولوحة الحملات التسويقية.',
-                    'Unlike merchant accounts which are created automatically, marketer accounts require administrator approval before referral codes, commissions, and campaign tools are unlocked.',
+                    'يُفعّل الحساب تلقائياً. حدّث حالة الحساب للمتابعة.',
+                    'Accounts activate automatically. Refresh your account status to continue.',
                   )}
             </p>
           </div>
@@ -211,7 +211,7 @@ export function MarketerDashboard({
             <small>{tr('تم استلام بياناتك بنجاح', 'Registration received')}</small>
           </div>
           <div className={`mkt-step ${isRejected ? '' : 'active'}`}>
-            <strong>{tr('2. مراجعة واعتماد الإدارة', '2. Admin Verification')}</strong>
+            <strong>{tr('2. تفعيل تلقائي', '2. Automatic activation')}</strong>
             <small>
               {isRejected
                 ? tr('لم يتم الاعتماد', 'Not approved')
@@ -944,12 +944,12 @@ export function MarketerApprovalAdmin({
             <UserCheck size={14} /> {tr('إدارة حسابات المسوّقين · Marketer Approvals', 'MARKETER ACCOUNT APPROVALS')}
           </span>
           <h3 style={{ margin: '6px 0' }}>
-            {tr('طلبات تسجيل المسوّقين واعتماد الصلاحيات والعمولات', 'Marketer Registration Requests & Commission Approvals')}
+            {tr('إدارة المسوّقين والعمولات', 'Marketer accounts and commissions')}
           </h3>
           <p style={{ margin: 0, color: 'rgba(255,255,255,0.68)' }}>
             {tr(
-              'حسابات التجار تُنشأ تلقائياً، بينما تتطلب حسابات المسوّقين مراجعة وموافقة الإدارة هنا لتفعيل لوحة المسوّق الخاصة بهم.',
-              'Merchant accounts are provisioned automatically, while marketer accounts require administrator approval here before activation.',
+              'تتفعّل حسابات المسوّقين تلقائياً. يمكنك هنا إدارة العمولات وإيقاف الحسابات أو إعادة تفعيلها.',
+              'Marketer accounts activate automatically. Manage commissions, suspend accounts, or restore access here.',
             )}
           </p>
         </div>
@@ -1020,7 +1020,7 @@ export function MarketerApprovalAdmin({
                           ? tr('مسوّق معتمد', 'Approved')
                           : marketer.status === 'rejected'
                             ? tr('مرفوض / موقوف', 'Rejected')
-                            : tr('بانتظار موافقة الإدارة', 'Pending Approval')}
+                            : tr('جارٍ تفعيل الحساب', 'Pending Approval')}
                       </span>
                     </div>
                     <p style={{ margin: '4px 0', color: 'rgba(255,255,255,0.72)' }}>

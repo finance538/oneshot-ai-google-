@@ -88,7 +88,7 @@ export interface AiAdminView {
   staffGrants: AiStaffGrantView[];
 }
 
-export type AccountRole = 'admin' | 'merchant' | 'marketer';
+export type AccountRole = 'admin' | 'merchant' | 'marketer' | 'loader';
 export type AccountStatus = 'pending' | 'approved' | 'rejected';
 
 export interface MarketerAccount {

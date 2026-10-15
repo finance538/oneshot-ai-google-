@@ -173,3 +173,14 @@
   }
 }
 
+
+/* Account tools remain on the right in both interface languages. */
+.app-shell .sidebar { right: 0; left: auto; }
+.app-shell .main-content { margin-left: 0; margin-right: var(--sidebar-width); }
+#account-sidebar-tools .admin-nav-tabs { flex-direction: column; margin: 12px 0; }
+#account-sidebar-tools .admin-nav-tabs button { justify-content: flex-start; text-align: start; width: 100%; }
+@media (max-width: 760px) {
+  .app-shell .sidebar { transform: translateX(100%); }
+  .app-shell .sidebar.is-open { transform: translateX(0); }
+  .app-shell .main-content { margin-right: 0; }
+}
