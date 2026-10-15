@@ -219,3 +219,25 @@ export const aiUsage = pgTable('ai_usage_events', {
   outcome: text().notNull().default('ok'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 }, table => [index('ai_usage_owner_created').on(table.ownerId, table.createdAt)]);
+
+/** بطاقة محفوظة عبر البوابة (Card on File): توكن البطاقة مشفَّرًا — لا رقم بطاقة ولا CSC عندنا. */
+export const savedCards = pgTable('saved_cards', {
+  id: uuid().defaultRandom().primaryKey(),
+  merchantId: uuid('merchant_id').notNull().references(() => merchants.id),
+  email: text().notNull(),
+  gateway: text().notNull(),
+  encryptedToken: text('encrypted_token').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+}, table => [uniqueIndex('saved_cards_merchant_email_gateway').on(table.merchantId, table.email, table.gateway)]);
+
+/** ما يرسله مستلم Webhooks كما وصل، للسجل والمطابقة فقط — الحالة الحيّة تُقرأ من البوابة لا من هنا. */
+export const gatewayEvents = pgTable('gateway_events', {
+  id: uuid().defaultRandom().primaryKey(),
+  gateway: text().notNull(),
+  event: text().notNull(),
+  reference: text(),
+  payload: jsonb().notNull(),
+  receivedAt: timestamp('received_at', { withTimezone: true }).defaultNow().notNull(),
+}, table => [index('gateway_events_received').on(table.receivedAt)]);
+

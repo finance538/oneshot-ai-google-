@@ -2,8 +2,9 @@ import { and, eq, ne } from 'drizzle-orm';
 import { database } from '../../db/index.js';
 import { attempts, documents, subscriptions, walletTopups } from '../../db/schema.js';
 import { encryptToken, HttpError, nextDate, paytabs } from './platform.js';
-import { ngeniusConfig, ngeniusOrder, ngeniusStatus } from './ngenius.js';
+import { ngeniusConfig, ngeniusOrder, ngeniusStatus, type NgeniusSavedCard } from './ngenius.js';
 import { telrConfig, telrRequest } from './telr.js';
+import { rememberSavedCard } from './saved-cards.js';
 import { creditTopup } from './wallet.js';
 
 export async function confirmPayment(attemptId: string, reference: string, callbackToken?: string, timeoutMs = 20000) {
@@ -14,12 +15,14 @@ export async function confirmPayment(attemptId: string, reference: string, callb
   if (!targetDocument) throw new HttpError(404, 'طلب الدفع غير موجود.');
   let status: 'paid' | 'pending' | 'failed';
   let token: string | undefined;
+  let storedCard: NgeniusSavedCard | undefined;
   if (targetDocument.gateway === 'ngenius') {
     const [topup] = await db.select().from(walletTopups).where(eq(walletTopups.documentId, targetDocument.id));
     if (topup && ngeniusConfig(attempt.merchantId).test) throw new HttpError(409, 'لا يمكن شحن المحفظة من بوابة في وضع الاختبار.');
     const order = await ngeniusOrder(attempt.merchantId, reference);
     if (order.reference !== reference || order.currency !== 'SAR' || order.value !== attempt.amount) throw new HttpError(409, 'تأكيد N-Genius لا يطابق الطلب.');
     status = ngeniusStatus(order.state);
+    storedCard = order.savedCard;
   } else if (targetDocument.gateway === 'telr') {
     const [topup] = await db.select().from(walletTopups).where(eq(walletTopups.documentId, targetDocument.id));
     if (topup && telrConfig(attempt.merchantId).test !== 0) throw new HttpError(409, 'لا يمكن شحن المحفظة من بوابة في وضع الاختبار.');
@@ -35,8 +38,10 @@ export async function confirmPayment(attemptId: string, reference: string, callb
     status = payment?.response_status === 'A' ? 'paid' : ['D', 'E', 'V'].includes(String(payment?.response_status)) ? 'failed' : 'pending';
     token = typeof result.token === 'string' ? result.token : callbackToken;
   }
-  // A gateway confirmation is never allowed to downgrade an already settled payment.
-  if (attempt.status === 'paid' && status !== 'paid') return 'paid';
+  // A gateway confirmation is never allowed to downgrade — or to re-apply — an already settled
+  // payment: the gateway sends several events per order and none are retried, so a repeated
+  // webhook must not credit a wallet or advance a subscription a second time.
+  if (attempt.status === 'paid') return 'paid';
   await db.transaction(async tx => {
     const [updated] = await tx.update(attempts).set({ status, reference }).where(and(eq(attempts.id, attempt.id), eq(attempts.status, attempt.status))).returning();
     if (!updated) return;
@@ -55,5 +60,8 @@ export async function confirmPayment(attemptId: string, reference: string, callb
     if (!token) return;
     await tx.insert(subscriptions).values({ merchantId: attempt.merchantId, documentId: attempt.documentId, encryptedToken: encryptToken(token), initialReference: reference, nextChargeAt: nextDate(new Date(), document.interval) }).onConflictDoNothing();
   });
+  // Card on File: a paid order hands back a card token, remembered so this customer can be offered
+  // the card back at this merchant. A card we fail to store never fails the sale.
+  if (status === 'paid' && storedCard) await rememberSavedCard({ merchantId: attempt.merchantId, email: targetDocument.customerEmail, gateway: 'ngenius', card: storedCard });
   return status;
 }

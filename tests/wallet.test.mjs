@@ -496,3 +496,110 @@ test('an N-Genius pay link or invoice stores a reusable payment link on the docu
     assert.equal(document.set.status, 'published');
   }
 });
+
+const savedCardKey = 'b7'.repeat(32);
+const savedToken = 'CARD-TOKEN-FIXTURE-1234';
+const savedCardEnv = { ...ngeniusEnv, PAYMENT_TOKEN_ENCRYPTION_KEY: savedCardKey };
+// What the gateway hands back for a card it tokenised: the token, who holds it, when it expires
+// and a masked tail of the number — never the number and never the CSC.
+const fixtureCard = { cardToken: savedToken, cardholderName: 'Test Customer', expiry: '2029-04', maskedPan: '401200******1112', scheme: 'VISA' };
+const rememberFixtureCard = async () => {
+  const fixture = await harness({ env: savedCardEnv });
+  const { rememberSavedCard } = await fixture.module('netlify/lib/saved-cards.ts');
+  assert.equal(await rememberSavedCard({ merchantId, email: '  Customer@Example.Test ', gateway: 'ngenius', card: fixtureCard }), true);
+  return fixture.trace.find(entry => entry.operation === 'insert' && entry.table === 'saved_cards');
+};
+// The same order fixture, but settled with a card the gateway tokenised — the read-back finds the
+// card inside the order's payment block.
+const savedCardOrderResult = { ...ngeniusOrderResult, amount: { currencyCode: 'SAR', value: 25025 }, _embedded: { payment: [{ state: 'PURCHASED', savedCard: fixtureCard }] } };
+const savedCardCheckout = async (method, encryptedToken, fetchResult = ngeniusOrderResult) => {
+  const fixture = await harness({ env: savedCardEnv, selections: { ...ngeniusDocument(method), saved_cards: [[{ id: walletId, encryptedToken }]] }, fetchResult });
+  const endpoint = await fixture.module('netlify/functions/checkout.mts');
+  const response = await endpoint.default(new Request(`https://preview.example/.netlify/functions/checkout?id=${documentId}`, { method: 'POST', headers: { Origin: 'https://preview.example', 'Content-Type': 'application/json' }, body: JSON.stringify({}) }), { ip: 'fixture' });
+  return { fixture, response, data: await response.json() };
+};
+
+test('a remembered card is stored encrypted, keyed to the merchant and the paying email', async () => {
+  const insert = await rememberFixtureCard();
+  assert.equal(insert.values.email, 'customer@example.test', 'the email is normalised so the card comes back to the same payer');
+  assert.equal(insert.values.gateway, 'ngenius');
+  assert.equal(insert.values.merchantId, merchantId);
+  assert.ok(!String(insert.values.encryptedToken).includes(savedToken), 'the card token is never written in the clear');
+  assert.equal(insert.onConflictDoUpdate.target.length, 3, 'one card per merchant, email and gateway');
+
+  const reader = await harness({ env: savedCardEnv, selections: { saved_cards: [[{ id: walletId, encryptedToken: insert.values.encryptedToken }]] } });
+  const { savedCardFor } = await reader.module('netlify/lib/saved-cards.ts');
+  assert.deepEqual({ ...await savedCardFor(merchantId, 'ngenius', 'CUSTOMER@example.test') }, fixtureCard, 'the same payer gets the same card back, tail and all');
+
+  const rotated = await harness({ env: { ...ngeniusEnv, PAYMENT_TOKEN_ENCRYPTION_KEY: 'c0'.repeat(32) }, selections: { saved_cards: [[{ id: walletId, encryptedToken: insert.values.encryptedToken }]] } });
+  const { savedCardFor: afterRotation } = await rotated.module('netlify/lib/saved-cards.ts');
+  assert.equal(await afterRotation(merchantId, 'ngenius', customer.email), undefined, 'a token we cannot decrypt falls back to a card form, it never fails the sale');
+
+  const anonymous = await harness({ env: savedCardEnv });
+  const { rememberSavedCard } = await anonymous.module('netlify/lib/saved-cards.ts');
+  assert.equal(await rememberSavedCard({ merchantId, gateway: 'ngenius', card: fixtureCard }), false);
+  assert.equal(await rememberSavedCard({ merchantId, email: customer.email, gateway: 'ngenius', card: { ...fixtureCard, cardToken: '' } }), false, 'a block without a usable token is not a card');
+  assert.equal(anonymous.trace.length, 0, 'an unkeyed or empty card is never written anywhere');
+});
+
+test('an N-Genius hosted checkout replays the remembered card and re-asks for the CSC', async () => {
+  const insert = await rememberFixtureCard();
+  const { fixture, response } = await savedCardCheckout('hosted', insert.values.encryptedToken);
+  assert.equal(response.status, 200);
+  const sent = JSON.parse(fixture.fetchTrace.find(call => call.url.endsWith('/orders')).init.body);
+  assert.equal(sent.merchantAttributes.offerOnly, undefined, 'a stored card is never narrowed to a scheme list it may not carry');
+  assert.deepEqual(sent.savedCard, fixtureCard, 'the card the payer stored is the card that is charged');
+  assert.equal(sent.recaptureCsc, true, 'the CSC is always re-asked — the token alone must not be enough to charge');
+  assert.equal(fixture.trace.some(entry => entry.operation === 'select' && entry.table === 'saved_cards'), true);
+});
+
+test('a settled N-Genius order hands the tokenised card back, and only a settled one does', async () => {
+  const row = { id: documentId, gateway: 'ngenius', customerEmail: customer.email, amount: 25025, method: 'hosted' };
+  const attemptRow = { id: requestId, merchantId, documentId, amount: 25025, status: 'pending', reference: ngeniusReference, period: 'initial:fixture' };
+  const selections = { payment_attempts: Array.from({ length: 4 }, () => [attemptRow]), payment_documents: Array.from({ length: 4 }, () => [row]) };
+  const fixture = await harness({ env: savedCardEnv, selections, fetchResult: savedCardOrderResult });
+  const { confirmPayment } = await fixture.module('netlify/lib/payments.ts');
+  assert.equal(await confirmPayment(requestId, ngeniusReference), 'paid');
+  const stored = fixture.trace.find(entry => entry.operation === 'insert' && entry.table === 'saved_cards');
+  assert.equal(stored.values.email, customer.email, 'the card is remembered for the payer the document was made out to');
+  assert.ok(!String(stored.values.encryptedToken).includes(savedToken), 'the card is only ever written encrypted');
+
+  const unsettled = await harness({ env: savedCardEnv, selections, fetchResult: { ...ngeniusOrderResult, amount: { currencyCode: 'SAR', value: 25025 } } });
+  const { confirmPayment: confirmAgain } = await unsettled.module('netlify/lib/payments.ts');
+  assert.equal(await confirmAgain(requestId, ngeniusReference), 'pending');
+  assert.equal(unsettled.trace.some(entry => entry.operation === 'insert' && entry.table === 'saved_cards'), false, 'an order with no payment block stores no card');
+});
+
+test('a shareable N-Genius pay link never carries somebody else card', async () => {
+  const insert = await rememberFixtureCard();
+  const { fixture, data } = await savedCardCheckout('paylink', insert.values.encryptedToken);
+  assert.equal(data.status, 'published');
+  const sent = JSON.parse(fixture.fetchTrace.find(call => call.url.endsWith('/orders')).init.body);
+  assert.equal(sent.savedCard, undefined, 'a forwarded link must never charge a card it did not collect');
+  assert.equal(fixture.trace.some(entry => entry.operation === 'select' && entry.table === 'saved_cards'), false, 'the stored token is not even read for a link');
+});
+
+test('the N-Genius webhook receiver ignores unsigned callers and never trusts the payload', async () => {
+  const url = 'https://preview.example/.netlify/functions/ngenius-webhook';
+  const body = JSON.stringify({ event: 'CAPTURED', order: { reference: ngeniusReference } });
+  const fixture = await harness({ env: { ...ngeniusEnv, NG_WEBHOOK_SECRET: 'fixture-secret' }, inserts: { gateway_events: [[{ id: requestId }]] }, selections: { payment_attempts: [] }, fetchResult: ngeniusOrderResult });
+  const hook = await fixture.module('netlify/functions/ngenius-webhook.mts');
+
+  const unconfigured = await (await harness({ env: ngeniusEnv })).module('netlify/functions/ngenius-webhook.mts');
+  assert.equal((await unconfigured.default(new Request(url, { method: 'POST', body }))).status, 503, 'no shared secret means the door stays shut');
+
+  assert.equal((await hook.default(new Request(url, { method: 'GET' }))).status, 405);
+  assert.equal((await hook.default(new Request(url, { method: 'POST', body }))).status, 401, 'an unsigned notification is refused');
+  assert.equal((await hook.default(new Request(url, { method: 'POST', headers: { 'x-webhook-token': 'guess' }, body }))).status, 401);
+  assert.equal(fixture.trace.length, 0, 'an unauthenticated caller never reaches the database');
+
+  const accepted = await hook.default(new Request(url, { method: 'POST', headers: { 'x-webhook-token': 'fixture-secret', 'Content-Type': 'application/json' }, body }));
+  assert.equal(accepted.status, 200);
+  assert.deepEqual(await accepted.json(), { received: true, event: 'CAPTURED', stored: true });
+  const logged = fixture.trace.find(entry => entry.operation === 'insert' && entry.table === 'gateway_events');
+  assert.equal(logged.values.event, 'CAPTURED');
+  assert.equal(logged.values.reference, ngeniusReference);
+  assert.equal(fixture.fetchTrace.length, 0, 'the payload alone never triggers a gateway call for a reference we do not know');
+
+  assert.equal((await hook.default(new Request(url, { method: 'POST', headers: { 'x-webhook-token': 'fixture-secret' }, body: 'not json' }))).status, 400);
+});

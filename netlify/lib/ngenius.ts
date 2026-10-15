@@ -48,10 +48,14 @@ export function ngeniusCapabilities(merchantId: string) {
   //   invoice       that same stored link, titled as an invoice for one customer
   // offerOnly is only ever sent for schemes the outlet confirms on the order it just created,
   // so a method whose account has no such scheme is refused instead of showing an empty page.
+  // Card on File: a paid order comes back carrying the savedCard block the gateway tokenised, so the
+  // card is stored (encrypted, in saved_cards) and re-presented on the next customer-present payment
+  // as savedCard + recaptureCsc — the card is remembered, the CSC is not. Only methods where the
+  // cardholder is at the browser get it: a pay link or invoice can be forwarded to anyone.
   // Not written yet, so never advertised: managed (Web SDK card fields need a Hosted Session
   // SDK session, which the KSA docs we hold do not publish), own (a Direct API card form would
-  // put the merchant in PCI SAQ D scope), recurring (no payment:saved-card link comes back on
-  // the order, so the outlet has no tokenisation and no merchant-initiated payments enabled).
+  // put the merchant in PCI SAQ D scope), recurring (charging a stored card without the
+  // cardholder present is a merchant-initiated payment, which this integration does not run).
   try { return { connected: true, hosted: true, framed: true, mobile: true, mada_applepay: true, samsung_pay: true, paylink: true, invoice: true, managed: false, own: false, recurring: false, platform: ngeniusConfig(merchantId).platform }; }
   catch { return { connected: false, hosted: false, framed: false, mobile: false, mada_applepay: false, samsung_pay: false, paylink: false, invoice: false, managed: false, own: false, recurring: false, platform: false }; }
 }
@@ -92,6 +96,30 @@ function orderReference(description: string) {
 const methodOffers: Record<string, string[]> = { mada_applepay: ['MADA', 'APPLE_PAY'], samsung_pay: ['SAMSUNG_PAY'] };
 const methodOffer = (method?: string) => { const schemes = method ? methodOffers[method] : undefined; return schemes ? schemes.join(',') : undefined; };
 
+// Card on File: a token the gateway stored may only be offered back where the cardholder is the
+// one paying right now — never on a pay link or an invoice, which can be forwarded to anyone —
+// and never together with offerOnly, which could pin the page to a scheme the stored card lacks.
+export const ngeniusSavedCardMethods = ['hosted', 'framed', 'mobile'];
+
+// What the gateway hands back for a card it tokenised, and what it takes back to charge it. The
+// token is the card: the PAN, the expiry and the CSC are never returned to us and never stored.
+export type NgeniusSavedCard = { cardToken: string; cardholderName?: string; expiry?: string; maskedPan?: string; scheme?: string };
+const savedCardPattern = /^[A-Za-z0-9+/=_-]{8,512}$/;
+function readSavedCard(value: unknown): NgeniusSavedCard | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const block = value as Record<string, unknown>;
+  if (typeof block.cardToken !== 'string' || !savedCardPattern.test(block.cardToken)) return undefined;
+  const text = (field: unknown) => (typeof field === 'string' && field.trim() ? field.trim() : undefined);
+  return {
+    cardToken: block.cardToken,
+    ...(text(block.cardholderName) ? { cardholderName: text(block.cardholderName) } : {}),
+    ...(text(block.expiry) ? { expiry: text(block.expiry) } : {}),
+    ...(text(block.maskedPan) ? { maskedPan: text(block.maskedPan) } : {}),
+    ...(text(block.scheme) ? { scheme: text(block.scheme) } : {}),
+  };
+}
+export { readSavedCard };
+
 // What the account really accepts, read from the order it just created: every order reports the
 // card and wallet schemes enabled on the outlet. Naming a scheme the account does not have would
 // leave the customer on a pay page that cannot render, so only confirmed schemes are ever sent,
@@ -119,11 +147,14 @@ export function ngeniusSlim(url: string) {
 // actually has, and the order it just created reports them; when one is missing the order is
 // placed once more for the rest, and a method with none of them is refused before the customer
 // ever sees a pay page.
-export async function ngeniusCreateOrder(merchantId: string, input: { amount: number; description: string; email?: string; origin: string; documentId: string; method?: string }) {
+export async function ngeniusCreateOrder(merchantId: string, input: { amount: number; description: string; email?: string; origin: string; documentId: string; method?: string; savedCard?: NgeniusSavedCard }) {
   const config = ngeniusConfig(merchantId);
   const token = await accessToken(config.key);
   const returnUrl = `${input.origin}/.netlify/functions/payment-return?id=${input.documentId}`;
   const offer = methodOffer(input.method);
+  // offerOnly and a stored card never travel together: the page would be pinned to schemes the
+  // stored card may not carry. The method list keeps them apart; this is the backstop.
+  const savedCard = offer ? undefined : input.savedCard;
   const sendOrder = async (only?: string) => {
     const response = await fetch(`${ngeniusIdentity}/transactions/outlets/${config.outlet}/orders`, {
       method: 'POST',
@@ -133,6 +164,7 @@ export async function ngeniusCreateOrder(merchantId: string, input: { amount: nu
         amount: { currencyCode: 'SAR', value: input.amount },
         merchantOrderReference: orderReference(input.description),
         ...(input.email ? { emailAddress: input.email } : {}),
+        ...(savedCard ? { savedCard, recaptureCsc: true } : {}),
         merchantAttributes: { redirectUrl: returnUrl, cancelUrl: returnUrl, skipConfirmationPage: true, ...(only ? { offerOnly: only } : {}) },
       }),
       redirect: 'error',
@@ -175,9 +207,13 @@ export async function ngeniusOrder(merchantId: string, reference: string) {
   const record = order as Record<string, unknown>;
   const payments = ((record._embedded || {}) as Record<string, unknown>).payment;
   const first = Array.isArray(payments) ? (payments[0] as Record<string, unknown> | undefined) : undefined;
+  // Card on File: a payment the gateway took carries the card it tokenised inside the payment
+  // block. Only a settled payment has one, and only the token, the holder's name and a masked
+  // tail of the number ever come back — never the number, the expiry or the CSC.
+  const savedCard = readSavedCard(first?.savedCard);
   const state = typeof first?.state === 'string' ? first.state : 'STARTED';
   const amount = ((record.amount || {}) as Record<string, unknown>);
-  return { reference: typeof record.reference === 'string' ? record.reference : undefined, state, currency: typeof amount.currencyCode === 'string' ? amount.currencyCode : undefined, value: typeof amount.value === 'number' ? amount.value : undefined };
+  return { reference: typeof record.reference === 'string' ? record.reference : undefined, state, currency: typeof amount.currencyCode === 'string' ? amount.currencyCode : undefined, value: typeof amount.value === 'number' ? amount.value : undefined, ...(savedCard ? { savedCard } : {}) };
 }
 
 // AUTHORISED is an authorisation without capture: never credited on its own.

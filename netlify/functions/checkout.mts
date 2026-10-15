@@ -5,7 +5,8 @@ import { attempts, documents, merchants, openLinks, walletTopups } from '../../d
 import { failure, HttpError, identifier, jsonBody, paytabs, reply, safeGatewayUrl, sameOrigin, text, throttle } from '../lib/platform.js';
 import { enabledCapabilities, settings } from '../lib/policy.js';
 import { confirmPayment } from '../lib/payments.js';
-import { ngeniusCreateOrder, ngeniusSlim } from '../lib/ngenius.js';
+import { ngeniusCreateOrder, ngeniusSavedCardMethods, ngeniusSlim } from '../lib/ngenius.js';
+import { savedCardFor } from '../lib/saved-cards.js';
 import { telrConfig, telrRequest, telrUrl } from '../lib/telr.js';
 import { publicGateways } from '../lib/wallet.js';
 import { gateways, type Gateway } from '../../shared/policy.js';
@@ -76,7 +77,11 @@ export default async (req: Request, context: Context) => {
     if (!attempt) throw new HttpError(409, 'توجد محاولة دفع أخرى قيد المعالجة.');
     const origin = url.origin;
     if (document.gateway === 'ngenius') {
-      const order = await ngeniusCreateOrder(merchant.id, { amount: document.amount, description: document.title, email: document.customerEmail, origin, documentId: document.id, method: document.method });
+      // Card on File: a card this customer already paid with here is offered back on the pay page —
+      // the gateway asks for the CSC again (recaptureCsc), so the number is not re-typed and the
+      // token alone is useless to anyone who steals it.
+      const savedCard = ngeniusSavedCardMethods.includes(document.method) ? await savedCardFor(merchant.id, 'ngenius', document.customerEmail) : undefined;
+      const order = await ngeniusCreateOrder(merchant.id, { amount: document.amount, description: document.title, email: document.customerEmail, origin, documentId: document.id, method: document.method, savedCard });
       // framed: our own checkout embeds this page, so ask for the vendor's bare slim layout.
       const paymentUrl = document.method === 'framed' ? ngeniusSlim(order.url) : order.url;
       await db.update(attempts).set({ reference: order.reference, gatewayUrl: paymentUrl, status: 'pending' }).where(eq(attempts.id, attempt.id));
