@@ -1,42 +1,12 @@
 import { Moon, Sun, Globe } from 'lucide-react';
 import { appearanceLink, languages, useAppearance, type Language } from './i18n';
 
-const languageNamesByActiveLanguage: Record<Language, Record<Language, string>> = {
-  ar: {
-    ar: 'العربية 🇸🇦',
-    en: 'الإنجليزية 🇬🇧',
-    zh: 'الصينية 🇨🇳',
-    ru: 'الروسية 🇷🇺',
-    fr: 'الفرنسية 🇫🇷',
-  },
-  en: {
-    ar: 'Arabic 🇸🇦',
-    en: 'English 🇬🇧',
-    zh: 'Chinese 🇨🇳',
-    ru: 'Russian 🇷🇺',
-    fr: 'French 🇫🇷',
-  },
-  zh: {
-    ar: '阿拉伯语 🇸🇦',
-    en: '英语 🇬🇧',
-    zh: '中文 🇨🇳',
-    ru: '俄语 🇷🇺',
-    fr: '法语 🇫🇷',
-  },
-  ru: {
-    ar: 'Арабский 🇸🇦',
-    en: 'Английский 🇬🇧',
-    zh: 'Китайский 🇨🇳',
-    ru: 'Русский 🇷🇺',
-    fr: 'Французский 🇫🇷',
-  },
-  fr: {
-    ar: 'Arabe 🇸🇦',
-    en: 'Anglais 🇬🇧',
-    zh: 'Chinois 🇨🇳',
-    ru: 'Russe 🇷🇺',
-    fr: 'Français 🇫🇷',
-  },
+const languageDisplayNames: Record<Language, string> = {
+  ar: 'العربية 🇸🇦',
+  en: 'English 🇬🇧',
+  zh: '中文 🇨🇳',
+  ru: 'Русский 🇷🇺',
+  fr: 'Français 🇫🇷',
 };
 
 export function Brand() {
@@ -58,7 +28,7 @@ export function AppearanceControls() {
         >
           {languages.map(item => (
             <option key={item.id} value={item.id} lang={item.id}>
-              {languageNamesByActiveLanguage[language]?.[item.id] || item.name}
+              {languageDisplayNames[item.id] || item.name}
             </option>
           ))}
         </select>

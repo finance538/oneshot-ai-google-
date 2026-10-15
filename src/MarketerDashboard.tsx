@@ -308,7 +308,7 @@ export function MarketerDashboard({
             <div className="mkt-hero-copy">
               <span className="mkt-role-pill">
                 <Award size={15} />
-                {tr('بوابة المسوّق المعتمد', 'Approved Marketer Portal')}
+                {tr('بوابة المسوّق المعتمد · Approved Marketer Portal', 'Approved Marketer Portal')}
               </span>
               <h2>
                 {tr('مرحباً بك في لوحة التسويق بالعمولة،', 'Welcome to your Marketer Dashboard,')}{' '}
@@ -331,7 +331,7 @@ export function MarketerDashboard({
                 </button>
                 <span className="mkt-isolation-badge">
                   <ShieldCheck size={15} />
-                  {tr('حساب مسوّق معتمد (صلاحيات مستقلة)', 'Verified Marketer · Isolated Role')}
+                  {tr('حساب مسوّق معتمد · صلاحيات مستقلة', 'Verified Marketer · Isolated Role')}
                 </span>
               </div>
             </div>
@@ -941,7 +941,7 @@ export function MarketerApprovalAdmin({
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '14px', flexWrap: 'wrap', marginBottom: '18px' }}>
         <div>
           <span className="eyebrow">
-            <UserCheck size={14} /> {tr('إدارة حسابات المسوّقين', 'MARKETER ACCOUNT APPROVALS')}
+            <UserCheck size={14} /> {tr('إدارة حسابات المسوّقين · Marketer Approvals', 'MARKETER ACCOUNT APPROVALS')}
           </span>
           <h3 style={{ margin: '6px 0' }}>
             {tr('طلبات تسجيل المسوّقين واعتماد الصلاحيات والعمولات', 'Marketer Registration Requests & Commission Approvals')}

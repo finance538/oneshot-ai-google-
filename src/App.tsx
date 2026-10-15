@@ -55,18 +55,18 @@ type View =
 type Auth = 'login' | 'signup' | 'admin_login' | 'reset' | 'password' | 'invite';
 const navigation = [
   { id: 'overview' as const, name: 'نظرة عامة', icon: LayoutDashboard },
-  { id: 'staff' as const, name: 'سوق كوادر الذكاء الاصطناعي', icon: UserPlus },
+  { id: 'staff' as const, name: 'سوق كوادر الـ AI (توظيف موظفين)', icon: UserPlus },
   { id: 'wallet' as const, name: 'محفظتي', icon: CreditCard },
-  { id: 'ceo' as const, name: 'مكتب الرئيس التنفيذي', icon: Users },
+  { id: 'ceo' as const, name: 'مكتب الرئيس التنفيذي (CEO Agents)', icon: Users },
   { id: 'links' as const, name: 'روابط الدفع', icon: Link2 },
   { id: 'invoices' as const, name: 'الفواتير', icon: FileText },
   { id: 'subscriptions' as const, name: 'الاشتراكات', icon: Repeat2 },
   { id: 'integrations' as const, name: 'طرق ربط البوابات', icon: Blocks },
-  { id: 'security' as const, name: 'أنظمة حماية البوابات', icon: Shield },
-  { id: 'loader' as const, name: 'حساب اللودر واختبار البوابات', icon: FlaskConical },
+  { id: 'security' as const, name: 'أنظمة حماية البوابات (التاجر)', icon: Shield },
+  { id: 'loader' as const, name: 'حساب اللودر واختبار البوابات (AI)', icon: FlaskConical },
   { id: 'settings' as const, name: 'إعدادات التاجر', icon: Settings2 },
   { id: 'admin' as const, name: 'إدارة المنصة واستقبال الطلبات', icon: SlidersHorizontal },
-  { id: 'assistant' as const, name: 'مركز عمليات الذكاء الاصطناعي', icon: Sparkles },
+  { id: 'assistant' as const, name: 'مركز عمليات AI (Full Admin)', icon: Sparkles },
 ];
 const marketerNavigation = [
   { id: 'marketer_overview' as const, name: 'لوحة المسوّق', icon: LayoutDashboard },
@@ -386,9 +386,9 @@ function MerchantPlatform() {
     : navigation.filter(item => user ? (!['admin', 'assistant'].includes(item.id) || platform.isAdmin) : guestNavigation.includes(item.id));
   const currentViewName = allNavigation.find(item => item.id === view)?.name || 'نظرة عامة';
   const workspaceLabel = platform.isAdmin
-    ? tr('إدارة المنصة', 'Platform Admin')
+    ? tr('إدارة المنصة · Admin', 'Platform Admin')
     : isMarketer
-      ? tr('بوابة المسوّقين', 'Marketer Portal')
+      ? tr('بوابة المسوّقين · Marketer', 'Marketer Portal')
       : t('مساحة التاجر');
 
   return <div className="app-shell">
@@ -397,7 +397,7 @@ function MerchantPlatform() {
     <aside className={`sidebar ${sidebar ? 'is-open' : ''}`}><Brand /><span className="workspace-label">{workspaceLabel}</span>
       <nav>{visibleNavigation.map(item => <button key={item.id} className={`nav-item ${view === item.id ? 'active' : ''}`} aria-current={view === item.id ? 'page' : undefined} onClick={() => { setView(item.id); setSidebar(false); }}><item.icon size={19} /><span>{t(item.name)}</span>{view === item.id && <span className="nav-active-dot" />}</button>)}</nav>
       {!user && <button className="nav-item nav-signup" onClick={() => setAuth('signup')}><UserPlus size={19} /><span>{t('أنشئ حساب تاجر أو مسوّق')}</span></button>}
-      {!user && <button className="nav-item" onClick={() => setAuth('admin_login')}><ShieldCheck size={19} /><span>{tr('دخول الإدارة', 'Admin Sign-In')}</span></button>}
+      {!user && <button className="nav-item" onClick={() => setAuth('admin_login')}><ShieldCheck size={19} /><span>{tr('دخول الإدارة (Admin)', 'Admin Sign-In')}</span></button>}
       {!user && <p className="nav-locked-hint">{t('بقية الأدوات تظهر بحسب صلاحية حسابك بعد تسجيل الدخول.')}</p>}
       <div className="sidebar-note"><ShieldCheck size={23} /><strong>{t('عزل الصلاحيات والحمايات دائمة')}</strong><p>{isMarketer ? tr('صلاحيات المسوّق معزولة بالكامل عن الإدارة وبوابات التجار.', 'Marketer permissions are strictly isolated from Admin and Merchant controls.') : t('المبالغ مؤكدة من بوابة الدفع، وليست من عودة المتصفح.')}</p></div><a className="sidebar-external" href={appearanceLink('/')}>{t('العودة إلى oneShot')}<ArrowUpLeft size={16} /></a>
       {user && <button className="sidebar-logout" onClick={() => void run(async () => { localStorage.removeItem('oneshot_google_user'); await logout(); setUser(null); setView('overview'); })}><LogOut size={17} />{t('تسجيل الخروج')}</button>}<span className="sidebar-version">ONESHOT / PAYMENT STUDIO</span>
@@ -411,9 +411,9 @@ function MerchantPlatform() {
           <div>
             <span className="eyebrow">
               {platform.isAdmin
-                ? tr('مركز تحكم وإدارة المنصة', 'PLATFORM ADMINISTRATION SUITE')
+                ? tr('مركز تحكم وإدارة المنصة · ADMIN SUITE', 'PLATFORM ADMINISTRATION SUITE')
                 : isMarketer
-                  ? tr('بوابة التسويق بالعمولة', 'AFFILIATE MARKETER PORTAL')
+                  ? tr('بوابة التسويق بالعمولة · MARKETER PORTAL', 'AFFILIATE MARKETER PORTAL')
                   : tr('علامتك. أعمالك.', 'YOUR BRAND. YOUR BUSINESS.')}
             </span>
             <h1>{t(currentViewName)}</h1>
@@ -501,7 +501,7 @@ function MerchantPlatform() {
         <footer className="dashboard-footer"><span>oneShot <strong>Payment Studio</strong></span><span>{t('المبالغ مؤكدة من بوابة الدفع، وليست من عودة المتصفح.')}</span></footer>
       </div>
     </main>
-    {auth && <Modal title={t(({ login: 'تسجيل الدخول', signup: 'إنشاء حساب تاجر أو مسوّق', admin_login: 'دخول إدارة المنصة', reset: 'استعادة كلمة المرور', password: 'كلمة مرور جديدة', invite: 'قبول الدعوة' } as const)[auth])} close={closeAuth}>
+    {auth && <Modal title={t(({ login: 'تسجيل الدخول', signup: 'إنشاء حساب تاجر أو مسوّق', admin_login: 'دخول إدارة المنصة (Admin)', reset: 'استعادة كلمة المرور', password: 'كلمة مرور جديدة', invite: 'قبول الدعوة' } as const)[auth])} close={closeAuth}>
       {['login', 'signup', 'admin_login'].includes(auth) && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px', marginBottom: '16px', background: 'rgba(255,255,255,0.04)', padding: '5px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.08)' }}>
           <button
@@ -595,7 +595,7 @@ function MerchantPlatform() {
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
                       <strong style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                         <Store size={16} />
-                        {tr('تاجر', 'Merchant')}
+                        {tr('تاجر (Merchant)', 'Merchant')}
                       </strong>
                       <span className="status-badge status-paid" style={{ fontSize: '0.7rem' }}>
                         {tr('إنشاء تلقائي', 'Auto-Created')}
@@ -622,7 +622,7 @@ function MerchantPlatform() {
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
                       <strong style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                         <Megaphone size={16} />
-                        {tr('مسوّق', 'Marketer')}
+                        {tr('مسوّق (Marketer)', 'Marketer')}
                       </strong>
                       <span className="status-badge status-pending" style={{ fontSize: '0.7rem' }}>
                         {tr('بموافقة الإدارة', 'Admin Approval')}
@@ -799,7 +799,7 @@ function AdminControls({ platform, onSave }: { platform: Platform; onSave: () =>
         >
           <UserCheck size={18} />
           <span>
-            {tr('اعتماد حسابات المسوّقين وصلاحياتهم', 'Marketer Account Approvals')}
+            {tr('اعتماد حسابات المسوّقين وصلاحياتهم (Marketer Approvals)', 'Marketer Account Approvals')}
             {pendingMarketersCount > 0 ? ` (${pendingMarketersCount})` : ''}
           </span>
         </button>
