@@ -85,7 +85,11 @@ export default async (req: Request, context: Context) => {
           cancelUrl: `${origin}/.netlify/functions/ng-pay-return`,
           skipConfirmationPage: true,
         },
-        merchantOrderReference: description.slice(0, 40),
+        merchantOrderReference: (() => {
+          const stamp = new Date().toISOString().replace(/[-:TZ.]/g, '').slice(0, 14);
+          const slug = description.replace(/[^A-Za-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 20);
+          return `OS-${stamp}${slug ? `-${slug}` : ''}`.slice(0, 37);
+        })(),
       }),
       redirect: 'error',
       signal: AbortSignal.timeout(20000),
