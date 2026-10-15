@@ -1,3 +1,4 @@
+import { gatewayNames } from '../shared/policy';
 export interface SpoofedCountry {
   code: string;
   countryName: string;
@@ -254,7 +255,7 @@ export function getGatewayGeoRules(country: SpoofedCountry): GatewayGeoRule[] {
   return [
     {
       gatewayId: 'paytabs',
-      gatewayName: 'بيتابس (PayTabs KSA)',
+      gatewayName: gatewayNames.paytabs,
       isCompatible: true,
       supportLevel: isKSA ? 'native' : isGCC ? 'supported' : 'supported',
       notes: isKSA 

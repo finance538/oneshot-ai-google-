@@ -1,3 +1,4 @@
+import { gatewayNames } from '../shared/policy';
 // multiBinAcceptanceService.ts
 // Service that evaluates multiple or single card BINs, groups them by card archetype/type (نوع البطاقة),
 // and determines with 100% mathematical/rule-based precision which gateways accept all BINs in that card category at 100% acceptance.
@@ -78,7 +79,7 @@ export interface MultiBinAnalysisReport {
 
 // Master Gateway Registry
 export const SUPPORTED_GATEWAYS = [
-  { id: 'paytabs', name: 'بيتابس (PayTabs)', badge: 'الأعلى استقراراً في السعودية والخليج', logo: '💳' },
+  { id: 'paytabs', name: gatewayNames.paytabs, badge: 'الأعلى استقراراً في السعودية والخليج', logo: '💳' },
   { id: 'telr', name: 'تيلر (Telr)', badge: 'بوابة الـ E-Commerce والإمارات', logo: '⚡' },
   { id: 'noon', name: 'نون باي (Noon Payments)', badge: 'معالج السيولة العالية والـ Omnichannel', logo: '🟡' },
   { id: 'myfatoorah', name: 'ماي فاتورة (MyFatoorah)', badge: 'بوابة الروابط و KNET و Benefit', logo: '🧾' },
@@ -175,7 +176,7 @@ function deduceBinHeuristically(cleanBin: string): EvaluatedBinItem {
       },
       approvalRate: 97.5,
       riskLevel: 'low',
-      notes: 'بطاقة خصم مدى مقبولة 100% على بيتابس ونون وماي فاتورة، ومشروطة في تيلر للربط عبر Mada Switch.',
+      notes: 'بطاقة خصم مدى مقبولة 100% على PayTabs ونون وماي فاتورة، ومشروطة في تيلر للربط عبر Mada Switch.',
     };
   }
 
@@ -219,7 +220,7 @@ function deduceBinHeuristically(cleanBin: string): EvaluatedBinItem {
       },
       approvalRate: 74.0,
       riskLevel: 'high',
-      notes: 'بطاقة مسبقة الدفع بدون حساب جاري، مقبولة 100% في بيتابس فقط.',
+      notes: 'بطاقة مسبقة الدفع بدون حساب جاري، مقبولة 100% في PayTabs فقط.',
     };
   }
 

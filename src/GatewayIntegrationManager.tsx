@@ -1,3 +1,4 @@
+import { gatewayName, gatewayNames } from '../shared/policy';
 import { useState, type FormEvent } from 'react';
 import {
   ExternalLink,
@@ -73,7 +74,7 @@ export default function GatewayIntegrationManager({
   if (!isAdmin) {
     // البوابات المنصّبية الأربع مرتبطة بحساب المسؤول؛ القائمة تعرض حالة كل واحدة من سياسة المنصة.
     const platformGateways: { id: 'paytabs' | 'telr' | 'ngenius' | 'tap'; label: string; english: string }[] = [
-      { id: 'paytabs', label: 'بيتابس (PayTabs)', english: 'PayTabs Gateway' },
+      { id: 'paytabs', label: gatewayNames.paytabs, english: gatewayNames.paytabs },
       { id: 'telr', label: 'تيلر (Telr)', english: 'Telr Gateway' },
       { id: 'ngenius', label: 'نيجنيس السعودية (N-Genius KSA)', english: 'N-Genius KSA Gateway' },
       { id: 'tap', label: 'تاب للمدفوعات (Tap Payments)', english: 'Tap Payments Gateway' },
@@ -252,7 +253,7 @@ export default function GatewayIntegrationManager({
           <p>
             سواء كنت تربط عبر <strong>تطبيقات الجوال (Mobile SDK)</strong>، أو عبر{' '}
             <strong>صفحة الدفع المستضافة (Hosted)</strong>، أو <strong>الإطار المدمج (iFrame)</strong>، أو{' '}
-            <strong>الربط المباشر للخوادم (Direct API)</strong>. اختر البوابة المطلوبة (تيلر، بيتابس، ماي فاتورة، بي زاتي، تابي، نون، بي وان، أو <strong>نيجنيس السعودية N-Genius KSA</strong> بطريقة ربطها الرسمية من الخمس)،
+            <strong>الربط المباشر للخوادم (Direct API)</strong>. اختر البوابة المطلوبة (تيلر، PayTabs، ماي فاتورة، بي زاتي، تابي، نون، بي وان، أو <strong>نيجنيس السعودية N-Genius KSA</strong> بطريقة ربطها الرسمية من الخمس)،
             أو أضف أي بوابة مخصصة جديدة لتسجيل تفاصيلها مباشرة لحسابك.
           </p>
 
@@ -610,7 +611,7 @@ export default function GatewayIntegrationManager({
                   <tr key={req.id}>
                     <td>
                       <strong className="gw-name-badge">
-                        {req.gateway.replace('custom_', '').toUpperCase()}
+                        {gatewayName(req.gateway.replace('custom_', ''))}
                       </strong>
                     </td>
                     <td>
@@ -657,7 +658,7 @@ export default function GatewayIntegrationManager({
             </div>
             <h2>طلبات ربط البوابات الواردة من التجار والعملاء</h2>
             <p>
-              يستقبل الأدمن هنا جميع طلبات التجار بمختلف بوابات الدفع (تيلر، بيتابس، ماي فاتورة، بي زاتي،
+              يستقبل الأدمن هنا جميع طلبات التجار بمختلف بوابات الدفع (تيلر، PayTabs، ماي فاتورة، بي زاتي،
               تابي، نون، بي وان، وغيرها)، بجميع أنواع الربط (جوال، هوست، إطار، API)، مع إمكانية نسخ كل
               متغير بضغطة زر وتغيير حالة الطلب فور تفعيله.
             </p>
@@ -716,7 +717,7 @@ export default function GatewayIntegrationManager({
                       <div className="vars-box-header">
                         <span>المتغيرات الصالحة للنسخ واللصق:</span>
                         <div className="req-tags-bundle">
-                          <span className="req-gateway-badge">{gwUpper}</span>
+                          <span className="req-gateway-badge">{gatewayName(req.gateway.replace('custom_', ''))}</span>
                           {req.variables?.INTEGRATION_NAME && (
                             <span className="req-it-name-badge">
                               {req.variables.INTEGRATION_NAME}

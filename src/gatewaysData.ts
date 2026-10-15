@@ -1,3 +1,4 @@
+import { gatewayNames } from '../shared/policy';
 export interface IntegrationType {
   id: string;
   name: string;
@@ -24,8 +25,8 @@ export interface GatewayDefinition {
 export const KNOWN_GATEWAYS: GatewayDefinition[] = [
   {
     id: 'paytabs',
-    name: 'بيتابس السعودية (PayTabs KSA)',
-    english: 'PayTabs Gateway',
+    name: gatewayNames.paytabs,
+    english: gatewayNames.paytabs,
     country: 'المملكة العربية السعودية',
     logoTheme: 'paytabs-theme',
     website: 'https://merchant.paytabs.com',

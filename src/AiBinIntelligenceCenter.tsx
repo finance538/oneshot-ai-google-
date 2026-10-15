@@ -120,7 +120,7 @@ export default function AiBinIntelligenceCenter({ onApplyCardToSimulator }: AiBi
         detectedBank: matchedBank.bankNameAr,
         detectedType: matchedBin.tierName,
         detectedScheme: matchedBin.scheme,
-        bestGateway: isMadaDebit ? 'بيتابس (PayTabs) أو نون باي (Noon)' : isPrepaidOrVirtual ? 'بيتابس (PayTabs) مع تفعيل 3DS' : 'تيلر (Telr) أو بيتابس (PayTabs)',
+        bestGateway: isMadaDebit ? 'PayTabs أو نون باي (Noon)' : isPrepaidOrVirtual ? 'PayTabs مع تفعيل 3DS' : 'تيلر (Telr) أو PayTabs',
         fallbackGateway: 'ماي فاتورة (MyFatoorah) كبديل فوري',
         avoidGateway: isPrepaidOrVirtual ? 'تيلر (Telr) و بي زاتي (PayZaty) - احتمال حظر عالي' : 'لا توجد موانع حظر',
         successRate: matchedBin.approvalRateEstimate,
@@ -132,7 +132,7 @@ export default function AiBinIntelligenceCenter({ onApplyCardToSimulator }: AiBi
         detectedBank: 'نطاق بنكي قياسي (Standard Global / Regional BIN)',
         detectedType: cleanBin.startsWith('4') ? 'فيزا ائتمانية / خصم' : cleanBin.startsWith('5') ? 'ماستركارد ائتمانية' : 'نطاق بطاقة متنوعة',
         detectedScheme: cleanBin.startsWith('4') ? 'Visa' : cleanBin.startsWith('5') ? 'Mastercard' : 'Mada',
-        bestGateway: 'بيتابس (PayTabs) أو تيلر (Telr)',
+        bestGateway: 'PayTabs أو تيلر (Telr)',
         fallbackGateway: 'ماي فاتورة (MyFatoorah)',
         avoidGateway: 'البوابات غير المرخصة محلياً',
         successRate: 88.0,
@@ -628,7 +628,7 @@ export default function AiBinIntelligenceCenter({ onApplyCardToSimulator }: AiBi
                 'لماذا تحظر البوابات بطاقات الراجحي مسبقة الدفع 457812 وتقبل مدى؟',
                 'كيف أقنع العميل بتغيير البطاقة دون خسارة المبيعة؟',
                 'ما هو الفرق بين بطاقات الشركات Commercial وبطاقات الأفراد؟',
-                'كيف أتفاوض مع تيلر وبيتابس لفتح الـ BIN المحظور (Whitelisting)؟',
+                'كيف أتفاوض مع تيلر و PayTabs لفتح الـ BIN المحظور (Whitelisting)؟',
               ].map((prompt, idx) => (
                 <button
                   key={idx}

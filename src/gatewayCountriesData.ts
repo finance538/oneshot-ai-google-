@@ -1,3 +1,4 @@
+import { gatewayNames } from '../shared/policy';
 export interface CountrySupportInfo {
   code: string;
   name: string;
@@ -41,8 +42,8 @@ export interface GatewayCountryMatrix {
 export const GATEWAY_COUNTRY_MATRICES: GatewayCountryMatrix[] = [
   {
     gatewayId: 'paytabs',
-    gatewayName: 'بيتابس (PayTabs)',
-    englishName: 'PayTabs Gateway',
+    gatewayName: gatewayNames.paytabs,
+    englishName: gatewayNames.paytabs,
     badge: 'الرائدة في السعودية والخليج',
     headquarters: 'المملكة العربية السعودية / البحرين',
     coverageRegion: 'الشرق الأوسط، شمال أفريقيا، وآسيا (168+ دولة عبر البطاقات الدولية)',

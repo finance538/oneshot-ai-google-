@@ -48,7 +48,7 @@ export const BANK_PROFILES_DATA: BankProfile[] = [
     logoColor: '#002B49',
     issuerCategory: 'Tier-1 Retail Giant',
     disparityOverview: 'مصرف الراجحي يمتلك أكبر كتلة بطاقات في الخليج. التباين الشديد يحدث بين بطاقات مدى الحساب الجاري (تقبل 98% على بوابات محلية) وبين بطاقات "سفر بلس" و"فرسان" المسبقة الدفع والبطاقات الرقمية (Urpay) التي تحظرها بوابات كثيرة بسبب ارتفاع عمليات الـ Chargeback ونقص الـ 3DS V2.',
-    bestGatewayForBank: 'بيتابس (PayTabs) أو نون باي (Noon Payments) للربط المباشر مع مدى',
+    bestGatewayForBank: 'PayTabs أو نون باي (Noon Payments) للربط المباشر مع مدى',
     bins: [
       {
         bin: '588846',
@@ -167,7 +167,7 @@ export const BANK_PROFILES_DATA: BankProfile[] = [
     logoColor: '#005A36',
     issuerCategory: 'Tier-1 Retail Giant',
     disparityOverview: 'بعد اندماج الأهلي وسامبا، يمتلك البنك بنية تحتية قديمة موروثة (Legacy Samba BINs) لا زالت تسجل نسب رفض أعلى مقارنة بنطاقات الأهلي الجديدة المحدثة بالكامل لبروتوكول 3DS 2.2.',
-    bestGatewayForBank: 'بيتابس (PayTabs) أو هايبر باي (HyperPay)',
+    bestGatewayForBank: 'PayTabs أو هايبر باي (HyperPay)',
     bins: [
       {
         bin: '457865',
@@ -480,7 +480,7 @@ export const STRATEGIC_AI_ADVICES: StrategicAiAdvice[] = [
     titleAr: 'إدارة قوائم السمعة والـ BIN Whitelisting مع مديري المخاطر بالبوابات',
     category: 'علاقات الشركاء والمصارف',
     iconName: 'ShieldCheck',
-    summaryAr: 'التواصل الاستباقي مع فرق المخاطر (Risk Teams) في تيلر وبيتابس لطلب فتح استثناءات (Whitelisting) لنطاقات الـ BINs الشائعة لعملائك.',
+    summaryAr: 'التواصل الاستباقي مع فرق المخاطر (Risk Teams) في تيلر و PayTabs لطلب فتح استثناءات (Whitelisting) لنطاقات الـ BINs الشائعة لعملائك.',
     actionItems: [
       'تصدير تقرير من لوحة الأدمن يوضح أن عمليات الـ BIN المرفوضة حقيقية وموثقة بنفاذ ولا تحمل أي نزاعات.',
       'طلب تعديل عتبة المخاطر (Fraud Threshold) لمتجرك بناءً على سجلك النظيف.',
