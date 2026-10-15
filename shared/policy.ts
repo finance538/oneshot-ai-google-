@@ -1,4 +1,4 @@
-export const paymentMethods = ['hosted', 'framed', 'mobile', 'mada_applepay', 'managed', 'own', 'paylink', 'invoice', 'recurring'] as const;
+export const paymentMethods = ['hosted', 'framed', 'mobile', 'mada_applepay', 'samsung_pay', 'managed', 'own', 'paylink', 'invoice', 'recurring'] as const;
 export type PaymentMethod = typeof paymentMethods[number];
 export const gateways = ['paytabs', 'telr', 'ngenius'] as const;
 export type Gateway = typeof gateways[number];
@@ -19,7 +19,7 @@ export const defaultPolicy: PaymentPolicy = {
   openLinksEnabled: true,
   aiEnabled: false,
   gateways: { paytabs: true, telr: true, ngenius: true },
-  methods: { hosted: true, framed: true, mobile: true, mada_applepay: true, managed: true, own: true, paylink: true, invoice: true, recurring: true },
+  methods: { hosted: true, framed: true, mobile: true, mada_applepay: true, samsung_pay: true, managed: true, own: true, paylink: true, invoice: true, recurring: true },
 };
 
 export function gatewayName(gateway: string) {

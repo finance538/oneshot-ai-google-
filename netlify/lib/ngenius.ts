@@ -37,20 +37,23 @@ export function ngeniusConfig(merchantId: string) {
 }
 
 export function ngeniusCapabilities(merchantId: string) {
-  // All six of these run on the same N-Genius hosted pay page:
+  // All seven of these run on the same N-Genius hosted pay page:
   //   hosted        the page itself, opened at the top level
   //   framed        the same page in slim mode inside our checkout iframe (the pay page
   //                 sends no X-Frame-Options and no CSP frame-ancestors, so it embeds)
   //   mobile        the same page on a phone
   //   mada_applepay the page limited to Mada + Apple Pay (offerOnly on the order)
+  //   samsung_pay   the same page limited to Samsung Pay alone
   //   paylink       the pay link is stored on the document and shared with the customer
   //   invoice       that same stored link, titled as an invoice for one customer
-  // Not written yet, so never advertised: managed (Web SDK card fields need a Hosted
-  // Session SDK session, which the KSA docs we hold do not publish), own (a Direct API
-  // card form would put the merchant in PCI SAQ D scope), recurring (needs tokenisation
-  // plus merchant-initiated transactions enabled on the outlet).
-  try { return { connected: true, hosted: true, framed: true, mobile: true, mada_applepay: true, paylink: true, invoice: true, managed: false, own: false, recurring: false, platform: ngeniusConfig(merchantId).platform }; }
-  catch { return { connected: false, hosted: false, framed: false, mobile: false, mada_applepay: false, paylink: false, invoice: false, managed: false, own: false, recurring: false, platform: false }; }
+  // offerOnly is only ever sent for schemes the outlet confirms on the order it just created,
+  // so a method whose account has no such scheme is refused instead of showing an empty page.
+  // Not written yet, so never advertised: managed (Web SDK card fields need a Hosted Session
+  // SDK session, which the KSA docs we hold do not publish), own (a Direct API card form would
+  // put the merchant in PCI SAQ D scope), recurring (no payment:saved-card link comes back on
+  // the order, so the outlet has no tokenisation and no merchant-initiated payments enabled).
+  try { return { connected: true, hosted: true, framed: true, mobile: true, mada_applepay: true, samsung_pay: true, paylink: true, invoice: true, managed: false, own: false, recurring: false, platform: ngeniusConfig(merchantId).platform }; }
+  catch { return { connected: false, hosted: false, framed: false, mobile: false, mada_applepay: false, samsung_pay: false, paylink: false, invoice: false, managed: false, own: false, recurring: false, platform: false }; }
 }
 
 async function accessToken(key: string) {
@@ -83,10 +86,25 @@ function orderReference(description: string) {
   return `OS-${stamp}${slug ? `-${slug}` : ''}`.slice(0, 37);
 }
 
-// Methods that run on the same hosted page but must be offered on their own: the page
-// then shows only these, so a customer sent a Mada/Apple Pay request cannot pay by another scheme.
-const methodOffers: Record<string, string> = { mada_applepay: 'MADA,APPLE_PAY' };
-const methodOffer = (method?: string) => (method ? methodOffers[method] : undefined);
+// Methods that run on the same hosted page but must be offered on their own: the page then shows
+// only these, so a customer sent a Mada/Apple Pay request cannot pay by another scheme.
+// Values are the schemes the hosted page accepts in offerOnly (card and wallet names alike).
+const methodOffers: Record<string, string[]> = { mada_applepay: ['MADA', 'APPLE_PAY'], samsung_pay: ['SAMSUNG_PAY'] };
+const methodOffer = (method?: string) => { const schemes = method ? methodOffers[method] : undefined; return schemes ? schemes.join(',') : undefined; };
+
+// What the account really accepts, read from the order it just created: every order reports the
+// card and wallet schemes enabled on the outlet. Naming a scheme the account does not have would
+// leave the customer on a pay page that cannot render, so only confirmed schemes are ever sent,
+// and a method with none of them is refused instead of advertised.
+function honouredOffer(offer: string, order: Record<string, unknown>) {
+  const groups = (order.paymentMethods || {}) as { card?: unknown; wallet?: unknown };
+  const enabled = [groups.card, groups.wallet].flatMap(group => (Array.isArray(group) ? group : [])).map(scheme => String(scheme).toUpperCase());
+  if (!enabled.length) return offer;
+  const wanted = offer.split(',').map(scheme => scheme.trim().toUpperCase()).filter(Boolean);
+  const kept = wanted.filter(scheme => enabled.includes(scheme));
+  if (!kept.length) throw new HttpError(409, 'وسيلة الدفع المطلوبة غير مفعّلة على حساب N-Genius. اختر وسيلة أخرى.');
+  return kept.join(',');
+}
 
 // The pay page carries no X-Frame-Options and no CSP frame-ancestors, so our checkout can
 // embed it; slim=true is the vendor's own bare layout for exactly that (no header, no chrome).
@@ -96,34 +114,44 @@ export function ngeniusSlim(url: string) {
   return target.href;
 }
 
-// Creates a PURCHASE order: a successful authorisation is captured immediately,
-// which is what a wallet top-up or a site payment needs.
+// Creates a PURCHASE order: a successful authorisation is captured immediately, which is what a
+// wallet top-up or a site payment needs. The page can only be limited to schemes the account
+// actually has, and the order it just created reports them; when one is missing the order is
+// placed once more for the rest, and a method with none of them is refused before the customer
+// ever sees a pay page.
 export async function ngeniusCreateOrder(merchantId: string, input: { amount: number; description: string; email?: string; origin: string; documentId: string; method?: string }) {
   const config = ngeniusConfig(merchantId);
   const token = await accessToken(config.key);
   const returnUrl = `${input.origin}/.netlify/functions/payment-return?id=${input.documentId}`;
   const offer = methodOffer(input.method);
-  const response = await fetch(`${ngeniusIdentity}/transactions/outlets/${config.outlet}/orders`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/vnd.ni-payment.v2+json', Accept: 'application/vnd.ni-payment.v2+json', ...browserHeaders },
-    body: JSON.stringify({
-      action: 'PURCHASE',
-      amount: { currencyCode: 'SAR', value: input.amount },
-      merchantOrderReference: orderReference(input.description),
-      ...(input.email ? { emailAddress: input.email } : {}),
-      merchantAttributes: { redirectUrl: returnUrl, cancelUrl: returnUrl, skipConfirmationPage: true, ...(offer ? { offerOnly: offer } : {}) },
-    }),
-    redirect: 'error',
-    signal: AbortSignal.timeout(20000),
-  });
-  if (!response.ok) {
-    const detail = await response.text().catch(() => '');
-    const reason = (() => { try { const parsed = JSON.parse(detail) as { errors?: Array<{ code?: string; message?: string }> }; const first = parsed?.errors?.[0]; return [first?.code, first?.message].filter(Boolean).join(' ').slice(0, 160); } catch { return ''; } })();
-    throw new HttpError(502, `تعذر إنشاء جلسة الدفع في N-Genius (رمز ${response.status}${reason ? ` — ${reason}` : ''}).`);
+  const sendOrder = async (only?: string) => {
+    const response = await fetch(`${ngeniusIdentity}/transactions/outlets/${config.outlet}/orders`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/vnd.ni-payment.v2+json', Accept: 'application/vnd.ni-payment.v2+json', ...browserHeaders },
+      body: JSON.stringify({
+        action: 'PURCHASE',
+        amount: { currencyCode: 'SAR', value: input.amount },
+        merchantOrderReference: orderReference(input.description),
+        ...(input.email ? { emailAddress: input.email } : {}),
+        merchantAttributes: { redirectUrl: returnUrl, cancelUrl: returnUrl, skipConfirmationPage: true, ...(only ? { offerOnly: only } : {}) },
+      }),
+      redirect: 'error',
+      signal: AbortSignal.timeout(20000),
+    });
+    if (!response.ok) {
+      const detail = await response.text().catch(() => '');
+      const reason = (() => { try { const parsed = JSON.parse(detail) as { errors?: Array<{ code?: string; message?: string }> }; const first = parsed?.errors?.[0]; return [first?.code, first?.message].filter(Boolean).join(' ').slice(0, 160); } catch { return ''; } })();
+      throw new HttpError(502, `تعذر إنشاء جلسة الدفع في N-Genius (رمز ${response.status}${reason ? ` — ${reason}` : ''}).`);
+    }
+    const data: unknown = await response.json();
+    if (!data || typeof data !== 'object' || Array.isArray(data)) throw new HttpError(502, 'لم تصل بيانات جلسة الدفع.');
+    return data as Record<string, unknown>;
+  };
+  let record = await sendOrder(offer);
+  if (offer) {
+    const honoured = honouredOffer(offer, record);
+    if (honoured !== offer) record = await sendOrder(honoured);
   }
-  const order: unknown = await response.json();
-  if (!order || typeof order !== 'object' || Array.isArray(order)) throw new HttpError(502, 'لم تصل بيانات جلسة الدفع.');
-  const record = order as Record<string, unknown>;
   const links = (record._links || {}) as Record<string, { href?: string }>;
   const reference = typeof record.reference === 'string' ? record.reference : null;
   if (!reference) throw new HttpError(502, 'لم يصل مرجع العملية من N-Genius.');

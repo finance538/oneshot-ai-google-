@@ -1,4 +1,4 @@
-export type Method = 'hosted' | 'framed' | 'mobile' | 'mada_applepay' | 'managed' | 'own' | 'paylink' | 'invoice' | 'recurring';
+export type Method = 'hosted' | 'framed' | 'mobile' | 'mada_applepay' | 'samsung_pay' | 'managed' | 'own' | 'paylink' | 'invoice' | 'recurring';
 
 export const methods: { id: Method; name: string; english: string; description: string; tag: string }[] = [
   { id: 'hosted', name: 'صفحة الدفع المستضافة', english: 'Hosted Checkout', description: 'تجربة دفع آمنة على صفحة PayTabs مع إعادة العميل إلى منصتك.', tag: 'الأبسط للبدء' },
@@ -9,6 +9,7 @@ export const methods: { id: Method; name: string; english: string; description: 
   { id: 'invoice', name: 'الفواتير', english: 'Invoice API', description: 'فاتورة إلكترونية ببنود الخدمة، وصفحة دفع خاصة بها على PayTabs.', tag: 'للخدمات والأعمال' },
   { id: 'recurring', name: 'الاشتراكات', english: 'Tokenization · Recurring', description: 'تحصيل شهري أو سنوي بعد موافقة العميل، باستخدام مراجع مشفرة لا بيانات البطاقة.', tag: 'تجديد تلقائي' },
   { id: 'mada_applepay', name: 'مدى وApple Pay', english: 'Mada · Apple Pay', description: 'صفحة دفع مخصصة للوسائل المتاحة على حساب التاجر والجهاز المستخدم.', tag: 'وسائل دفع' },
+  { id: 'samsung_pay', name: 'سامسونج باي', english: 'Samsung Pay', description: 'صفحة دفع مخصصة لمحفظة سامسونج باي على الأجهزة التي تدعمها، بحسب ما يعلنه حساب التاجر.', tag: 'وسائل دفع' },
   { id: 'mobile', name: 'الدفع من الجوال', english: 'Mobile · PWA', description: 'صفحة دفع مناسبة للجوال والتطبيق المثبّت. ليست تكاملاً مع Native SDK.', tag: 'قابل للتثبيت' },
 ];
 
