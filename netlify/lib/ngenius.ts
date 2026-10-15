@@ -37,9 +37,11 @@ export function ngeniusConfig(merchantId: string) {
 }
 
 export function ngeniusCapabilities(merchantId: string) {
-  // Only the hosted payment page is implemented server-side, so every other
-  // method stays off even if the account supports it on paper.
-  try { return { connected: true, hosted: true, framed: false, mobile: false, mada_applepay: false, paylink: false, invoice: false, managed: false, own: false, recurring: false, platform: ngeniusConfig(merchantId).platform }; }
+  // The hosted payment page is the only server-side integration we run, and it is the
+  // same page for desktop and mobile. The KSA outlet takes Mada + Apple Pay on that page.
+  // Every other method (embedded iframe, direct API, tokenisation, Pay by Link, invoices,
+  // store plugins) is catalog-only until its code is actually written.
+  try { return { connected: true, hosted: true, framed: false, mobile: true, mada_applepay: true, paylink: false, invoice: false, managed: false, own: false, recurring: false, platform: ngeniusConfig(merchantId).platform }; }
   catch { return { connected: false, hosted: false, framed: false, mobile: false, mada_applepay: false, paylink: false, invoice: false, managed: false, own: false, recurring: false, platform: false }; }
 }
 

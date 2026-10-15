@@ -403,3 +403,22 @@ test('loading the admin dashboard registers a connected N-Genius account for sit
   assert.equal(upsert.values.merchantId, merchantId);
   assert.equal(fixture.trace.some(entry => entry.operation === 'delete' && entry.table === 'site_payment_gateways'), true);
 });
+
+test('a connected N-Genius account offers the hosted page plus its mobile and Mada/Apple Pay variants only', async () => {
+  const fixture = await harness({ env: ngeniusEnv });
+  const { enabledCapabilities } = await fixture.module('netlify/lib/policy.ts');
+  const { defaultPolicy } = await fixture.module('shared/policy.ts');
+  const caps = enabledCapabilities(merchantId, 'ngenius', defaultPolicy);
+  const offered = Object.entries(caps).filter(([key, value]) => !['connected', 'platform'].includes(key) && value).map(([key]) => key).sort();
+  assert.deepEqual(offered, ['hosted', 'mada_applepay', 'mobile']);
+});
+
+test('N-Genius never advertises a card form or stored-credential method it does not run', async () => {
+  for (const method of ['own', 'managed', 'recurring', 'framed', 'paylink', 'invoice']) {
+    const fixture = await harness({ env: ngeniusEnv, selections: { payment_documents: [[{ payment_documents: { id: documentId, merchantId, title: 'طلب دفع', customerEmail: customer.email, amount: 10000, method, gateway: 'ngenius', expiresAt: new Date(Date.now() + 3600000), status: 'pending' }, merchants: { id: merchantId, name: 'Store' } }]] } });
+    const endpoint = await fixture.module('netlify/functions/checkout.mts');
+    const response = await endpoint.default(new Request(`https://preview.example/.netlify/functions/checkout?id=${documentId}`, { method: 'POST', headers: { Origin: 'https://preview.example', 'Content-Type': 'application/json' }, body: JSON.stringify({}) }), { ip: 'fixture' });
+    assert.equal(response.status, 409, `${method} must be refused`);
+    assert.equal(fixture.fetchTrace.length, 0, `${method} must never reach the gateway`);
+  }
+});
