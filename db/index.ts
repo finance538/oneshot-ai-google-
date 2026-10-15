@@ -1,9 +1,11 @@
 import { drizzle } from 'drizzle-orm/netlify-db';
 import * as schema from './schema.js';
 
-export function database() {
+const createDb = () => drizzle({ schema });
+
+export function database(): ReturnType<typeof createDb> {
   try {
-    return drizzle({ schema });
+    return createDb();
   } catch {
     console.warn('[AI Studio] Database not connected — using mock');
     const noOp = {
@@ -18,6 +20,6 @@ export function database() {
       get: (_, prop) => prop === 'query'
         ? new Proxy({}, { get: () => noOp })
         : async () => [],
-    });
+    }) as ReturnType<typeof createDb>;
   }
 }

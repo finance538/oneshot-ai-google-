@@ -2,9 +2,10 @@ import assert from 'node:assert/strict';
 import path from 'node:path';
 import { test } from 'node:test';
 import { pathToFileURL } from 'node:url';
-// حرس البوابة يعيش في مستودع السيرفر (/root/oneshot-agent-gateway) خارج هذا المستودع،
-// لذا تُتخطّى اختباراته في أي بيئة لا يوجد فيها الملف (بناء Netlify مثلاً).
-const gateway = await import(pathToFileURL(process.env.ONESHOT_GATEWAY_GUARD || '/root/oneshot-agent-gateway/tier-guard.mjs').href).catch(() => null);
+// حرس البوابة يعيش في مستودع السيرفر (/root/oneshot-agent-gateway) ومرآته في tools/gateway/tier-guard.mjs.
+const gateway = await import(pathToFileURL(process.env.ONESHOT_GATEWAY_GUARD || '/root/oneshot-agent-gateway/tier-guard.mjs').href)
+  .catch(() => import(pathToFileURL(path.resolve('tools/gateway/tier-guard.mjs')).href))
+  .catch(() => null);
 const { allowedModels, checkModel, grantSignature, TIER_X_MODELS } = gateway || {};
 const gatewayTest = (name, fn) => test(name, { skip: gateway ? false : 'ملف حرس البوابة غير موجود في هذه البيئة' }, fn);
 

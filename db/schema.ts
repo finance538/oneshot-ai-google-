@@ -8,6 +8,7 @@ export const merchants = pgTable('merchants', {
   id: uuid().defaultRandom().primaryKey(),
   ownerId: text('owner_id').notNull().unique(),
   name: text().notNull(),
+  accountId: text('account_id').unique(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 });
 
@@ -240,4 +241,42 @@ export const gatewayEvents = pgTable('gateway_events', {
   payload: jsonb().notNull(),
   receivedAt: timestamp('received_at', { withTimezone: true }).defaultNow().notNull(),
 }, table => [index('gateway_events_received').on(table.receivedAt)]);
+
+/** سجل نوع الحساب عند التسجيل (تاجر أو مسوّق) وحالة اعتماد الإدارة لحسابات المسوّقين. */
+export const accountRegistrations = pgTable('account_registrations', {
+  id: uuid().defaultRandom().primaryKey(),
+  ownerId: text('owner_id').notNull().unique(),
+  email: text().notNull(),
+  fullName: text('full_name').notNull(),
+  role: text().notNull().default('merchant'), // 'merchant' | 'marketer'
+  status: text().notNull().default('approved'), // 'pending' | 'approved' | 'rejected'
+  referralCode: text('referral_code').unique(),
+  commissionRate: integer('commission_rate').notNull().default(10),
+  notes: text(),
+  reviewedBy: text('reviewed_by'),
+  reviewedAt: timestamp('reviewed_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+}, table => [
+  check('account_registration_role_valid', sql`${table.role} in ('merchant', 'marketer')`),
+  check('account_registration_status_valid', sql`${table.status} in ('pending', 'approved', 'rejected')`),
+  index('account_registrations_role_status').on(table.role, table.status),
+]);
+
+/** حملات وروابط الإحالة الخاصة بالمسوّقين المعتمدين. */
+export const marketerCampaigns = pgTable('marketer_campaigns', {
+  id: uuid().defaultRandom().primaryKey(),
+  marketerId: uuid('marketer_id').notNull().references(() => accountRegistrations.id),
+  ownerId: text('owner_id').notNull(),
+  title: text().notNull(),
+  targetProductSku: text('target_product_sku').notNull().default('ALL'),
+  utmCampaign: text('utm_campaign').notNull(),
+  channel: text().notNull().default('social'),
+  clicks: integer().notNull().default(0),
+  conversions: integer().notNull().default(0),
+  earnedCommission: integer('earned_commission').notNull().default(0),
+  enabled: boolean().notNull().default(true),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+}, table => [index('marketer_campaigns_owner').on(table.ownerId, table.createdAt)]);
+
 
