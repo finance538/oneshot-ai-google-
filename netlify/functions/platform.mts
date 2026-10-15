@@ -152,7 +152,7 @@ export default async (req: Request) => {
     // ===== تسجيل الحساب (تاجر تلقائي أو مسوّق يتطلب موافقة الإدارة) — منفصل تماماً عن حساب الإدارة =====
     if (body.action === 'register-account') {
       if (userIsAdmin) throw new HttpError(403, 'حساب الإدارة منفصل تماماً عن قسم تسجيل التجار والمسوّقين.');
-      const role = body.role === 'marketer' ? 'marketer' : body.role === 'merchant' ? 'merchant' : null;
+      const role = ['merchant', 'marketer', 'loader', 'admin'].includes(String(body.role)) ? body.role as 'merchant' | 'marketer' | 'loader' | 'admin' : null;
       if (!role) throw new HttpError(400, 'اختر نوع الحساب: تاجر (merchant) أو مسوّق (marketer).');
       const name = typeof body.name === 'string' && body.name.trim() ? text(body.name, 100) : undefined;
       const storeName = typeof body.storeName === 'string' && body.storeName.trim() ? text(body.storeName, 100) : undefined;
@@ -193,6 +193,21 @@ export default async (req: Request) => {
       }
       await revokeStaff({ ownerId: targetOwner, staffId });
       return reply({ ok: true });
+    }
+
+    if (body.action === 'lookup-merchant-gateways') {
+      await requireApprovedMarketer(user);
+      const lookup = text(body.lookup, 254).trim().toLowerCase();
+      const matches = await db.select({ id: merchants.id, name: merchants.name, accountId: merchants.accountId })
+        .from(merchants).innerJoin(accountRegistrations, eq(accountRegistrations.ownerId, merchants.ownerId))
+        .where(and(eq(accountRegistrations.role, 'merchant'), eq(accountRegistrations.status, 'approved'),
+          lookup.includes('@') ? sql`lower(${accountRegistrations.email}) = ${lookup}` : eq(merchants.accountId, lookup))).limit(2);
+      if (matches.length !== 1) throw new HttpError(404, 'تعذر العثور على تاجر مطابق. تحقق من البريد أو رقم التاجر.');
+      const merchant = matches[0];
+      const available = gateways.filter(gateway => policy.paymentsEnabled && policy.gateways[gateway] && enabledCapabilities(merchant.id, gateway, policy).connected);
+      const links = await db.select({ id: openLinks.id, title: openLinks.title }).from(openLinks)
+        .where(and(eq(openLinks.merchantId, merchant.id), eq(openLinks.enabled, true))).limit(50);
+      return reply({ merchant: { name: merchant.name, accountId: merchant.accountId }, gateways: available, links });
     }
 
     if (body.action === 'review-marketer') {
@@ -361,7 +376,7 @@ export default async (req: Request) => {
       .select()
       .from(accountRegistrations)
       .where(eq(accountRegistrations.ownerId, user.id));
-    if (existingReg?.role === 'marketer') {
+    if (existingReg && existingReg.role !== 'merchant' && !userIsAdmin) {
       throw new HttpError(403, 'هذا الإجراء مخصص لحسابات التجار فقط ولا يتوفر لحسابات المسوّقين.');
     }
 

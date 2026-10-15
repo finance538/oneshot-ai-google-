@@ -1,0 +1,1 @@
+ALTER TABLE "account_registrations" DROP CONSTRAINT "account_registration_role_valid", ADD CONSTRAINT "account_registration_role_valid" CHECK ("role" in ('merchant', 'marketer', 'loader', 'admin'));
