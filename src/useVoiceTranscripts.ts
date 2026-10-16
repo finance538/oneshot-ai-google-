@@ -5,7 +5,8 @@ import { mergeTranscripts, readTranscripts, writeTranscripts, type TranscriptRec
 // Legacy Firestore remains optional. Never prompt for a second identity or use another account's session.
 async function legacyStore(userId: string) {
   try {
-    const firebase = await import('./firebase');
+    const { getLegacyFirebase } = await import('./firebase');
+    const firebase = await getLegacyFirebase();
     await firebase.auth.authStateReady();
     return firebase.auth.currentUser?.uid === userId ? firebase.db : null;
   } catch { return null; }

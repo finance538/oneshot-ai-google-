@@ -2,6 +2,11 @@
 command = "npm run build"
 publish = "dist"
 
+[build.environment]
+# Firebase web SDK configuration is public. Keep it in a separate JSON asset so
+# this exception never excludes executable bundles or server-side credentials.
+SECRETS_SCAN_OMIT_PATHS = "firebase-applet-config.json,dist/assets/firebase-applet-config-*.json"
+
 [functions]
 directory = "netlify/functions"
 

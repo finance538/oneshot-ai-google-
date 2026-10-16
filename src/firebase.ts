@@ -1,71 +1,29 @@
-import { initializeApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, type User as FirebaseUser } from 'firebase/auth';
-import { getFirestore, doc, getDocFromServer } from 'firebase/firestore';
-import firebaseConfig from '../firebase-applet-config.json';
+import { initializeApp, type FirebaseOptions } from 'firebase/app';
+import { getAuth, type Auth } from 'firebase/auth';
+import { getFirestore, type Firestore } from 'firebase/firestore';
+import firebaseConfigUrl from '../firebase-applet-config.json?url&no-inline';
 
-export const app = initializeApp(firebaseConfig);
-// CRITICAL: Must pass databaseId from config
-export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
-export const auth = getAuth(app);
-export const googleProvider = new GoogleAuthProvider();
-
-export enum OperationType {
-  CREATE = 'create',
-  UPDATE = 'update',
-  DELETE = 'delete',
-  LIST = 'list',
-  GET = 'get',
-  WRITE = 'write',
+interface LegacyFirebase {
+  auth: Auth;
+  db: Firestore;
 }
 
-export interface FirestoreErrorInfo {
-  error: string;
-  operationType: OperationType;
-  path: string | null;
-  authInfo: {
-    userId?: string | null;
-    email?: string | null;
-    emailVerified?: boolean | null;
-    isAnonymous?: boolean | null;
-    tenantId?: string | null;
-    providerInfo?: {
-      providerId?: string | null;
-      email?: string | null;
-    }[];
-  };
-}
+let initialization: Promise<LegacyFirebase> | undefined;
 
-export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null): never {
-  const errInfo: FirestoreErrorInfo = {
-    error: error instanceof Error ? error.message : String(error),
-    authInfo: {
-      userId: auth.currentUser?.uid,
-      email: auth.currentUser?.email,
-      emailVerified: auth.currentUser?.emailVerified,
-      isAnonymous: auth.currentUser?.isAnonymous,
-      tenantId: auth.currentUser?.tenantId,
-      providerInfo: auth.currentUser?.providerData?.map(provider => ({
-        providerId: provider.providerId,
-        email: provider.email,
-      })) || [],
-    },
-    operationType,
-    path,
-  };
-  console.error('Firestore Error:', JSON.stringify(errInfo));
-  throw new Error(JSON.stringify(errInfo));
-}
-
-export async function testConnection(): Promise<boolean> {
-  try {
-    await getDocFromServer(doc(db, 'test', 'connection'));
-    return true;
-  } catch (error) {
-    if (error instanceof Error && error.message.includes('the client is offline')) {
-      console.warn('Firestore is offline or client is disconnected');
-    }
-    return false;
+// The web SDK configuration is intentionally public. The no-inline URL import
+// keeps it in its own JSON asset, covered by a narrowly scoped scan exception.
+export function getLegacyFirebase(): Promise<LegacyFirebase> {
+  if (!initialization) {
+    initialization = (async () => {
+      const response = await fetch(firebaseConfigUrl);
+      if (!response.ok) throw new Error('Legacy archive configuration is unavailable.');
+      const config = await response.json() as FirebaseOptions & { firestoreDatabaseId: string };
+      const app = initializeApp(config);
+      return { auth: getAuth(app), db: getFirestore(app, config.firestoreDatabaseId) };
+    })().catch(error => {
+      initialization = undefined;
+      throw error;
+    });
   }
+  return initialization;
 }
-
-export { onAuthStateChanged, signInWithPopup, signOut, type FirebaseUser };
