@@ -24,10 +24,10 @@ export function sameOrigin(req: Request) {
   if (!origin || origin !== new URL(req.url).origin) throw new HttpError(403, 'مصدر الطلب غير مسموح.');
 }
 
-export async function jsonBody(req: Request): Promise<Record<string, unknown>> {
+export async function jsonBody(req: Request, maxLength = 16000): Promise<Record<string, unknown>> {
   if (!req.headers.get('content-type')?.includes('application/json')) throw new HttpError(415, 'صيغة الطلب غير مدعومة.');
   const raw = await req.text();
-  if (raw.length > 16000) throw new HttpError(413, 'الطلب أكبر من الحد المسموح.');
+  if (raw.length > maxLength) throw new HttpError(413, 'الطلب أكبر من الحد المسموح.');
   let body: unknown;
   try { body = JSON.parse(raw); } catch { throw new HttpError(400, 'صيغة الطلب غير صالحة.'); }
   if (!body || typeof body !== 'object' || Array.isArray(body)) throw new HttpError(400, 'بيانات الطلب غير صالحة.');

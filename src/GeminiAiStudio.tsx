@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   Mic,
   Square,
@@ -11,41 +11,17 @@ import {
   Search,
   MapPin,
   RefreshCw,
-  LogIn,
-  LogOut,
   Archive,
   MessageSquare,
   Zap,
-  Flame,
   ShieldCheck,
   Clock,
-  ArrowRight,
   ExternalLink
 } from 'lucide-react';
-import {
-  auth,
-  db,
-  googleProvider,
-  signInWithPopup,
-  signOut,
-  onAuthStateChanged,
-  handleFirestoreError,
-  OperationType,
-  testConnection,
-  type FirebaseUser
-} from './firebase';
-import {
-  collection,
-  addDoc,
-  query,
-  where,
-  orderBy,
-  onSnapshot,
-  serverTimestamp,
-  deleteDoc,
-  doc,
-  type DocumentData
-} from 'firebase/firestore';
+import { getUser, onAuthChange, type User as PlatformUser } from '@netlify/identity';
+import { api } from './platform';
+import { useVoiceRecorder } from './useVoiceRecorder';
+import { useVoiceTranscripts } from './useVoiceTranscripts';
 import './GeminiAiStudio.css';
 
 interface Message {
@@ -57,22 +33,13 @@ interface Message {
   createdAt: string;
 }
 
-interface TranscriptRecord {
-  id: string;
-  title: string;
-  transcriptText: string;
-  durationSeconds: number;
-  createdAt: string;
-}
-
 type ModelTier = 'gemini-3.8-flash' | 'gemini-3.1-flash-lite' | 'gemini-4-argon';
-type PersonaKey = 'studio_director' | 'gateway_architect' | 'campaign_strategist';
+type PersonaKey = 'studio_director' | 'gateway_architect' | 'campaign_strategist' | 'coo_operations';
 
 export default function GeminiAiStudio() {
   const [activeTab, setActiveTab] = useState<'chat' | 'transcripts'>('chat');
-  const [user, setUser] = useState<FirebaseUser | null>(null);
-  const [firestoreReady, setFirestoreReady] = useState(false);
-  const [authLoading, setAuthLoading] = useState(false);
+  const [user, setUser] = useState<PlatformUser | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
 
   // Model & Persona Configuration
   const [selectedModel, setSelectedModel] = useState<ModelTier>('gemini-3.8-flash');
@@ -86,68 +53,27 @@ export default function GeminiAiStudio() {
   const [sending, setSending] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
-  // Audio Recording State
-  const [isRecording, setIsRecording] = useState(false);
-  const [recordingDuration, setRecordingDuration] = useState(0);
-  const [transcribing, setTranscribing] = useState(false);
   const [lastTranscript, setLastTranscript] = useState<string | null>(null);
-  const [recordingError, setRecordingError] = useState<string | null>(null);
-
-  // Transcripts Archive
-  const [savedTranscripts, setSavedTranscripts] = useState<TranscriptRecord[]>([]);
-
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const audioChunksRef = useRef<Blob[]>([]);
-  const timerIntervalRef = useRef<number | null>(null);
+  const { savedTranscripts, archiveNotice, saveTranscript, deleteTranscript } = useVoiceTranscripts(user?.id);
+  const { isRecording, isStarting, recordingDuration, transcribing, recordingError, startRecording, stopRecording } = useVoiceRecorder((text, seconds) => {
+    setLastTranscript(text);
+    saveTranscript(text, seconds);
+  });
   const chatBottomRef = useRef<HTMLDivElement>(null);
 
-  // Check Firestore connection and listen for Auth changes
   useEffect(() => {
-    testConnection().then(ok => setFirestoreReady(ok));
-    const unsubscribe = onAuthStateChanged(auth, currentUser => {
-      setUser(currentUser);
+    let active = true;
+    let changed = false;
+    const unsubscribe = onAuthChange((_event, current) => {
+      changed = true;
+      setUser(current);
+      setAuthLoading(false);
     });
-    return () => unsubscribe();
+    void getUser().then(current => {
+      if (active && !changed) { setUser(current); setAuthLoading(false); }
+    });
+    return () => { active = false; unsubscribe(); };
   }, []);
-
-  // Listen for saved transcripts if user is authenticated
-  useEffect(() => {
-    if (!user) {
-      setSavedTranscripts([]);
-      return;
-    }
-    const path = 'voice_transcripts';
-    try {
-      const q = query(
-        collection(db, path),
-        where('userId', '==', user.uid),
-        orderBy('createdAt', 'desc')
-      );
-      const unsubscribe = onSnapshot(
-        q,
-        snapshot => {
-          const loaded: TranscriptRecord[] = [];
-          snapshot.forEach(docSnap => {
-            const data = docSnap.data();
-            loaded.push({
-              id: docSnap.id,
-              title: data.title || 'تسجيل صوتي',
-              transcriptText: data.transcriptText || '',
-              durationSeconds: data.durationSeconds || 0,
-              createdAt: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : new Date().toISOString(),
-            });
-          });
-          setSavedTranscripts(loaded);
-        },
-        error => {
-          handleFirestoreError(error, OperationType.GET, path);
-        }
-      );
-      return () => unsubscribe();
-    } catch (err) {
-      console.warn('Firestore snapshot subscription warning:', err);
-    }
-  }, [user]);
 
   // Scroll chat to bottom on new message
   useEffect(() => {
@@ -156,131 +82,10 @@ export default function GeminiAiStudio() {
     }
   }, [messages, activeTab]);
 
-  // Handle Firebase Sign In
-  const handleGoogleSignIn = async () => {
-    setAuthLoading(true);
-    try {
-      await signInWithPopup(auth, googleProvider);
-    } catch (err) {
-      console.error('Sign in error:', err);
-    } finally {
-      setAuthLoading(false);
-    }
-  };
-
-  const handleSignOut = async () => {
-    try {
-      await signOut(auth);
-    } catch (err) {
-      console.error('Sign out error:', err);
-    }
-  };
-
-  // Audio Recording Handlers (using Web Audio API and MediaRecorder)
-  const startRecording = async () => {
-    setRecordingError(null);
-    setLastTranscript(null);
-    audioChunksRef.current = [];
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const recorder = new MediaRecorder(stream);
-      mediaRecorderRef.current = recorder;
-
-      recorder.ondataavailable = e => {
-        if (e.data && e.data.size > 0) {
-          audioChunksRef.current.push(e.data);
-        }
-      };
-
-      recorder.onstop = async () => {
-        stream.getTracks().forEach(track => track.stop());
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-        await processAudioTranscription(audioBlob);
-      };
-
-      recorder.start(250);
-      setIsRecording(true);
-      setRecordingDuration(0);
-      timerIntervalRef.current = window.setInterval(() => {
-        setRecordingDuration(d => d + 1);
-      }, 1000);
-    } catch (err) {
-      console.error('Microphone access error:', err);
-      setRecordingError('تعذر الوصول إلى الميكروفون. يرجى منح الإذن في المتصفح.');
-      setIsRecording(false);
-    }
-  };
-
-  const stopRecording = () => {
-    if (timerIntervalRef.current) {
-      clearInterval(timerIntervalRef.current);
-      timerIntervalRef.current = null;
-    }
-    if (mediaRecorderRef.current && isRecording) {
-      mediaRecorderRef.current.stop();
-      setIsRecording(false);
-    }
-  };
-
-  // Convert Blob to Base64 and call server transcription endpoint
-  const processAudioTranscription = async (blob: Blob) => {
-    setTranscribing(true);
-    try {
-      const reader = new FileReader();
-      const base64Promise = new Promise<string>((resolve, reject) => {
-        reader.onloadend = () => {
-          const result = reader.result as string;
-          // Strip data url prefix (e.g. "data:audio/webm;base64,")
-          const base64Data = result.split(',')[1] || result;
-          resolve(base64Data);
-        };
-        reader.onerror = reject;
-      });
-      reader.readAsDataURL(blob);
-      const base64Audio = await base64Promise;
-
-      const res = await fetch('/.netlify/functions/gemini-studio', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'transcribe',
-          audio: base64Audio,
-          mimeType: blob.type || 'audio/webm',
-        }),
-      });
-
-      const data = await res.json();
-      if (data.transcript) {
-        setLastTranscript(data.transcript);
-        // If user is authenticated, save automatically to Firestore
-        if (user) {
-          try {
-            await addDoc(collection(db, 'voice_transcripts'), {
-              userId: user.uid,
-              title: data.transcript.slice(0, 45) + '...',
-              transcriptText: data.transcript,
-              durationSeconds: recordingDuration,
-              createdAt: serverTimestamp(),
-            });
-          } catch (e) {
-            console.warn('Could not auto-save transcript to Firestore:', e);
-          }
-        }
-      } else if (data.error) {
-        setRecordingError(data.error);
-      }
-    } catch (err) {
-      console.error('Transcription error:', err);
-      setRecordingError('حدث خطأ أثناء معالجة الصوت وتحويله إلى نص.');
-    } finally {
-      setTranscribing(false);
-    }
-  };
-
   // Send Multi-Turn Message to Gemini
   const handleSendMessage = async (customPrompt?: string) => {
     const textToSend = (customPrompt || inputMessage).trim();
-    if (!textToSend || sending) return;
+    if (!user || !textToSend || sending) return;
 
     const userMsg: Message = {
       id: 'usr-' + Date.now(),
@@ -300,21 +105,10 @@ export default function GeminiAiStudio() {
         content: m.content,
       }));
 
-      const res = await fetch('/.netlify/functions/gemini-studio', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'chat',
-          message: textToSend,
-          history: historyPayload,
-          model: selectedModel,
-          persona: selectedPersona,
-          enableSearchGrounding,
-          enableMapsGrounding,
-        }),
+      const data = await api<{ answer: string; modelUsed: string; groundingSources?: string[] }>('gemini-studio', {
+        action: 'chat', message: textToSend, history: historyPayload,
+        model: selectedModel, persona: selectedPersona, enableSearchGrounding, enableMapsGrounding,
       });
-
-      const data = await res.json();
       const assistantMsg: Message = {
         id: 'ast-' + Date.now(),
         role: 'assistant',
@@ -326,13 +120,12 @@ export default function GeminiAiStudio() {
 
       setMessages(prev => [...prev, assistantMsg]);
     } catch (err) {
-      console.error('Chat error:', err);
       setMessages(prev => [
         ...prev,
         {
           id: 'err-' + Date.now(),
           role: 'assistant',
-          content: 'حدث خطأ في الاتصال بخدمة الذكاء الاصطناعي. يرجى التحقق من الشبكة وإعادة المحاولة.',
+          content: err instanceof Error ? err.message : 'تعذر الاتصال بخدمة الذكاء الاصطناعي.',
           createdAt: new Date().toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' }),
         },
       ]);
@@ -380,44 +173,18 @@ export default function GeminiAiStudio() {
           <h1>OneShot Gemini AI Suite</h1>
           <p>
             تكامل متعدد الأدوار للمحادثات الذكية وتوليد الأفكار الإنتاجية، مع تحويل الصوت إلى نصوص عبر الميكروفون
-            بدقة فائقة وحفظ الجلسات في قاعدة بيانات Firestore.
+            وحفظ أرشيف التفريغ الصوتي في حسابك مع نسخة محلية فورية.
           </p>
         </div>
 
-        {/* Firebase Authentication & Cloud Status */}
-        <div className="gemini-auth-status">
-          <div className="firebase-badge">
-            <span className={`status-dot ${firestoreReady ? '' : 'offline'}`} />
-            <span>{firestoreReady ? 'Firestore متصل' : 'سحابة Firebase'}</span>
-          </div>
-          <span style={{ color: '#d1d5db' }}>|</span>
-          {user ? (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <span style={{ fontSize: '11px', fontWeight: 600, color: '#374151' }}>
-                {user.displayName || user.email}
-              </span>
-              <button
-                onClick={handleSignOut}
-                className="icon-button"
-                title="تسجيل الخروج من Firebase"
-                style={{ padding: '4px' }}
-              >
-                <LogOut size={16} />
-              </button>
-            </div>
-          ) : (
-            <button
-              onClick={handleGoogleSignIn}
-              disabled={authLoading}
-              className="outline-button"
-              style={{ fontSize: '11px', padding: '6px 12px', minHeight: '34px' }}
-            >
-              <LogIn size={14} />
-              <span>{authLoading ? 'جارٍ تسجيل الدخول...' : 'تسجيل دخول Google'}</span>
-            </button>
-          )}
+        <div className="gemini-auth-status" role="status">
+          {authLoading ? 'جارٍ التحقق من حساب المنصة...' : user ? (
+            <><ShieldCheck size={16} /><span>{user.name || user.email}</span><span>أرشيف حسابك جاهز</span></>
+          ) : <span>سجّل الدخول إلى المنصة لاستخدام الاستوديو.</span>}
         </div>
       </div>
+
+      {archiveNotice && <p role="status" className="helper-note">{archiveNotice}</p>}
 
       {/* Model & Persona Configuration Controls */}
       <div className="gemini-controls-grid">
@@ -448,6 +215,13 @@ export default function GeminiAiStudio() {
               onClick={() => setSelectedPersona('campaign_strategist')}
             >
               خبير الحملات (Growth)
+            </button>
+            <button
+              type="button"
+              className={`segmented-btn ${selectedPersona === 'coo_operations' ? 'active' : ''}`}
+              onClick={() => setSelectedPersona('coo_operations')}
+            >
+              مدير التشغيل (COO)
             </button>
           </div>
         </div>
@@ -522,8 +296,8 @@ export default function GeminiAiStudio() {
           <button
             type="button"
             className={`mic-circle-btn ${isRecording ? 'recording' : ''}`}
-            onClick={isRecording ? stopRecording : startRecording}
-            disabled={transcribing}
+            onClick={() => isRecording ? stopRecording() : void startRecording()}
+            disabled={!user || transcribing || isStarting}
             title={isRecording ? 'إيقاف التسجيل والتحويل إلى نص' : 'بدء تسجيل صوتي عبر الميكروفون'}
           >
             {isRecording ? <Square size={18} /> : <Mic size={20} />}
@@ -533,7 +307,7 @@ export default function GeminiAiStudio() {
               {isRecording
                 ? 'جارٍ التسجيل المباشر...'
                 : transcribing
-                ? 'جارٍ معالجة الصوت ونقله عبر gemini-3.5-transcribe...'
+                ? 'جارٍ تحويل التسجيل إلى نص...'
                 : 'التسجيل الصوتي المباشر (Voice Transcription)'}
             </strong>
             <small>
@@ -702,11 +476,11 @@ export default function GeminiAiStudio() {
               placeholder="اكتب استفسارك أو طلبك هنا..."
               value={inputMessage}
               onChange={e => setInputMessage(e.target.value)}
-              disabled={sending}
+              disabled={!user || sending}
             />
             <button
               type="submit"
-              disabled={!inputMessage.trim() || sending}
+              disabled={!user || !inputMessage.trim() || sending}
               className="send-action-btn"
             >
               <span>إرسال</span>
@@ -733,7 +507,7 @@ export default function GeminiAiStudio() {
               <p style={{ fontSize: '12px', color: '#6b7280' }}>
                 {user
                   ? 'سجّل صوتاً عبر الميكروفون وسيقوم النظام بتفريغه وحفظه تلقائياً في حسابك.'
-                  : 'سجّل الدخول بحساب Google لحفظ وتصفح أرشيف التفريغات الصوتية عبر Firestore.'}
+                  : 'سجّل الدخول إلى المنصة لحفظ وتصفح أرشيف التفريغات الصوتية.'}
               </p>
             </div>
           ) : (
@@ -771,13 +545,7 @@ export default function GeminiAiStudio() {
                     type="button"
                     className="icon-button"
                     title="حذف التسجيل"
-                    onClick={async () => {
-                      try {
-                        await deleteDoc(doc(db, 'voice_transcripts', rec.id));
-                      } catch (err) {
-                        handleFirestoreError(err, OperationType.DELETE, `voice_transcripts/${rec.id}`);
-                      }
-                    }}
+                    onClick={() => void deleteTranscript(rec.id)}
                   >
                     <Square size={14} color="#ef4444" />
                   </button>

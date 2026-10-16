@@ -1,11 +1,8 @@
-import { GoogleGenAI } from '@google/genai';
-
-interface ChatMessage {
-  role: 'user' | 'model';
-  content: string;
-}
+import { GoogleGenAI, type Content, type GenerateContentConfig } from '@google/genai';
+import { failure, HttpError, jsonBody, owner, reply, sameOrigin, throttle } from '../lib/platform.js';
 
 const systemPersonas: Record<string, string> = {
+  coo_operations: 'أنت مدير التشغيل وضمان سلاسل التسليم (COO) لمنصة OneShot. مهمتك متابعة مسارات تسليم الخدمات، مراقبة مؤشرات جودة المخرجات SLA، وضمان رضا عملاء ونشوت.',
   studio_director: `أنت المستشار التنفيذي والمدير الإبداعي لاستوديو OneShot (Brand Studio) في المملكة العربية السعودية.
 خدمات OneShot الأساسية:
 1. تصوير المنتجات الإعلاني (PHT-01): 1,450 ريال سعودي (تصوير استوديو احترافي مع معالجة ألوان سينمائية).
@@ -25,158 +22,92 @@ const systemPersonas: Record<string, string> = {
 مهمتك: مساعدة التجار والمسوقين في صياغة حملات تسويقية جذابة، وصياغة خطط نمو تعتمد على الفيديو القصير، وتحسين معدلات التحويل (Conversion Rate)، واستراتيجيات جذب العملاء لروابط الدفع. أجب بصياغة ملهمة ومباشرة مع خطط قابلة للتنفيذ.`
 };
 
-export default async (req: Request): Promise<Response> => {
-  if (req.method === 'OPTIONS') {
-    return new Response(null, {
-      status: 204,
-      headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-      },
-    });
+const modelMapping: Record<string, string> = {
+  'gemini-3.5-transcribe': 'gemini-2.5-flash',
+  'gemini-3.8-flash': 'gemini-2.5-flash',
+  'gemini-3.1-flash-lite': 'gemini-2.5-flash-lite',
+  'gemini-4-argon': 'gemini-2.5-pro',
+};
+
+function inlineData(data: unknown, mime: unknown, kind: 'audio' | 'image') {
+  const mimeType = typeof mime === 'string' ? mime.split(';')[0].trim() : '';
+  const allowed = kind === 'audio'
+    ? ['audio/webm', 'audio/mp4', 'audio/ogg', 'audio/wav', 'audio/mpeg', 'audio/aac', 'audio/flac']
+    : ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
+  if (!allowed.includes(mimeType) || typeof data !== 'string' || !data.length || data.length > 5_500_000
+    || data.length % 4 !== 0 || !/^[A-Za-z0-9+/]+={0,2}$/.test(data)) {
+    throw new HttpError(400, 'المرفق غير صالح أو أكبر من الحد المسموح.');
   }
+  return { data, mimeType };
+}
 
-  const apiKey = process.env.GEMINI_API_KEY;
-  const ai = new GoogleGenAI({
-    apiKey: apiKey || '',
-    httpOptions: {
-      headers: {
-        'User-Agent': 'aistudio-build',
-      },
-    },
-  });
-
+export default async (req: Request): Promise<Response> => {
   try {
-    const body = await req.json();
-    const action = body.action || 'chat';
+    if (req.method !== 'POST') throw new HttpError(405, 'طريقة الطلب غير مدعومة.');
+    sameOrigin(req);
+    const user = await owner();
+    await throttle(`gemini-studio:${user.id}`, 30);
+    // Only this media endpoint accepts large bodies; payment endpoints keep the 16 KB default.
+    const body = await jsonBody(req, 6_000_000);
+    const action = body.action ?? 'chat';
 
-    // 1. Audio Transcription via gemini-3.5-transcribe
     if (action === 'transcribe') {
-      const audioData = body.audio;
-      const mimeType = body.mimeType || 'audio/webm';
-
-      if (!audioData) {
-        return new Response(JSON.stringify({ error: 'البيانات الصوتية مطلوبة' }), {
-          status: 400,
-          headers: { 'Content-Type': 'application/json' },
-        });
-      }
-
-      if (!apiKey) {
-        return new Response(
-          JSON.stringify({
-            transcript: 'تم استقبال التسجيل الصوتي بنجاح: "أهلاً بكم في استوديو ون شوت، نود حجز باقة تصوير المنتجات الإعلانية بالاستوديو والتنسيق مع فريق الإنتاج."'
-          }),
-          { headers: { 'Content-Type': 'application/json' } }
-        );
-      }
-
+      const audio = inlineData(body.audio, body.mimeType ?? 'audio/webm', 'audio');
+      const ai = new GoogleGenAI({});
       const response = await ai.models.generateContent({
-        model: 'gemini-3.5-transcribe',
-        contents: {
-          parts: [
-            {
-              inlineData: {
-                mimeType,
-                data: audioData,
-              },
-            },
-            {
-              text: 'Transcribe this spoken audio accurately. Output the exact transcribed text in natural Arabic with proper punctuation. Do not add conversational commentary.',
-            },
-          ],
-        },
+        model: modelMapping['gemini-3.5-transcribe'],
+        contents: { parts: [
+          { inlineData: audio },
+          { text: 'Transcribe this spoken audio accurately. Output the exact transcribed text in natural Arabic with proper punctuation. Do not add conversational commentary.' },
+        ] },
       });
-
-      return new Response(
-        JSON.stringify({
-          transcript: response.text || '',
-        }),
-        { headers: { 'Content-Type': 'application/json' } }
-      );
+      if (!response.text?.trim()) throw new HttpError(502, 'لم يتم التعرف على كلام واضح في التسجيل.');
+      return reply({ transcript: response.text });
     }
-
-    // 2. Multi-turn Chat via Gemini models (gemini-3.8-flash, gemini-3.1-flash-lite, gemini-4-argon)
-    const prompt = body.message || '';
-    const history: ChatMessage[] = Array.isArray(body.history) ? body.history : [];
-    const selectedModel = body.model || 'gemini-3.8-flash';
-    const persona = body.persona || 'studio_director';
-    const systemInstruction = systemPersonas[persona] || systemPersonas.studio_director;
-    const enableSearch = Boolean(body.enableSearchGrounding);
-    const enableMaps = Boolean(body.enableMapsGrounding);
-
-    if (!prompt.trim()) {
-      return new Response(JSON.stringify({ error: 'الرسالة مطلوبة' }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' },
-      });
+    if (action !== 'chat') throw new HttpError(400, 'الإجراء غير مدعوم.');
+    if (typeof body.message !== 'string' || !body.message.trim() || body.message.length > 12000) {
+      throw new HttpError(400, 'الرسالة مطلوبة ويجب ألا تتجاوز 12000 حرف.');
     }
-
-    if (!apiKey) {
-      const fallbackReply = `أهلاً بك في استوديو OneShot الذكي.\n\nبناءً على طلبك بخصوص: "${prompt}":\n\n• باقات الإنتاج والتصوير الإعلاني متاحة بجدولة سريعة داخل الرياض وجدة.\n• بوابات الدفع (PayTabs و Telr و Tap) مجهزة لاستقبال المدفوعات الفورية عبر مدى و Apple Pay.\n• الموديل المحدد للطلب: ${selectedModel}.\n\nهل تود استكمال صياغة العقد أو إنشاء رابط دفع فوري؟`;
-      return new Response(
-        JSON.stringify({
-          answer: fallbackReply,
-          modelUsed: selectedModel,
-          groundingSources: enableSearch ? ['بحث Google Grounding: دليل تصوير المنتجات 2026'] : [],
-        }),
-        { headers: { 'Content-Type': 'application/json' } }
-      );
+    const selectedModel = body.model ?? 'gemini-3.8-flash';
+    if (typeof selectedModel !== 'string' || !Object.hasOwn(modelMapping, selectedModel) || selectedModel === 'gemini-3.5-transcribe') {
+      throw new HttpError(400, 'النموذج المحدد غير مدعوم.');
     }
-
-    const contents: any[] = [];
-    for (const turn of history.slice(-8)) {
-      contents.push({
-        role: turn.role === 'model' ? 'model' : 'user',
-        parts: [{ text: turn.content }],
-      });
+    const persona = body.persona ?? 'studio_director';
+    if (typeof persona !== 'string' || !Object.hasOwn(systemPersonas, persona)) {
+      throw new HttpError(400, 'المستشار المحدد غير مدعوم.');
     }
-    contents.push({
-      role: 'user',
-      parts: [{ text: prompt }],
-    });
-
-    const config: any = {
-      systemInstruction,
+    if (body.history !== undefined && !Array.isArray(body.history)) throw new HttpError(400, 'سجل المحادثة غير صالح.');
+    const contents: Content[] = [];
+    for (const turn of (Array.isArray(body.history) ? body.history.slice(-8) : [])) {
+      if (!turn || (turn.role !== 'user' && turn.role !== 'model') || typeof turn.content !== 'string' || turn.content.length > 12000) {
+        throw new HttpError(400, 'سجل المحادثة غير صالح.');
+      }
+      contents.push({ role: turn.role, parts: [{ text: turn.content }] });
+    }
+    const current: Content = { role: 'user', parts: [{ text: body.message.trim() }] };
+    if (body.image !== undefined) {
+      if (typeof body.image !== 'string') throw new HttpError(400, 'الصورة غير صالحة.');
+      const match = body.image.match(/^data:(image\/[a-z]+);base64,(.+)$/);
+      if (!match) throw new HttpError(400, 'الصورة غير صالحة.');
+      current.parts!.push({ inlineData: inlineData(match[2], match[1], 'image') });
+    }
+    contents.push(current);
+    const config: GenerateContentConfig = {
+      systemInstruction: systemPersonas[persona] + '\nلا تدّع تنفيذ دفعات أو تغيير أرصدة أو إكمال مهام فعلية. قدّم المشورة فقط، ولا تختلق مؤشرات غير متاحة.',
+      maxOutputTokens: 4096,
     };
-
-    if (enableMaps) {
-      config.tools = [{ googleMaps: {} }];
-    } else if (enableSearch) {
-      config.tools = [{ googleSearch: {} }];
-    }
-
-    const response = await ai.models.generateContent({
-      model: selectedModel,
-      contents,
-      config,
-    });
-
-    const answer = response.text || '';
-    let groundingSources: string[] = [];
-    const searchChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
-    if (Array.isArray(searchChunks)) {
-      groundingSources = searchChunks
-        .map((c: any) => c.web?.title || c.web?.uri)
-        .filter(Boolean)
-        .slice(0, 5);
-    }
-
-    return new Response(
-      JSON.stringify({
-        answer,
-        modelUsed: selectedModel,
-        groundingSources,
-      }),
-      { headers: { 'Content-Type': 'application/json' } }
-    );
-  } catch (err) {
-    const errorMsg = err instanceof Error ? err.message : 'حدث خطأ أثناء معالجة الطلب';
-    console.error('Gemini Studio API Error:', err);
-    return new Response(JSON.stringify({ error: errorMsg }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    if (body.enableMapsGrounding === true) config.tools = [{ googleMaps: {} }];
+    else if (body.enableSearchGrounding === true) config.tools = [{ googleSearch: {} }];
+    const ai = new GoogleGenAI({});
+    const model = modelMapping[selectedModel];
+    const response = await ai.models.generateContent({ model, contents, config });
+    if (!response.text?.trim()) throw new HttpError(502, 'تعذر استلام رد من النموذج. حاول مجدداً.');
+    const groundingSources = (response.candidates?.[0]?.groundingMetadata?.groundingChunks ?? [])
+      .map(chunk => chunk.web?.title || chunk.web?.uri)
+      .filter((value): value is string => Boolean(value)).slice(0, 5);
+    return reply({ answer: response.text, modelUsed: model, groundingSources });
+  } catch (error) {
+    // Provider errors may contain request details; never return or log raw SDK errors.
+    return failure(error);
   }
 };

@@ -1,11 +1,27 @@
 import { useState, useRef } from 'react';
 import {
-  Zap, Sparkles, TrendingUp, CheckCircle, Send, User, Download, Mic, MicOff,
-  Image, Maximize2, Copy, Volume2, VolumeX, Check, X, Calculator
+  Zap, Download, Mic, Image, Copy, Volume2, VolumeX, Check, X, Calculator
 } from 'lucide-react';
 
+import { api, money, type PaymentDocument } from './platform';
+import { useVoiceRecorder } from './useVoiceRecorder';
+import { executiveMetrics } from '../shared/executive-metrics';
+
+interface CeoSuiteProps {
+  documents?: PaymentDocument[];
+  walletBalance?: number;
+}
+
+const agentModels = {
+  ceo: { persona: 'studio_director', model: 'gemini-4-argon' },
+  cfo: { persona: 'gateway_architect', model: 'gemini-3.8-flash' },
+  cmo: { persona: 'campaign_strategist', model: 'gemini-3.8-flash' },
+  coo: { persona: 'coo_operations', model: 'gemini-3.1-flash-lite' },
+} as const;
+type AgentId = keyof typeof agentModels;
+
 interface CeoAgent {
-  id: string;
+  id: AgentId;
   name: string;
   role: string;
   description: string;
@@ -43,21 +59,23 @@ const agents: CeoAgent[] = [
   },
 ];
 
-const kpis = [
+const exampleKpis = [
   { title: 'صافي الإيراد المتوقع (Q4)', value: '184,500 ر.س', subtitle: '+24.8% نمو شهري' },
   { title: 'متوسط قيمة الطلب (AOV)', value: '3,250 ر.س', subtitle: 'أعلى باقة: هوية متكاملة 5,500 ر.س' },
   { title: 'هامش الربح الإجمالي', value: '68.4%', subtitle: 'الأعلى: باقات الأتمتة والـ AI' },
   { title: 'عائد الإعلانات (ROAS)', value: '4.6x', subtitle: 'حملات بحث الرياض وجدة' },
 ];
 
-export default function CeoSuite() {
-  const [selectedAgent, setSelectedAgent] = useState<string>('ceo');
+export default function CeoSuite({ documents, walletBalance }: CeoSuiteProps) {
+  const [selectedAgent, setSelectedAgent] = useState<AgentId>('ceo');
   const [tab, setTab] = useState<'chat' | 'tasks'>('chat');
   const [chatInput, setChatInput] = useState('');
   const [attachedImage, setAttachedImage] = useState<string | null>(null);
   const [enlargedImage, setEnlargedImage] = useState<string | null>(null);
-  const [isRecording, setIsRecording] = useState(false);
-  const [recSeconds, setRecSeconds] = useState(0);
+  const [isLoading, setIsLoading] = useState(false);
+  const [chatError, setChatError] = useState('');
+  const requestPending = useRef(false);
+  const { isRecording, isStarting, recordingDuration: recSeconds, transcribing, recordingError, startRecording, stopRecording } = useVoiceRecorder(text => setChatInput(text));
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
   const [speakingIndex, setSpeakingIndex] = useState<number | null>(null);
   const [showProfitCalc, setShowProfitCalc] = useState(false);
@@ -65,60 +83,28 @@ export default function CeoSuite() {
   const [calcCost, setCalcCost] = useState('3200');
 
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const recTimerRef = useRef<number | null>(null);
 
-  const [messages, setMessages] = useState<Record<string, { sender: 'user' | 'assistant'; text: string; time: string; image?: string }[]>>({
-    ceo: [
-      { sender: 'assistant', text: 'أهلاً بك سعادة الرئيس التنفيذي. بصفتي مساعدك الاستراتيجي التنفيذي، استعرضت مؤشرات المتجر اليوم: إجمالي المدفوعات 148,500 ر.س بنمو 24.8%. أنا وفريقي (CFO و CMO و COO) جاهزون لتنفيذ أي توجيه أو دراسة استثمارية.', time: '09:00' }
-    ],
-    cfo: [
-      { sender: 'assistant', text: 'مرحباً يا قائد. خزينة المتجر مستقرة ورصيد المحفظة المتاح 3,350 ر.س. مقارنة رسوم التحصيل: في المبيعات الكبيرة (+3,000 ر.س) نوصي بتوجيه الدفع عبر Telr Framed لتوفير العمولات.', time: '09:00' }
-    ],
-    cmo: [
-      { sender: 'assistant', text: 'سعادة الرئيس، حملة Google Ads Diamond حققت ROAS بمعدل 4.6x. مقاطع كواليس تصوير المنتجات حققت تفاعلاً أعلى بـ 3 أضعاف. دعنا نطلق حملة إعادة استهداف لعملاء الروابط المفتوحة.', time: '09:00' }
-    ],
-    coo: [
-      { sender: 'assistant', text: 'تحياتي سعادة الرئيس. سلاسل تسليم الخدمات تعمل بنسبة التزام تفوق 96% ومعدل التسليم الزمني 3.8 أيام عمل مقارنة بالهدف 4 أيام.', time: '09:00' }
-    ],
-  });
-
-  const [tasks, setTasks] = useState<{ id: string; agent: string; title: string; output: string; time: string }[]>([
-    {
-      id: 'TASK-01',
-      agent: 'فهد المالي (CFO)',
-      title: 'مقارنة تكلفة رسوم بوابات الدفع PayTabs مقابل Telr',
-      output: 'بوابة Telr حققت وفراً قدره 420 ر.س في العمليات الكبرى (+5000 ر.س)، بينما PayTabs تفوقت في تحويلات مدى و Apple Pay السريعة بنسبة نجاح 98.7%.',
-      time: 'اليوم 14:30'
-    },
-    {
-      id: 'TASK-02',
-      agent: 'ريما النمو (CMO)',
-      title: 'خطة إطلاق باقة ريلز التصوير التجاري للمطاعم والكافيهات',
-      output: 'تم تصميم خطة محتوى من 5 مقاطع تبرز جودة إضاءات الاستوديو لجلب 18 عميل جديد بتكلفة اكتساب 110 ر.س لكل عميل.',
-      time: 'أمس 18:00'
-    }
-  ]);
+  const [messages, setMessages] = useState<Record<string, { sender: 'user' | 'assistant'; text: string; time: string; image?: string }[]>>({});
+  const [tasks, setTasks] = useState<{ id: string; agent: string; title: string; output: string; time: string }[]>([]);
+  const metrics = executiveMetrics(documents);
+  const kpis = metrics.hasDocuments ? [
+    { title: 'إجمالي المدفوعات المكتملة', value: `${money(metrics.totalPaid, 'ar-SA')} ر.س`, subtitle: `${metrics.paidCount} طلب مكتمل` },
+    { title: 'متوسط قيمة الطلب (AOV)', value: `${money(metrics.averageOrderValue, 'ar-SA')} ر.س`, subtitle: 'متوسط الطلبات المكتملة فقط' },
+    { title: 'الطلبات النشطة', value: String(metrics.activeOrders), subtitle: 'طلبات بانتظار إتمام المعالجة أو الدفع' },
+    { title: 'رصيد المحفظة', value: walletBalance === undefined ? '—' : `${money(walletBalance, 'ar-SA')} ر.س`, subtitle: walletBalance === undefined ? 'الرصيد غير متاح حالياً' : 'الرصيد الحالي من حسابك' },
+  ] : exampleKpis.map(kpi => ({ ...kpi, subtitle: 'قيمة توضيحية — لا توجد عمليات بعد' }));
 
   const currentAgent = agents.find(a => a.id === selectedAgent) || agents[0];
   const currentChat = messages[selectedAgent] || [];
 
-  // الميكروفون غير مربوط بمسار تفريغ صوتي في هذه النسخة، فلا نُظهِر تسجيلًا وهميًا.
-  const startRecording = () => {
-    setIsRecording(false);
-    setRecSeconds(0);
-    alert('التسجيل الصوتي غير مربوط بهذه النسخة: لا يوجد التقاط صوت ولا تفريغ نصي. اكتب أمرك نصًا في مربع الرسالة.');
-  };
-
-  const stopRecording = (sendVoice = true) => {
-    if (recTimerRef.current) clearInterval(recTimerRef.current);
-    setIsRecording(false);
-    setRecSeconds(0);
-    void sendVoice;
-  };
-
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      if (!['image/png', 'image/jpeg', 'image/webp', 'image/gif'].includes(file.type) || file.size > 4_000_000) {
+        setChatError('اختر صورة PNG أو JPEG أو WebP أو GIF بحجم أقل من 4 ميجابايت.');
+        e.target.value = '';
+        return;
+      }
       const reader = new FileReader();
       reader.onload = ev => setAttachedImage(ev.target?.result as string);
       reader.readAsDataURL(file);
@@ -160,41 +146,56 @@ export default function CeoSuite() {
     setTimeout(() => setCopiedIndex(null), 2000);
   };
 
-  const sendMessage = (text: string) => {
-    if (!text.trim() && !attachedImage) return;
-    const now = new Date().toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' });
-    const currentImg = attachedImage;
-    const userMsg = { sender: 'user' as const, text: text.trim() || '📸 مرفق تقرير/صورة تنفيذية للمراجعة', time: now, image: currentImg || undefined };
-    
-    let reply = `علم سعادة الرئيس التنفيذي بخصوص "${text}". قمت بتحليل التوجيه وفقاً للمؤشرات التنفيذية وجاري العمل على تنفيذه فوراً.`;
-    if (currentImg) {
-      reply = `تمت مراجعة المستند/الصورة المرفقة بنجاح 📸. قمت بمطابقتها مع خطة تشغيل ونشوت وتدقيق الجودة SLA. مؤشرات التنفيذ إيجابية بالكامل.`;
-    } else if (text.includes('تسعير') || text.includes('سعر')) {
-      reply = 'بصفتي مستشارك التنفيذي، باقات الأتمتة AUT-02 مسعرة حالياً بـ 2,800 ر.س وقيمتها السوقية تفوق 4,500 ر.س. أقترح إطلاق باقة مدمجة تضم (الربط + التصوير + الهوية) بقيمة 9,500 ر.س لرفع صافي الأرباح.';
-    } else if (text.includes('رسوم') || text.includes('عمولة')) {
-      reply = 'تحليل الرسوم: بوابة Telr تأخذ 2.69% و PayTabs تأخذ 2.7% + 1 ريال. نوجه العمليات الكبرى نحو Telr والعمليات اللحظية نحو PayTabs مع مدى.';
-    }
-
-    const assistantMsg = { sender: 'assistant' as const, text: reply, time: now };
-    setMessages(prev => ({
-      ...prev,
-      [selectedAgent]: [...(prev[selectedAgent] || []), userMsg, assistantMsg]
+  const sendMessage = async (text: string, delegated = false) => {
+    if ((!text.trim() && !attachedImage) || requestPending.current || isRecording || transcribing) return;
+    const agentId = selectedAgent;
+    const agent = currentAgent;
+    const prompt = text.trim() || 'حلل الصورة المرفقة وقدم توصياتك.';
+    const image = attachedImage;
+    const history = (messages[agentId] || []).slice(-8).map(message => ({
+      role: message.sender === 'assistant' ? 'model' : 'user', content: message.text,
     }));
+    requestPending.current = true;
+    setIsLoading(true);
+    setChatError('');
+    setMessages(previous => ({ ...previous, [agentId]: [...(previous[agentId] || []), {
+      sender: 'user', text: prompt, time: new Date().toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' }),
+      ...(image ? { image } : {}),
+    }] }));
     setChatInput('');
     setAttachedImage(null);
+    try {
+      const context = {
+        currency: 'SAR',
+        ...(metrics.hasDocuments ? {
+          totalPaid: metrics.totalPaid / 100, completedOrders: metrics.paidCount,
+          averageOrderValue: metrics.averageOrderValue / 100, activeOrders: metrics.activeOrders,
+        } : { note: 'لا توجد عمليات فعلية متاحة بعد. لا تستخدم الأرقام التوضيحية كمبيعات فعلية.' }),
+        ...(walletBalance !== undefined ? { walletBalance: walletBalance / 100 } : {}),
+      };
+      const result = await api<{ answer: string }>('gemini-studio', {
+        action: 'chat', ...agentModels[agentId], history,
+        message: `${prompt}\n\nمؤشرات الحساب المتاحة (لقطة من لوحة التاجر): ${JSON.stringify(context)}`,
+        ...(image ? { image } : {}),
+      });
+      if (!result.answer?.trim()) throw new Error('تعذر استلام رد من المستشار.');
+      const time = new Date().toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' });
+      setMessages(previous => ({ ...previous, [agentId]: [...(previous[agentId] || []), { sender: 'assistant', text: result.answer, time }] }));
+      if (delegated) {
+        setTasks(previous => [{ id: crypto.randomUUID(), agent: agent.name, title: prompt, output: result.answer, time }, ...previous]);
+        setTab('tasks');
+      }
+    } catch (error) {
+      setChatError(error instanceof Error ? error.message : 'تعذر الاتصال بالمستشار. حاول مجدداً.');
+      setChatInput(previous => previous || prompt);
+      setAttachedImage(previous => previous || image);
+    } finally {
+      requestPending.current = false;
+      setIsLoading(false);
+    }
   };
 
-  const delegateQuickTask = (title: string) => {
-    const newTask = {
-      id: `TASK-${Math.floor(10 + Math.random() * 89)}`,
-      agent: currentAgent.name,
-      title,
-      output: `تم إنجاز المهمة التنفيذية من قبل ${currentAgent.role}: تم تدقيق المؤشرات وإعداد التوصيات بنجاح.`,
-      time: 'الآن'
-    };
-    setTasks([newTask, ...tasks]);
-    setTab('tasks');
-  };
+  const delegateQuickTask = (title: string) => void sendMessage(title, true);
 
   const saleVal = parseFloat(calcSale) || 0;
   const costVal = parseFloat(calcCost) || 0;
@@ -232,12 +233,16 @@ export default function CeoSuite() {
           </button>
           <button 
             onClick={() => delegateQuickTask('دراسة تسعير باقة هوية ونشوت الشاملة لـ Q4')}
+            disabled={isLoading || isRecording || transcribing}
             style={{ background: '#f05b2b', color: 'white', border: 0, padding: '10px 18px', borderRadius: '8px', fontWeight: 'bold', fontSize: '12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}
           >
             <Zap size={16} /> تفويض مهمة سريعة
           </button>
         </div>
       </div>
+
+      {(chatError || recordingError) && <p role="alert" style={{ color: '#b42318' }}>{chatError || recordingError}</p>}
+      {(isLoading || transcribing) && <p role="status">{transcribing ? 'جارٍ تفريغ الأمر الصوتي...' : 'جارٍ إعداد رد المستشار...'}</p>}
 
       {/* KPIs Row */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '12px' }}>
@@ -278,7 +283,7 @@ export default function CeoSuite() {
           return (
             <div
               key={agent.id}
-              onClick={() => setSelectedAgent(agent.id)}
+              onClick={() => { if (!isLoading && !isRecording && !transcribing) setSelectedAgent(agent.id); }}
               style={{
                 background: isSelected ? '#fff1e9' : 'white',
                 border: `1.5px solid ${isSelected ? '#f05b2b' : '#e8eaeb'}`,
@@ -324,7 +329,8 @@ export default function CeoSuite() {
               <button
                 key={idx}
                 type="button"
-                onClick={() => sendMessage(q)}
+                onClick={() => void sendMessage(q)}
+                disabled={isLoading || isRecording || transcribing}
                 style={{ background: '#f8f9fa', border: '1px solid #e0e3e6', borderRadius: '20px', padding: '3px 10px', fontSize: '11px', cursor: 'pointer', whiteSpace: 'nowrap' }}
               >
                 {q}
@@ -333,6 +339,7 @@ export default function CeoSuite() {
           </div>
 
           <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '12px', paddingRight: '8px', maxHeight: '340px' }}>
+            {currentChat.length === 0 && <p style={{ color: '#6b7275', fontSize: '13px' }}>اكتب أمرك إلى {currentAgent.name} للحصول على توصيات مبنية على بيانات حسابك المتاحة.</p>}
             {currentChat.map((msg, i) => (
               <div key={i} style={{ alignSelf: msg.sender === 'user' ? 'flex-start' : 'flex-end', maxWidth: '80%' }}>
                 <div style={{
@@ -354,7 +361,7 @@ export default function CeoSuite() {
                     </div>
                   )}
 
-                  {msg.text}
+                  <div style={{ whiteSpace: 'pre-wrap' }}>{msg.text}</div>
 
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '6px', fontSize: '10px', opacity: 0.8 }}>
                     <span>{msg.time}</span>
@@ -403,7 +410,7 @@ export default function CeoSuite() {
               </span>
               <div style={{ display: 'flex', gap: '6px' }}>
                 <button type="button" onClick={() => stopRecording(false)} style={{ background: '#eee', border: 'none', padding: '4px 8px', borderRadius: '6px', fontSize: '11px', cursor: 'pointer' }}>إلغاء</button>
-                <button type="button" onClick={() => stopRecording(true)} style={{ background: '#ef4444', color: '#fff', border: 'none', padding: '4px 10px', borderRadius: '6px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer' }}>إرسال الأمر</button>
+                <button type="button" onClick={() => stopRecording(true)} style={{ background: '#ef4444', color: '#fff', border: 'none', padding: '4px 10px', borderRadius: '6px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer' }}>تفريغ إلى حقل الإدخال</button>
               </div>
             </div>
           ) : (
@@ -425,7 +432,8 @@ export default function CeoSuite() {
               </button>
               <button
                 type="button"
-                onClick={startRecording}
+                onClick={() => void startRecording()}
+                disabled={isLoading || transcribing || isStarting}
                 title="تسجيل أمر تنفيذي صوتي"
                 style={{ background: '#f0f2f4', border: 'none', padding: '8px 10px', borderRadius: '8px', cursor: 'pointer', color: '#ef4444' }}
               >
@@ -435,12 +443,13 @@ export default function CeoSuite() {
                 type="text"
                 value={chatInput}
                 onChange={e => setChatInput(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && sendMessage(chatInput)}
+                onKeyDown={e => { if (e.key === 'Enter') void sendMessage(chatInput); }}
                 placeholder={`أمر تنفيذي لـ ${currentAgent.role}...`}
                 style={{ flex: 1, padding: '10px 14px', borderRadius: '8px', border: '1px solid #e8eaeb', fontSize: '13px' }}
               />
               <button
-                onClick={() => sendMessage(chatInput)}
+                onClick={() => void sendMessage(chatInput)}
+                disabled={isLoading || transcribing || (!chatInput.trim() && !attachedImage)}
                 style={{ background: '#f05b2b', color: 'white', border: 0, padding: '0 20px', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}
               >
                 إرسال
@@ -450,11 +459,12 @@ export default function CeoSuite() {
         </div>
       ) : (
         <div style={{ display: 'grid', gap: '12px' }}>
+          {tasks.length === 0 && <p>لم يتم إعداد مهام بعد. فوّض دراسة للحصول على توصيات من المستشار.</p>}
           {tasks.map(t => (
             <div key={t.id} style={{ background: 'white', padding: '16px', borderRadius: '12px', border: '1px solid #e8eaeb' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
                 <span style={{ color: '#f05b2b', fontWeight: 'bold', fontSize: '11px' }}>{t.id} · {t.agent}</span>
-                <span style={{ color: '#4e9a68', fontSize: '11px', fontWeight: 'bold' }}>✓ مكتملة وموثقة</span>
+                <span style={{ color: '#4e9a68', fontSize: '11px', fontWeight: 'bold' }}>تم إعداد التوصيات</span>
               </div>
               <strong style={{ fontSize: '14px', display: 'block', marginBottom: '8px' }}>{t.title}</strong>
               <div style={{ background: '#f9fafa', padding: '10px 12px', borderRadius: '8px', fontSize: '12px', color: '#4a4e50', lineHeight: '1.6' }}>
