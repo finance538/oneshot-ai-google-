@@ -1,1 +1,0 @@
-ALTER TABLE "payment_documents" ADD COLUMN "gateway" text DEFAULT 'paytabs' NOT NULL;

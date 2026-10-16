@@ -1,2 +1,0 @@
-ALTER TABLE "wallet_service_orders" ADD COLUMN "customer_name" text DEFAULT '' NOT NULL;--> statement-breakpoint
-ALTER TABLE "wallet_service_orders" ADD COLUMN "customer_email" text DEFAULT '' NOT NULL;
