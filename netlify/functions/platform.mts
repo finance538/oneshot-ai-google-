@@ -152,8 +152,8 @@ export default async (req: Request) => {
     // ===== تسجيل الحساب (تاجر تلقائي أو مسوّق يتطلب موافقة الإدارة) — منفصل تماماً عن حساب الإدارة =====
     if (body.action === 'register-account') {
       if (userIsAdmin) throw new HttpError(403, 'حساب الإدارة منفصل تماماً عن قسم تسجيل التجار والمسوّقين.');
-      const role = ['merchant', 'marketer', 'loader', 'admin'].includes(String(body.role)) ? body.role as 'merchant' | 'marketer' | 'loader' | 'admin' : null;
-      if (!role) throw new HttpError(400, 'اختر نوع الحساب: تاجر (merchant) أو مسوّق (marketer).');
+      const role = ['merchant', 'marketer', 'loader', 'admin', 'customer'].includes(String(body.role)) ? body.role as 'merchant' | 'marketer' | 'loader' | 'admin' | 'customer' : null;
+      if (!role) throw new HttpError(400, 'اختر نوع الحساب: تاجر (merchant) أو مسوّق (marketer) أو عميل (customer).');
       const name = typeof body.name === 'string' && body.name.trim() ? text(body.name, 100) : undefined;
       const storeName = typeof body.storeName === 'string' && body.storeName.trim() ? text(body.storeName, 100) : undefined;
       const notes = typeof body.notes === 'string' && body.notes.trim() ? text(body.notes, 400) : null;
