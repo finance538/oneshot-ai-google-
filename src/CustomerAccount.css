@@ -4,7 +4,7 @@
   --customer-text: #f5f5f2;
   --customer-muted: #a6adb6;
   --customer-line: #282d33;
-  --customer-orange: var(--brand-accent, #ff5500);
+  --customer-orange: var(--brand-accent, #e05520);
   --customer-orange-text: var(--accent-text, #ff8a50);
   min-height: 100svh;
   background: var(--customer-bg);
@@ -13,7 +13,7 @@
   overflow-x: clip;
 }
 html[data-theme='light'] .customer-account {
-  --customer-bg: #f5f4f1;
+  --customer-bg: #f7f7f5;
   --customer-panel: #ffffff;
   --customer-text: #16181b;
   --customer-muted: #4b5059;
@@ -55,7 +55,7 @@ html[data-theme='light'] .customer-account {
   border-color: var(--customer-orange);
 }
 .customer-nav-wallet {
-  border-color: #ff550059;
+  border-color: #e0552059;
   color: var(--customer-orange-text);
 }
 .customer-layout {
@@ -94,8 +94,8 @@ html[data-theme='light'] .customer-account {
   margin-top: 20px;
   padding: 14px 16px;
   border-radius: 12px;
-  border: 1px solid #ff55004d;
-  background: #ff550012;
+  border: 1px solid #e055204d;
+  background: #e0552012;
 }
 .customer-selected-service svg {
   color: var(--customer-orange-text);
@@ -147,7 +147,7 @@ html[data-theme='light'] .customer-account {
   min-height: 44px;
 }
 .customer-wallet-cta:hover {
-  background: #ff6a22;
+  background: #ff7438;
 }
 .customer-back {
   display: inline-flex;
@@ -228,7 +228,7 @@ html[data-theme='light'] .customer-account {
   padding: 10px 16px;
 }
 .customer-submit:hover {
-  background: #ff6a22;
+  background: #ff7438;
 }
 .customer-secondary-btn {
   display: inline-flex;
@@ -266,7 +266,7 @@ html[data-theme='light'] .customer-account {
   border-radius: 14px;
   display: grid;
   place-items: center;
-  background: #ff550018;
+  background: #e0552018;
   color: var(--customer-orange-text);
 }
 .customer-confirm-step p {

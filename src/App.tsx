@@ -1,3 +1,4 @@
+import AccountPassword from './AccountPassword';
 import { createPortal } from 'react-dom';
 import MerchantGatewayLookup from './MerchantGatewayLookup';
 import { useCallback, useEffect, useRef, useState, type ReactNode, type FormEvent } from 'react';
@@ -140,6 +141,7 @@ function MerchantPlatform() {
   const [search, setSearch] = useState('');
   const [installPrompt, setInstallPrompt] = useState<InstallPrompt | null>(null);
   const [signupRole, setSignupRole] = useState<'merchant' | 'marketer' | 'loader' | 'admin'>('merchant');
+  const authInitialization = useRef<ReturnType<typeof handleAuthCallback> | null>(null);
   const [signupStoreName, setSignupStoreName] = useState('');
   const [signupMarketerNotes, setSignupMarketerNotes] = useState('');
 
@@ -193,7 +195,8 @@ function MerchantPlatform() {
     let mounted = true;
     async function initialize() {
       try {
-        const callback = await handleAuthCallback().catch(() => null);
+        authInitialization.current ??= handleAuthCallback();
+        const callback = await authInitialization.current;
         if (!mounted) return;
         const current = await getUser();
         if (current?.userMetadata?.account_type === 'customer') {
@@ -208,7 +211,7 @@ function MerchantPlatform() {
           const requestedRole = params.get('role');
           if (requestedRole === 'marketer' || requestedRole === 'merchant' || requestedRole === 'loader' || requestedRole === 'admin') setSignupRole(requestedRole);
           if (requested === 'admin') setAuth('login');
-          else if (requested === 'login' || ['/login', '/sign-in'].includes(window.location.pathname)) setAuth('login');
+          else if (requested === 'login' || ['/login', '/sign-in', '/signin'].includes(window.location.pathname)) setAuth('login');
           else if (requested === 'signup' || ['/signup', '/sign-up', '/register'].includes(window.location.pathname)) setAuth('signup');
         }
         const settings = await getSettings().catch(() => ({ disableSignup: false }));
@@ -221,7 +224,7 @@ function MerchantPlatform() {
           setAutoconfirm(Boolean(identity?.autoconfirm));
         }
       } catch {
-        // Identity offline or running outside Netlify cloud
+        if (mounted) setNotice('تعذر إكمال رابط الدخول. جرّب تسجيل الدخول أو اطلب رابط استعادة جديداً.');
       }
       if (mounted) await load();
     }
@@ -260,7 +263,7 @@ function MerchantPlatform() {
       return;
     }
 
-    if (['/login', '/sign-in', '/signup', '/sign-up', '/register'].includes(url.pathname)) {
+    if (['/login', '/sign-in', '/signin', '/signup', '/sign-up', '/register'].includes(url.pathname)) {
       url.pathname = '/dashboard';
     }
     window.history.replaceState(null, '', url);
@@ -272,10 +275,10 @@ function MerchantPlatform() {
     setBusy(true); setError(''); setNotice('');
     try {
       if (!googleEnabled) {
-        setError('تسجيل الدخول بجوجل غير مفعّل على الموقع حالياً. استخدم البريد وكلمة المرور، أو فعّل مزوّد Google من Netlify ← Identity ← External providers.');
+        setError('تسجيل الدخول بجوجل غير متاح حالياً. استخدم البريد وكلمة المرور.');
         return;
       }
-      const redirect = `${window.location.origin}/`;
+      const redirect = new URL(appearanceLink('/dashboard'), window.location.origin).href;
       window.location.href = `/.netlify/identity/authorize?provider=google&redirect_to=${encodeURIComponent(redirect)}`;
     } catch {
       setError('تعذر تسجيل الدخول عبر Google. حاول مجدداً.');
@@ -297,7 +300,7 @@ function MerchantPlatform() {
   async function authenticate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const data = new FormData(event.currentTarget);
-    const email = String(data.get('email') || '');
+    const email = String(data.get('email') || '').trim();
     const password = String(data.get('password') || '');
     setBusy(true); setError(''); setNotice('');
     try {
@@ -342,7 +345,7 @@ function MerchantPlatform() {
           return;
         }
       }
-      else if (auth === 'reset') { await requestPasswordRecovery(email); setNotice('تم إرسال الرابط. راجع بريدك.'); }
+      else if (auth === 'reset') { await requestPasswordRecovery(email); setNotice('إذا كان البريد مسجّلاً، ستصلك رسالة لاستعادة كلمة المرور.'); }
       else if (auth === 'password') { await updateUser({ password }); closeAuth(true); }
       else if (auth === 'invite' && invite) { await acceptInvite(invite, password); closeAuth(true); }
       else {
@@ -430,6 +433,7 @@ function MerchantPlatform() {
         {notice && <div className="message success" role="status">{t(notice)}<button className="icon-button" aria-label={t('إغلاق')} onClick={() => setNotice('')}><X size={16} /></button></div>}{error && <div className="message error" role="alert">{t(error)}<button className="icon-button" aria-label={t('إغلاق')} onClick={() => setError('')}><X size={16} /></button></div>}
         {!user && <section className="welcome-banner"><div className="welcome-copy"><span className="eyebrow">ONESHOT / ACCOUNTS</span><h1>{tr('حساب واحد. مساحة تناسب دورك.', 'One sign-in. Your own workspace.')}</h1><p>{tr('سجّل الدخول للوصول إلى أدواتك، أو أنشئ حساباً واختر تاجر أو مسوّق أو لودر أو مسؤول منصة.', 'Sign in to access your tools, or create an account and choose Merchant, Marketer, Loader, or Administrator.')}</p><div className="welcome-actions"><button className="primary-button" onClick={() => setAuth('login')}>{t('تسجيل الدخول')}</button><button className="outline-button" disabled={!signupEnabled} onClick={() => setAuth('signup')}>{t('إنشاء حساب')}</button></div></div></section>}
         {user && !merchant && platform.accountRole === 'merchant' && !loading && view !== 'wallet' && <section className="panel onboarding"><h2>{t('ابدأ مساحة التاجر')}</h2><p>{t('أنشئ مساحتك المستقلة لتبدأ استقبال المدفوعات.')}</p><form onSubmit={event => { event.preventDefault(); const name = new FormData(event.currentTarget).get('name'); void run(() => api('platform', { action: 'onboard', name })); }}><label>{t('اسم المتجر')}<input name="name" required maxLength={100} /></label><button className="primary-button" disabled={busy}>{t('ابدأ مساحة التاجر')}<Plus size={17} /></button></form></section>}
+        {user && platform.accountRole === 'admin' && !platform.isAdmin && <section className="panel account-pending" role="status"><ShieldCheck size={28} /><h2>{tr('طلب صلاحيات الإدارة قيد المراجعة', 'Administrator access pending')}</h2><p>{tr('حسابك مسجّل. الوصول لأدوات الإدارة يتطلب منح الصلاحيات من مسؤول المنصة.', 'Your account is registered. A platform administrator must grant access to administration tools.')}</p></section>}
         <div className="page-heading">
           <div>
             <span className="eyebrow">
@@ -527,9 +531,10 @@ function MerchantPlatform() {
         <footer className="dashboard-footer"><span>oneShot <strong>Payment Studio</strong></span><span>{t('المبالغ مؤكدة من بوابة الدفع، وليست من عودة المتصفح.')}</span></footer>
       </div>
     </main>
-    {auth && <Modal title={t(({ login: 'تسجيل الدخول', signup: 'إنشاء حساب', reset: 'استعادة كلمة المرور', password: 'كلمة مرور جديدة', invite: 'قبول الدعوة' } as const)[auth])} close={closeAuth}>
+    {auth && <Modal className="account-auth" title={t(({ login: 'تسجيل الدخول', signup: 'إنشاء حساب', reset: 'استعادة كلمة المرور', password: 'كلمة مرور جديدة', invite: 'قبول الدعوة' } as const)[auth])} close={closeAuth}>
+      <div className="auth-brand-heading"><span dir="ltr">oneShot <small>ACCOUNTS</small></span><p>{tr('حساب واحد. مساحة تناسب دورك.', 'One account. Your own workspace.')}</p></div>
       {['login', 'signup'].includes(auth) && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '6px', marginBottom: '16px', background: 'rgba(255,255,255,0.04)', padding: '5px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.08)' }}>
+        <div className="auth-mode-tabs">
           <button
             type="button"
             className={auth === 'signup' ? 'primary-button' : 'text-button'}
@@ -586,7 +591,7 @@ function MerchantPlatform() {
                 </select>
               </label>
               <label>
-                {tr(signupRole === 'marketer' ? 'اسم المسوّق الكامل' : 'اسم التاجر الكامل', 'Full Name')}
+                {tr('الاسم الكامل', 'Full name')}
                 <input name="name" autoComplete="name" required maxLength={100} />
               </label>
 
@@ -601,7 +606,7 @@ function MerchantPlatform() {
                     placeholder={tr('اتركه فارغاً لاستخدام اسمك تلقائياً', 'Leave blank to use your name automatically')}
                   />
                 </label>
-              ) : (
+              ) : signupRole === 'marketer' ? (
                 <label>
                   {tr('قنوات التسويق أو نبذة لطلب الاعتماد (اختياري)', 'Account notes (optional)')}
                   <input
@@ -612,7 +617,7 @@ function MerchantPlatform() {
                     placeholder={tr('مثال: مسوّق عبر سناب شات وإعلانات جوجل...', 'e.g. Snapchat & Google Ads affiliate marketer...')}
                   />
                 </label>
-              )}
+              ) : null}
             </>
           )}
           {!['password', 'invite'].includes(auth) && (
@@ -624,7 +629,7 @@ function MerchantPlatform() {
           {auth !== 'reset' && (
             <label>
               {t('كلمة المرور')}
-              <input
+              <AccountPassword
                 name="password"
                 type="password"
                 autoComplete={['login'].includes(auth) ? 'current-password' : 'new-password'}
@@ -662,13 +667,16 @@ function MerchantPlatform() {
           )}
         </form>
       )}
-      {auth === 'signup' && !autoconfirm && (
+      {auth === 'signup' && (
         <p className="modal-description">
+          {!autoconfirm && <span>{tr('راجع بريدك لتأكيد الحساب قبل الدخول. ', 'Confirm your email before signing in. ')}</span>}
           {signupRole === 'merchant'
-            ? tr('يُنشأ حساب التاجر ومساحة متجرك تلقائياً وفوراً بعد التسجيل.', 'Your merchant account and workspace are created automatically upon signup.')
+            ? tr('تُنشأ مساحة متجرك تلقائياً عند أول دخول.', 'Your merchant workspace is created automatically on your first sign-in.')
             : tr('تتفعّل حسابات المسوّق واللودر تلقائياً بعد تأكيد البريد. صلاحيات الإدارة تُمنح بشكل منفصل.', 'Marketer and loader accounts activate automatically after email confirmation. Administrator permissions are granted separately.')}
         </p>
       )}
+      {auth === 'reset' && <button type="button" className="text-button auth-back" disabled={busy} onClick={() => { setError(''); setNotice(''); setAuth('login'); }}>{tr('العودة لتسجيل الدخول', 'Back to sign in')}</button>}
+      {['login', 'signup'].includes(auth) && <a className="auth-customer-link" href={appearanceLink('/customer')}>{tr('تبحث عن حساب العميل؟ الدخول وشراء الخدمات', 'Customer account · Sign in and shop')}</a>}
       {error && <p className="form-error" role="alert">{t(error)}</p>}
       {notice && <p className="message success" role="status">{t(notice)}</p>}
     </Modal>}
@@ -706,11 +714,11 @@ export function Safeguards() {
   return <div className="security-banner"><ShieldCheck size={25} /><div><strong>{t('الحمايات الأساسية دائمة')}</strong><p>{t('توقيع الإشعارات، تأكيد المبلغ والتاجر، عزل الحسابات وحماية المفاتيح لا يمكن تعطيلها. CVV و3D Secure ومكافحة الاحتيال تُدار لدى البوابة.')}</p></div></div>;
 }
 
-function Modal({ title, close, children }: { title: string; close: () => void; children: ReactNode }) {
+function Modal({ title, close, children, className = '' }: { title: string; close: () => void; children: ReactNode; className?: string }) {
   const { t } = useAppearance();
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => { const dialog = ref.current; dialog?.showModal(); return () => dialog?.close(); }, []);
-  return <dialog className="modal" ref={ref} aria-label={title} onCancel={event => { event.preventDefault(); close(); }}><div className="modal-heading"><h2>{title}</h2><button className="icon-button" onClick={close} aria-label={t('إغلاق')}><X size={21} /></button></div>{children}</dialog>;
+  return <dialog className={`modal ${className}`} ref={ref} aria-label={title} onCancel={event => { event.preventDefault(); close(); }}><div className="modal-heading"><h2>{title}</h2><button className="icon-button" onClick={close} aria-label={t('إغلاق')}><X size={21} /></button></div>{children}</dialog>;
 }
 
 function AdminControls({ platform, onSave }: { platform: Platform; onSave: () => Promise<void> }) {

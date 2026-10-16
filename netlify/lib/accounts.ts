@@ -30,7 +30,7 @@ async function provisionMerchantRecord(
   const MAX_ATTEMPTS = 12;
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
     const accountId = generateAccountId(ownerId, attempt);
-    let createdMerchant: typeof existingByOwner | null = null;
+    let createdMerchant: typeof merchants.$inferSelect | null = null;
     try {
       await db.transaction(async tx => {
         const [created] = await tx

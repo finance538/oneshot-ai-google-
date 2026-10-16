@@ -1,3 +1,4 @@
+import AccountPassword from './AccountPassword';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { getSettings, getUser, handleAuthCallback, login, logout, onAuthChange, requestPasswordRecovery, signup, updateUser, type User } from '@netlify/identity';
 import { ArrowUpLeft, CheckCircle2, MailCheck, RefreshCw, ShieldCheck, ShoppingBag, WalletCards } from 'lucide-react';
@@ -186,13 +187,13 @@ export default function CustomerAccount({
         setPendingEmail(email);
         setPendingName(fullName);
         setPendingPassword(password);
-        const result = await signup(email, password, {
+        await signup(email, password, {
           full_name: fullName,
           account_type: 'customer',
           ...(activeSku ? { pending_sku: activeSku } : {}),
           ...(targetDestination ? { return_to: targetDestination } : {}),
         });
-        if (result.authenticated) {
+        if (await getUser()) {
           await refresh('login');
         } else {
           setMode('confirm');
@@ -471,7 +472,7 @@ export default function CustomerAccount({
                   {(mode === 'password' || (!user && mode !== 'reset')) && (
                     <label>
                       {tr('كلمة المرور', 'Password')}
-                      <input
+                      <AccountPassword
                         name="password"
                         type="password"
                         dir="ltr"
