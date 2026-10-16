@@ -70,7 +70,7 @@ legend { padding: 0 8px; font-size: 12px; color: var(--muted); }
 .breadcrumb > span { font-family: 'Outfit', sans-serif; }
 .topbar-actions { gap: 18px; }
 .appearance-controls { display: flex; align-items: center; gap: 9px; }
-.appearance-controls select { width: auto; min-height: 34px; font-size: 11px; padding: 5px 10px; }
+.appearance-controls select { width: auto; min-height: 34px; font-size: 11px; padding: 5px 10px; padding-inline-start: 30px; }
 .theme-button { width: 35px; height: 35px; border: 1px solid var(--border); border-radius: 9px; color: var(--muted); }
 .user-avatar { height: 32px; width: 32px; border: 1px solid var(--border); border-radius: 50%; color: var(--flame); display: grid; place-items: center; background: var(--flame-soft); font-size: 14px; }
 .page-content { padding-top: 34px; max-width: 1600px; margin: auto; }

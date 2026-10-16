@@ -269,7 +269,7 @@ input, textarea, select { caret-color: var(--flame); }
   .storefront .store-header-actions { margin-inline-start: auto; flex-wrap: wrap; }
   .storefront .store-logo-emblem { width: 36px; height: 36px; }
   .storefront .appearance-controls { gap: 5px; }
-  .storefront .appearance-controls select { min-width: 84px; width: 84px; padding: 8px; }
+  .storefront .appearance-controls select { min-width: 84px; width: 84px; padding: 8px; padding-inline-start: 28px; }
   .storefront .store-button.compact { padding-inline: 10px; font-size: 11px; }
   .storefront .store-hero h1 { line-height: 1.6; }
   .storefront .store-hero { border-radius: 20px; }
