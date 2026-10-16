@@ -6,10 +6,6 @@ export type Language = 'ar' | 'en' | 'zh' | 'ru' | 'fr';
 type Theme = 'dark' | 'light';
 export const languages: { id: Language; name: string }[] = [{ id: 'ar', name: 'العربية' }, { id: 'en', name: 'English' }, { id: 'zh', name: '中文' }, { id: 'ru', name: 'Русский' }, { id: 'fr', name: 'Français' }];
 const phrases: [string, string, string, string][] = [
-  ['أدوات اللودر واختبار البوابات', 'Loader / tester tools', '网关测试工具', 'Инструменты тестирования'],
-  ['أنظمة حماية البوابات (التاجر)', 'Test security rules', '测试安全规则', 'Правила безопасности тестов'],
-  ['إدارة المنصة واستقبال الطلبات', 'Platform administration', '平台管理', 'Управление платформой'],
-  ['مركز عمليات AI (Full Admin)', 'AI operations center', 'AI 运营中心', 'Центр операций ИИ'],
   ['نظرة عامة', 'Overview', '概览', 'Обзор'],
   ['روابط الدفع', 'Payment links', '支付链接', 'Платёжные ссылки'],
   ['الفواتير', 'Invoices', '发票', 'Счета'],

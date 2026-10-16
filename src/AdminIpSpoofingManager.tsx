@@ -12,15 +12,21 @@ import {
   type AdminIpSpoofingConfig
 } from './adminIpSpoofingData';
 import './AdminIpSpoofingManager.css';
-import { useTestingWorkspace } from './TestingWorkspace';
 
 interface AdminIpSpoofingManagerProps {
   onNotify?: (message: string) => void;
 }
 
 export default function AdminIpSpoofingManager({ onNotify }: AdminIpSpoofingManagerProps) {
-  const { settings, update } = useTestingWorkspace();
-  const config = settings.ipSimulation;
+  // Load configuration from local storage or defaults
+  const [config, setConfig] = useState<AdminIpSpoofingConfig>(() => {
+    try {
+      const saved = localStorage.getItem('oneshot_admin_ip_spoofing');
+      return saved ? { ...DEFAULT_ADMIN_IP_CONFIG, ...JSON.parse(saved) } : DEFAULT_ADMIN_IP_CONFIG;
+    } catch {
+      return DEFAULT_ADMIN_IP_CONFIG;
+    }
+  });
 
   const [regionFilter, setRegionFilter] = useState<'all' | 'gcc' | 'arab' | 'europe' | 'north_america' | 'asia'>('all');
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
@@ -69,22 +75,28 @@ export default function AdminIpSpoofingManager({ onNotify }: AdminIpSpoofingMana
     return getGatewayGeoRules(currentCountry);
   }, [currentCountry]);
 
-  // Update this account's simulation draft; the shared save button persists it.
+  // Save changes to localStorage and broadcast to other components
   const saveConfig = (newConfig: AdminIpSpoofingConfig) => {
-    const country = SPOOFED_COUNTRIES_CATALOG.find(item => item.code === newConfig.selectedCountryCode);
-    update(previous => {
-      const proxy = country ? {
-        code: country.code,
-        name: newConfig.isCustomActive ? `${newConfig.customCountryName} (${newConfig.customCityName})` : `${country.countryName} (${country.cityName})`,
-        ip: newConfig.isCustomActive && newConfig.customIp ? newConfig.customIp : country.ip,
-        isp: newConfig.isCustomActive && newConfig.customIsp ? newConfig.customIsp : country.isp,
-        ping: country.avgLatency,
-      } : previous.simulator.proxy;
-      return { ...previous, ipSimulation: newConfig, simulator: { ...previous.simulator, proxy, activeIp: proxy.ip } };
-    });
-    setSaveSuccess(true);
-    setTimeout(() => setSaveSuccess(false), 2500);
-    onNotify?.('تم تحديث سيناريو الموقع. استخدم حفظ إعدادات الأدوات لحفظه في الحساب.');
+    setConfig(newConfig);
+    try {
+      localStorage.setItem('oneshot_admin_ip_spoofing', JSON.stringify(newConfig));
+      // Also sync active IP to the testing suite proxy
+      const countryObj = SPOOFED_COUNTRIES_CATALOG.find(c => c.code === newConfig.selectedCountryCode);
+      if (countryObj) {
+        localStorage.setItem('oneshot_test_active_proxy', JSON.stringify({
+          code: countryObj.code,
+          name: newConfig.isCustomActive ? `${newConfig.customCountryName} (${newConfig.customCityName})` : `${countryObj.countryName} (${countryObj.cityName})`,
+          ip: newConfig.isCustomActive && newConfig.customIp ? newConfig.customIp : countryObj.ip,
+          isp: newConfig.isCustomActive && newConfig.customIsp ? newConfig.customIsp : countryObj.isp,
+          ping: countryObj.avgLatency
+        }));
+      }
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 2500);
+      if (onNotify) onNotify('تم حفظ وتطبيق إعدادات انتحال الـ IP بنجاح.');
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   const handleSelectCountry = (country: SpoofedCountry) => {
@@ -198,17 +210,17 @@ export default function AdminIpSpoofingManager({ onNotify }: AdminIpSpoofingMana
             <span className="live-pulse" />
             <span>نظام محاكاة وتوجيه الـ IP الجغرافي (Geo IP Spoofing Engine)</span>
           </div>
-          <h2>اختبار سيناريوهات الموقع الجغرافي</h2>
+          <h2>تغيير الموقع الجغرافي لطلبات الدفع التجريبية</h2>
           <p>
-            حدد الدولة وعنوان IP الافتراضي لدراسة سيناريوهات توافق البوابات والعملات.
-            تعمل هذه الأدوات محلياً على أمثلة؛ لا تغيّر عنوان اتصالك أو ترويسات طلبات الدفع الفعلية.
+            تسمح هذه الواجهة لمدير المنصة بتحديد الدولة وعنوان الـ IP المحقون في ترويسات كل طلب دفع اختباري،
+            لضمان توافقية بوابات الدفع (PayTabs، تيلر، ماي فاتورة، تابي، بي زاتي) مع معايير الحظر الجغرافي والتحقق من العملات.
           </p>
         </div>
 
         <div className="hero-toggle-card">
           <div className="hero-toggle-info">
             <strong>حالة محاكاة الـ IP</strong>
-            <span>{config.enabled ? 'مفعّل لسيناريوهات هذا الحساب' : 'محاكاة الموقع معطّلة'}</span>
+            <span>{config.enabled ? 'مفعل لجميع اختبارات البوابات' : 'معطل (استخدام IP الخادم الفعلي)'}</span>
           </div>
           <button
             type="button"
@@ -224,7 +236,7 @@ export default function AdminIpSpoofingManager({ onNotify }: AdminIpSpoofingMana
       {saveSuccess && (
         <div className="ip-save-alert" role="status">
           <CheckCircle2 size={18} />
-          <span>تم تحديث سيناريو الموقع لهذا الحساب. استخدم حفظ إعدادات الأدوات للاحتفاظ بالتعديلات.</span>
+          <span>تم تحديث وتثبيت إعدادات الـ IP Spoofing بنجاح وتطبيقها على كافة اختبارات المنصة.</span>
         </div>
       )}
 
@@ -293,7 +305,7 @@ export default function AdminIpSpoofingManager({ onNotify }: AdminIpSpoofingMana
             <Sliders size={20} />
           </div>
           <div>
-            <h3>سياسة الموقع في المحاكاة المحلية</h3>
+            <h3>سياسة تطبيق الـ IP على طلبات الدفع</h3>
             <p>اختر السلوك البرمجي الذي سيتم اعتماده عند توليد أو تجربة طلب دفع عبر البوابات.</p>
           </div>
         </div>

@@ -1,26 +1,37 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   ShieldAlert, ShieldCheck, Check, AlertTriangle,
   RotateCcw, Sparkles, Sliders, Lock, Info, ExternalLink
 } from 'lucide-react';
 import { initialSecuritySystems, type SecuritySystem } from './securitySystemsData';
 import './SecuritySystemsManager.css';
-import { useTestingWorkspace } from './TestingWorkspace';
 
 export default function SecuritySystemsManager() {
-  const { settings, update } = useTestingWorkspace();
-  const systems = initialSecuritySystems.map(system => ({
-    ...system, enabled: settings.securityRules[system.id as keyof typeof settings.securityRules],
-  }));
+  const [systems, setSystems] = useState<SecuritySystem[]>(() => {
+    const saved = localStorage.getItem('oneshot_security_systems');
+    return saved ? JSON.parse(saved) : initialSecuritySystems;
+  });
+
   const [filterCategory, setFilterCategory] = useState<string>('all');
-  const handleToggle = (id: string) => update(previous => ({
-    ...previous,
-    securityRules: { ...previous.securityRules, [id]: !previous.securityRules[id as keyof typeof previous.securityRules] },
-  }));
+  const [saveNotice, setSaveNotice] = useState(false);
+
+  useEffect(() => {
+    localStorage.setItem('oneshot_security_systems', JSON.stringify(systems));
+  }, [systems]);
+
+  const handleToggle = (id: string) => {
+    setSystems((prev) =>
+      prev.map((item) => (item.id === id ? { ...item, enabled: !item.enabled } : item))
+    );
+    setSaveNotice(true);
+    setTimeout(() => setSaveNotice(false), 2500);
+  };
 
   const handleResetDefaults = () => {
     if (window.confirm('هل ترغب بإعادة تعيين إعدادات الحماية إلى الحالة الآمنة الافتراضية؟')) {
-      update(previous => ({ ...previous, securityRules: Object.fromEntries(initialSecuritySystems.map(system => [system.id, system.enabled])) as typeof previous.securityRules }));
+      setSystems(initialSecuritySystems);
+      setSaveNotice(true);
+      setTimeout(() => setSaveNotice(false), 2500);
     }
   };
 
@@ -37,7 +48,7 @@ export default function SecuritySystemsManager() {
         <div className="sec-header-top">
           <div className="sec-badge">
             <Lock size={16} />
-            <span>قواعد الحماية في بيئة الاختبار</span>
+            <span>لوحة تحكم أنظمة حماية بوابات الدفع (خاص بالتاجر فقط)</span>
           </div>
           <button type="button" className="outline-button reset-btn" onClick={handleResetDefaults}>
             <RotateCcw size={15} />
@@ -45,10 +56,12 @@ export default function SecuritySystemsManager() {
           </button>
         </div>
 
-        <h2>إعداد سيناريوهات الحماية ومكافحة الاحتيال</h2>
+        <h2>إدارة أنظمة الحماية ومكافحة الاحتيال وقواعد البوابات</h2>
         <p>
-          اضبط قواعد المحاكاة لحسابك واختبر أثرها في أدوات اللودر. استخدم زر حفظ إعدادات الأدوات للاحتفاظ بها عبر الأجهزة.
-          هذه الخيارات لا تغيّر حماية الدفع الفعلية؛ تُدار قواعد 3DS وCVV ومكافحة الاحتيال الحقيقية لدى بوابة الدفع.
+          تتيح لك هذه الصفحة التحكم الكامل في تفعيل وتعطيل أنظمة الحماية الأمنية للبوابات المرتبطة بحسابك
+          (التحقق الثنائي 3DS، فحص الـ IP والدولة، حاظر الـ VPN، كشف محاولات التخمين، إلزامية CVV).
+          كل نظام يوضح بالتفصيل: ما يفعله عند تشغيله، وما هي المخاطر الدقيقة إذا قمت بفصله، لمساعدتك في
+          إجراء اختبارات دقيقة مع فريق اللودر أو لضبط قواعد متجرك.
         </p>
 
         <div className="sec-summary-bar">
@@ -60,12 +73,18 @@ export default function SecuritySystemsManager() {
             <ShieldCheck size={18} className="shield-ok" />
             <span>
               {activeCount >= 6
-                ? 'سيناريو الاختبار يتضمن معظم قواعد الحماية.'
-                : 'بعض قواعد المحاكاة غير مفعّلة لهذا السيناريو.'}
+                ? 'مستوى الحماية الحالي: مرتفع ومحصن ضد الهجمات وعمليات الاحتيال الدولية.'
+                : 'تنبيه: قمت بتعطيل بعض أنظمة الحماية الأساسية. تأكد من أن هذا الإجراء مؤقت لغرض الاختبار.'}
             </span>
           </div>
         </div>
 
+        {saveNotice && (
+          <div className="sec-save-banner animate-fade-in">
+            <Check size={16} />
+            <span>تم حفظ التعديلات وتطبيقها فوراً على جميع بوابات الدفع وبيئة الاختبار.</span>
+          </div>
+        )}
       </section>
 
       {/* Category Tabs */}
@@ -137,7 +156,6 @@ export default function SecuritySystemsManager() {
                   type="button"
                   role="switch"
                   aria-checked={sys.enabled}
-                  aria-label={sys.name}
                   className={`switch-btn ${sys.enabled ? 'on' : 'off'}`}
                   onClick={() => handleToggle(sys.id)}
                 >

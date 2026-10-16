@@ -1,6 +1,5 @@
 import AccountPassword from './AccountPassword';
-import { adminViews, merchantViews, canUseTestingTools, requestedWorkspaceView } from '../shared/testing-workspace';
-import { TestingWorkspaceProvider, TestingSettingsPanel, TestingWorkspaceShortcut } from './TestingWorkspace';
+import { createPortal } from 'react-dom';
 import MerchantGatewayLookup from './MerchantGatewayLookup';
 import { useCallback, useEffect, useRef, useState, type ReactNode, type FormEvent } from 'react';
 import { acceptInvite, getSettings, getUser, handleAuthCallback, login, logout, onAuthChange, requestPasswordRecovery, signup, updateUser, type User } from '@netlify/identity';
@@ -94,6 +93,8 @@ const marketerNavigation = [
 ];
 const allNavigation = [...navigation, ...marketerNavigation.filter(item => item.id !== 'wallet')];
 const guestNavigation: View[] = [];
+const merchantViews = ['overview', 'gemini_studio', 'ceo', 'links', 'invoices', 'subscriptions', 'integrations', 'settings', 'wallet'];
+const adminViews = ['admin', 'gemini_studio', 'ceo', 'integrations', 'loader', 'wallet'];
 const initialPlatform: Platform = { merchant: null, documents: [], subscriptions: [], attempts: [], openLinks: [] };
 
 function WalletRoute() {
@@ -212,7 +213,7 @@ function MerchantPlatform() {
   const [user, setUser] = useState<User | null>(null);
   const [platform, setPlatform] = useState<Platform>(initialPlatform);
   const [walletBalance, setWalletBalance] = useState<number | undefined>(undefined);
-  const [view, setView] = useState<View>(requestedWorkspaceView(window.location.pathname) ?? 'links');
+  const [view, setView] = useState<View>(window.location.pathname === '/wallet' ? 'wallet' : 'links');
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState('');
@@ -274,7 +275,7 @@ function MerchantPlatform() {
       } else if (result.accountRole === 'admin') {
         setView('admin');
       } else if (current) {
-        setView(previous => merchantViews.includes(previous) ? previous : 'overview');
+        setView(previous => merchantViews.includes(previous) ? previous : 'links');
       }
       setError(platformError ? `تعذر تحميل بيانات الحساب — الأرقام المعروضة غير محدّثة. (${platformError})` : '');
     }
@@ -313,7 +314,7 @@ function MerchantPlatform() {
           const requestedRole = params.get('role');
           if (requestedRole === 'marketer' || requestedRole === 'merchant' || requestedRole === 'loader' || requestedRole === 'admin') setSignupRole(requestedRole);
           if (requested === 'admin') setAuth('login');
-          else if (requested === 'login' || ['/login', '/sign-in', '/signin'].includes(window.location.pathname) || (!current && ['/loader', '/tester'].includes(normalizePathname(window.location.pathname)))) setAuth('login');
+          else if (requested === 'login' || ['/login', '/sign-in', '/signin'].includes(window.location.pathname)) setAuth('login');
           else if (requested === 'signup' || ['/signup', '/sign-up', '/register'].includes(window.location.pathname)) setAuth('signup');
         }
         const settings = await getSettings().catch(() => ({ disableSignup: false }));
@@ -484,7 +485,7 @@ function MerchantPlatform() {
     return () => { active = false; };
   }, [user?.id, view]);
 
-  const canUseAdvancedTools = !!user && canUseTestingTools(platform);
+  const canUseAdvancedTools = platform?.isAdmin === true || platform?.accountRole === 'loader';
   const policy = platform.policy ?? defaultPolicy;
   const merchant = platform.merchant;
   const isMarketer = Boolean(user && platform.accountRole === 'marketer' && !platform.isAdmin);
@@ -514,7 +515,7 @@ function MerchantPlatform() {
 
   const visibleNavigation = isMarketer
     ? marketerNavigation.filter(item => isMarketerApproved || item.id === 'marketer_overview')
-    : navigation.filter(item => !['loader', 'security'].includes(item.id) || canUseAdvancedTools).filter(item => !user ? guestNavigation.includes(item.id)
+    : navigation.filter(item => item.id !== 'loader' || canUseAdvancedTools).filter(item => !user ? guestNavigation.includes(item.id)
       : platform.isAdmin ? adminViews.includes(item.id)
       : platform.accountRole === 'loader' ? item.id === 'loader'
       : platform.accountRole === 'admin' ? false : merchantViews.includes(item.id));
@@ -525,7 +526,7 @@ function MerchantPlatform() {
       ? tr('بوابة المسوّقين · Marketer', 'Marketer Portal')
       : platform.accountRole === 'loader' ? tr('مساحة اللودر', 'Loader workspace') : t('مساحة التاجر');
 
-  return <TestingWorkspaceProvider key={user?.id ?? 'guest'} enabled={canUseAdvancedTools}><div className="app-shell">
+  return <div className="app-shell">
     {tour && user && !platform.isAdmin && !isMarketer && <OnboardingGuide userId={user.id} onNavigate={next => setView(next as View)} onOpenChat={() => setView('staff')} onClose={() => setTour(false)} />}
     {sidebar && <button className="sidebar-scrim" aria-label={t('إغلاق')} onClick={() => setSidebar(false)} />}
     <aside className={`sidebar ${sidebar ? 'is-open' : ''}`}><Brand /><span className="workspace-label">{workspaceLabel}</span>
@@ -548,7 +549,7 @@ function MerchantPlatform() {
                 ? tr('مركز تحكم وإدارة المنصة · ADMIN SUITE', 'PLATFORM ADMINISTRATION SUITE')
                 : isMarketer
                   ? tr('بوابة التسويق بالعمولة · MARKETER PORTAL', 'AFFILIATE MARKETER PORTAL')
-                  : view === 'loader' ? tr('مساحة اللودر والاختبار', 'LOADER / TESTER WORKSPACE') : tr('علامتك. أعمالك.', 'YOUR BRAND. YOUR BUSINESS.')}
+                  : tr('علامتك. أعمالك.', 'YOUR BRAND. YOUR BUSINESS.')}
             </span>
             <h1>{t(currentViewName)}</h1>
             <p>
@@ -556,7 +557,6 @@ function MerchantPlatform() {
                 ? tr('لوحة مخصصة حصرياً لصلاحيات المسوّق المعتمد: إدارة روابط الإحالة، الحملات التسويقية، ومتابعة العمولات.', 'Dedicated exclusively to marketer permissions: referral links, promotional campaigns, and commission tracking.')
                 : platform.isAdmin && view === 'admin'
                   ? tr('إدارة سياسات المنصة، إدارة حسابات المسوّقين والصلاحيات (منفصلة تماماً عن حسابات التجار والمسوّقين).', 'Manage platform policies, marketer accounts, and permissions.')
-                  : view === 'loader' ? tr('أدواتك السابقة لاختبار الخدمات والبوابات، مرتبطة بحسابك الحالي.', 'Your existing service and gateway testing tools, linked to your current account.')
                   : t(view === 'links' ? 'روابط دفع مفتوحة وفواتير مؤتمتة: شارك الرابط ليحدد العميل مبلغه أو أرسل فاتورة مخصصة مباشرة.' : 'المتاح يعتمد على إعدادات المسؤول وتفعيل حساب البوابة.')}
             </p>
           </div>
@@ -619,22 +619,22 @@ function MerchantPlatform() {
         {user && !isMarketer && view === 'gemini_studio' && <GeminiAiStudio key={user.id} />}
         {!isMarketer && view === 'staff' && <AiStaffMarketplace />}
         {user && !isMarketer && view === 'ceo' && <CeoSuite key={user.id} documents={platform.documents} walletBalance={walletBalance} />}
-        {!isMarketer && view === 'overview' && <>{user && canUseAdvancedTools && <TestingWorkspaceShortcut onOpen={() => setView('loader')} />}<div className="stats-grid"><Stat title={t('إجمالي المدفوعات')} value={money(metrics.totalPaid, locale)} suffix="SAR" icon={<CreditCard size={19} />} featured /><Stat title={t('عمليات مكتملة')} value={new Intl.NumberFormat(locale).format(metrics.paidCount)} icon={<Check size={19} />} /><Stat title={t('طلبات معلقة')} value={new Intl.NumberFormat(locale).format(metrics.pendingCount)} icon={<FileText size={19} />} /><Stat title={t('العملاء')} value={new Intl.NumberFormat(locale).format(metrics.customers)} icon={<Users size={19} />} /></div><VirtualMerchantStation />{platform.isAdmin && <div className="overview-grid"><section className="panel"><div className="section-heading"><div><span className="eyebrow">{tr('صفحة الدفع العامة', 'PUBLIC CHECKOUT PAGE')}</span><h2>{t('صفحة الدفع على pay.1shotcam.com')}</h2></div><Globe size={23} /></div><p>{t('صفحة واحدة يدفع منها عملاؤك مباشرة عبر بواباتك المفعّلة، بلا إنشاء رابط لكل عملية.')}</p><div className="open-amount-range"><span>{t('الرابط')} <strong dir="ltr">{sitePayUrl}</strong></span><span>{t('البوابات المفعّلة')} <strong>{liveGateways.length ? liveGateways.join(' · ') : t('لا توجد بوابة مفعّلة بعد')}</strong></span></div><div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}><button className="outline-button" onClick={() => void copy(sitePayUrl)}>{t('نسخ الرابط')}<Copy size={16} /></button><a className="outline-button" href={sitePayUrl} target="_blank" rel="noreferrer">{t('فتح الصفحة')}<ExternalLink size={16} /></a></div><p className="helper-note">{tr('تشغيل الدومين: أضف pay.1shotcam.com كـ Domain alias في Netlify ← Domain management، ثم في لوحة DNS لديك اجعل سجل CNAME باسم pay يشير إلى elegant-puppy-9ddbd7.netlify.app.', 'Going live: add pay.1shotcam.com as a domain alias in Netlify → Domain management, then point the `pay` CNAME in your DNS panel to elegant-puppy-9ddbd7.netlify.app.')}</p><p className="readiness">{liveGateways.length ? t('الصفحة فعّالة: تظهر فقط بوابات حساب المشرف المفعّلة.') : `${t('متغيرات Netlify المطلوبة قبل تفعيل الصفحة')}: ${readinessVariables.join(' · ')} — ${t('القيم تُدخل في لوحة Netlify مباشرة، ولا تُكتب في أي محادثة.')}`}</p></section></div>}<div className="overview-grid"><section className="panel activity-panel"><div className="section-heading"><h2>{t('نشاط آخر 7 أيام')}</h2><span className="subtle-tag">SAR</span></div><Activity daily={platform.daily || []} /></section><section className="panel quick-panel"><span className="eyebrow">{tr('أنشئ. شارك. حصّل.', 'CREATE. SHARE. COLLECT.')}</span><Link2 size={32} /><h2>{t('رابط مفتوح لجميع البوابات')}</h2><p>{t('رابط موحد يجمع بواباتك ويدعم التحويل والتوجيه الذكي بحسب بطاقة العميل.')}</p><div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}><button className="primary-button" disabled={!canCreate || !policy.openLinksEnabled} onClick={() => { setOpenGatewayMode('all'); setOpenBuilder(true); }}>{t('رابط مفتوح لجميع البوابات')}<Sparkles size={16} /></button><button className="outline-button" disabled={!canCreate || !policy.openLinksEnabled} onClick={() => { setOpenGatewayMode('single'); setOpenBuilder(true); }}>{t('رابط مفتوح لبوابة')}<Link2 size={16} /></button>{testButton}</div></section></div><div className="section-heading"><h2>{t('آخر الطلبات')}</h2></div><DocumentTable documents={platform.documents.slice(0, 6)} copy={copy} cancel={cancel} busy={busy} /></>}
+        {!isMarketer && view === 'overview' && <><div className="stats-grid"><Stat title={t('إجمالي المدفوعات')} value={money(metrics.totalPaid, locale)} suffix="SAR" icon={<CreditCard size={19} />} featured /><Stat title={t('عمليات مكتملة')} value={new Intl.NumberFormat(locale).format(metrics.paidCount)} icon={<Check size={19} />} /><Stat title={t('طلبات معلقة')} value={new Intl.NumberFormat(locale).format(metrics.pendingCount)} icon={<FileText size={19} />} /><Stat title={t('العملاء')} value={new Intl.NumberFormat(locale).format(metrics.customers)} icon={<Users size={19} />} /></div><VirtualMerchantStation />{platform.isAdmin && <div className="overview-grid"><section className="panel"><div className="section-heading"><div><span className="eyebrow">{tr('صفحة الدفع العامة', 'PUBLIC CHECKOUT PAGE')}</span><h2>{t('صفحة الدفع على pay.1shotcam.com')}</h2></div><Globe size={23} /></div><p>{t('صفحة واحدة يدفع منها عملاؤك مباشرة عبر بواباتك المفعّلة، بلا إنشاء رابط لكل عملية.')}</p><div className="open-amount-range"><span>{t('الرابط')} <strong dir="ltr">{sitePayUrl}</strong></span><span>{t('البوابات المفعّلة')} <strong>{liveGateways.length ? liveGateways.join(' · ') : t('لا توجد بوابة مفعّلة بعد')}</strong></span></div><div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}><button className="outline-button" onClick={() => void copy(sitePayUrl)}>{t('نسخ الرابط')}<Copy size={16} /></button><a className="outline-button" href={sitePayUrl} target="_blank" rel="noreferrer">{t('فتح الصفحة')}<ExternalLink size={16} /></a></div><p className="helper-note">{tr('تشغيل الدومين: أضف pay.1shotcam.com كـ Domain alias في Netlify ← Domain management، ثم في لوحة DNS لديك اجعل سجل CNAME باسم pay يشير إلى elegant-puppy-9ddbd7.netlify.app.', 'Going live: add pay.1shotcam.com as a domain alias in Netlify → Domain management, then point the `pay` CNAME in your DNS panel to elegant-puppy-9ddbd7.netlify.app.')}</p><p className="readiness">{liveGateways.length ? t('الصفحة فعّالة: تظهر فقط بوابات حساب المشرف المفعّلة.') : `${t('متغيرات Netlify المطلوبة قبل تفعيل الصفحة')}: ${readinessVariables.join(' · ')} — ${t('القيم تُدخل في لوحة Netlify مباشرة، ولا تُكتب في أي محادثة.')}`}</p></section></div>}<div className="overview-grid"><section className="panel activity-panel"><div className="section-heading"><h2>{t('نشاط آخر 7 أيام')}</h2><span className="subtle-tag">SAR</span></div><Activity daily={platform.daily || []} /></section><section className="panel quick-panel"><span className="eyebrow">{tr('أنشئ. شارك. حصّل.', 'CREATE. SHARE. COLLECT.')}</span><Link2 size={32} /><h2>{t('رابط مفتوح لجميع البوابات')}</h2><p>{t('رابط موحد يجمع بواباتك ويدعم التحويل والتوجيه الذكي بحسب بطاقة العميل.')}</p><div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}><button className="primary-button" disabled={!canCreate || !policy.openLinksEnabled} onClick={() => { setOpenGatewayMode('all'); setOpenBuilder(true); }}>{t('رابط مفتوح لجميع البوابات')}<Sparkles size={16} /></button><button className="outline-button" disabled={!canCreate || !policy.openLinksEnabled} onClick={() => { setOpenGatewayMode('single'); setOpenBuilder(true); }}>{t('رابط مفتوح لبوابة')}<Link2 size={16} /></button>{testButton}</div></section></div><div className="section-heading"><h2>{t('آخر الطلبات')}</h2></div><DocumentTable documents={platform.documents.slice(0, 6)} copy={copy} cancel={cancel} busy={busy} /></>}
         {!isMarketer && ['links', 'invoices'].includes(view) && <>{view === 'links' && <section className="panel open-links-panel"><div className="section-heading"><div><span className="eyebrow">{tr('رابط مرن. بقواعدك.', 'A LINK WITHOUT LIMITS. WITH YOUR RULES.')}</span><h2>{t('روابط بمبلغ يحدده العميل')}</h2></div><div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}><button className="primary-button" style={{ background: 'linear-gradient(135deg, #ff5500, #ff7700)', borderColor: '#ff5500' }} disabled={!canCreate || !policy.openLinksEnabled || busy} onClick={() => { setOpenGatewayMode('all'); setOpenBuilder(true); }}><Sparkles size={16} />{t('رابط مفتوح لجميع البوابات')}</button><button className="outline-button" disabled={!canCreate || !policy.openLinksEnabled || busy} onClick={() => { setOpenGatewayMode('single'); setOpenBuilder(true); }}><Link2 size={16} />{t('رابط مفتوح لبوابة')}</button>{testButton}</div></div>{platform.isAdmin && !choices.length && <section className="panel" style={{ marginBottom: '16px' }}><div className="section-heading"><ShieldCheck size={20} /><div><h2>{t('لا توجد بوابة مفعّلة بعد')}</h2></div></div><p>{t('لا يصدر رابط دفع حقيقي قبل تفعيل بوابة واحدة على الأقل (PayTabs أو Telr) من قسم الربط، وإضافة مفاتيح البوابة في Netlify ← Site configuration ← Environment variables.')}</p>{readinessVariables.map(name => <div key={name} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}><code className="share-url" dir="ltr" style={{ flex: 1 }}>{name}</code><button className="outline-button" onClick={() => void copy(name)}><Copy size={15} />{tr('نسخ', 'COPY')}</button></div>)}<p className="helper-note">{t('القيم تُدخل في لوحة Netlify مباشرة، ولا تُكتب في أي محادثة.')}</p></section>}{platform.openLinks?.length ? <div className="open-link-grid">{platform.openLinks.map(link => <article className="open-link-card" key={link.id}><div className="section-heading"><Link2 size={22} /><span className={`status-badge ${link.enabled ? 'status-active' : 'status-cancelled'}`}>{t(link.enabled ? 'نشط' : 'متوقف')}</span></div><h3>{link.title}</h3><p>{money(link.minimum, locale)} — {money(link.maximum, locale)} SAR</p><code className="share-url" dir="ltr">{openPaymentLink(link.id)}</code><div className="row-actions"><button className="outline-button" onClick={() => void copy(openPaymentLink(link.id))}><Copy size={15} />{t('نسخ الرابط')}</button><a className="icon-button" aria-label={t('فتح الرابط')} href={openPaymentLink(link.id)} target="_blank" rel="noreferrer"><ExternalLink size={16} /></a><button className="icon-button" role="switch" aria-checked={link.enabled} aria-label={t(link.enabled ? 'متوقف' : 'نشط')} disabled={busy} onClick={() => void run(() => api('platform', { action: 'toggle-open-link', id: link.id, enabled: !link.enabled }))}>{link.enabled ? <X size={16} /> : <Check size={16} />}</button></div></article>)}</div> : <Empty title={t('لا توجد روابط مفتوحة بعد.')} />}</section>}<div className="list-toolbar"><h2>{t('طلبات بمبلغ ثابت')}</h2><label className="search-field"><Search size={17} /><input value={search} onChange={event => setSearch(event.target.value)} placeholder={t('ابحث عن عميل أو طلب')} /></label></div><DocumentTable documents={filtered} copy={copy} cancel={cancel} busy={busy} /></>}
         {!isMarketer && view === 'subscriptions' && <><section className="panel documents-panel">{platform.subscriptions.length ? <div className="table-scroll"><table><thead><tr><th>{t('عنوان الطلب')}</th><th>{t('الحالة')}</th><th>{t('الخصم القادم')}</th><th /></tr></thead><tbody>{platform.subscriptions.map(subscription => <tr key={subscription.id}><td>{platform.documents.find(document => document.id === subscription.documentId)?.title || subscription.documentId}</td><td><Status value={subscription.status} /></td><td>{date(subscription.nextChargeAt, locale)}</td><td>{subscription.status !== 'cancelled' && <button className="text-button danger-text" disabled={busy} onClick={() => void run(() => api('platform', { action: 'cancel-subscription', id: subscription.id }))}>{t('إيقاف الاشتراك')}</button>}</td></tr>)}</tbody></table></div> : <Empty title={t('لا توجد اشتراكات بعد.')} />}</section><p className="helper-note">{t('تحصيل دوري بعد موافقة العميل؛ ليس تخزيناً لبيانات البطاقة.')}</p>{platform.attempts.filter(attempt => !attempt.reference && platform.documents.find(document => document.id === attempt.documentId)?.method !== 'paylink').map(attempt => <button key={attempt.id} className="outline-button recovery-button" onClick={() => setReviewAttempt(attempt.id)}><ShieldCheck size={17} />{t('مطابقة عملية غير مؤكدة')} · {platform.documents.find(document => document.id === attempt.documentId)?.title}</button>)}</>}
         {!isMarketer && view === 'integrations' && (
           <GatewayIntegrationManager platform={platform} onRefresh={load} />
         )}
-        {user && canUseAdvancedTools && view === 'security' && (
-          <TestingSettingsPanel><SecuritySystemsManager /></TestingSettingsPanel>
+        {!isMarketer && view === 'security' && (
+          <SecuritySystemsManager />
         )}
         {user && canUseAdvancedTools && (platform.isAdmin === true || platform.registrationStatus === 'approved') && view === 'loader' && (
-          <TestingSettingsPanel><LoaderTestingSuite platform={platform} userEmail={user.email} /></TestingSettingsPanel>
+          <LoaderTestingSuite platform={platform} userEmail={user?.email} />
         )}
         {!isMarketer && view === 'settings' && <><div className="settings-grid"><section className="panel settings-panel"><h2>{t('إعدادات التاجر')}</h2>{merchant && <form onSubmit={event => { event.preventDefault(); const name = new FormData(event.currentTarget).get('name'); void run(() => api('platform', { action: 'rename', name })); }}><label>{t('اسم المتجر')}<input name="name" key={merchant.name} defaultValue={merchant.name} required maxLength={100} /></label><label>{t('معرّف التاجر')}<input value={merchant.id} readOnly dir="ltr" /></label><button className="primary-button" disabled={busy}>{t('حفظ')}<Check size={16} /></button></form>}<div className="divider" /><button className="outline-button" onClick={() => void install()}><Download size={16} />{t('تثبيت التطبيق')}</button></section><section className="panel settings-panel"><h2>{t('بوابة الدفع')}</h2><p>{t('أسماء المتغيرات فقط؛ لا تدخل المفاتيح هنا.')}</p>{[{ label: 'PayTabs', prefix: platform.credentialPrefix, suffixes: ['PROFILE_ID', 'SERVER_KEY', 'API_BASE_URL', 'CLIENT_KEY', 'MANAGED_ENABLED', 'OWN_ENABLED', 'RECURRING_ENABLED'] }, { label: 'Telr', prefix: platform.telrPrefix, suffixes: ['STORE_ID', 'SERVICE_API_KEY', 'TEST_MODE'] }].map(provider => <div className="gateway-config" key={provider.label}><h3>{provider.label}</h3>{provider.prefix && <div className="config-list" dir="ltr">{provider.suffixes.map(suffix => <code key={suffix}>{provider.prefix}_{suffix}</code>)}</div>}</div>)}<p className="helper-note">{t('أضف القيم في Netlify بنطاق Functions، ثم أعد النشر.')}</p><button className="outline-button" disabled={loading} onClick={() => void load()}><RefreshCw size={16} />{t('إعادة فحص الربط')}</button></section></div><section className="panel settings-panel connect-panel"><h2>{t('دخول واحد. أعمال أكثر.')}</h2><p>{t('ضع هذين الرابطين على زري موقع oneShot الآخر. الربط ينقل الزائر ولا يشارك جلسات الحسابات بين النطاقات.')}</p>{[{ title: 'رابط الدخول', path: '/sign-in' }, { title: 'رابط إنشاء الحساب', path: '/sign-up' }].map(link => <div key={link.path} className="connect-link"><strong>{t(link.title)}</strong><code dir="ltr">{appearanceLink(link.path)}</code><button className="icon-button" aria-label={t('نسخ الرابط')} onClick={() => void copy(appearanceLink(link.path))}><Copy size={16} /></button></div>)}</section><Safeguards /></>}
         {isMarketer && isMarketerApproved && view === 'marketer_gateways' && <MerchantGatewayLookup />}
         {platform.accountRole === 'admin' && !platform.isAdmin && <section className="panel"><h2>{tr('طلب صلاحيات الإدارة', 'Administrator access requested')}</h2><p>{tr('تم تسجيل الحساب. تتوفر أدوات الإدارة بعد منح الصلاحيات من مسؤول مخوّل.', 'Your account is registered. Administrator tools become available after an authorized administrator grants access.')}</p></section>}
-        {view === 'admin' && platform.isAdmin && <><TestingWorkspaceShortcut admin onOpen={() => setView('loader')} /><AdminControls platform={platform} onSave={load} /></>}
+        {view === 'admin' && platform.isAdmin && <AdminControls platform={platform} onSave={load} />}
         {view === 'assistant' && platform.isAdmin && user && <OperationsCenter key={user.id} onRefresh={load} />}
         <footer className="dashboard-footer"><span>oneShot <strong>Payment Studio</strong></span><span>{t('المبالغ مؤكدة من بوابة الدفع، وليست من عودة المتصفح.')}</span></footer>
       </div>
@@ -791,7 +791,7 @@ function MerchantPlatform() {
     {create && <Modal title={t(create === 'invoice' ? 'إرسال فاتورة جديدة للعميل' : create === 'recurring' ? 'إرسال فاتورة دورية (اشتراك)' : 'طلب دفع جديد')} close={() => setCreate(null)}><form onSubmit={event => { event.preventDefault(); const data = new FormData(event.currentTarget); void run(async () => { await api('platform', { action: 'create', gateway, method: create, title: data.get('title'), customerName: data.get('customerName'), customerEmail: data.get('customerEmail'), amount: data.get('amount'), interval: data.get('interval') }); setCreate(null); setView('links'); }); }}><label>{t('عنوان الفاتورة أو الخدمة')}<input name="title" defaultValue={create === 'invoice' ? 'فاتورة خدمة وتكامل مالي' : 'طلب دفع'} required maxLength={150} /></label><div className="form-row"><label>{t('اسم العميل')}<input name="customerName" placeholder="مثال: شركة الرواد" required maxLength={100} /></label><label>{t('المبلغ بالريال السعودي')}<input name="amount" type="number" min="1" max="9999999.99" step="0.01" required dir="ltr" placeholder="0.00" /></label></div><label>{t('بريد العميل لإرسال الفاتورة')}<input name="customerEmail" type="email" required maxLength={254} dir="ltr" placeholder="client@example.sa" /></label><label>{t('بوابة الدفع المعتمدة')}<select aria-label={t('بوابة الدفع')} value={gateway} onChange={event => { setGateway(event.target.value as Gateway); }}><option value="telr">Telr (حساب المتجر 35574 - فاينانس ميرشنت)</option><option value="paytabs">PayTabs</option><option value="ngenius">N-Genius KSA</option><option value="tap">Tap Payments</option></select></label><label>{t('طريقة الدفع')}<select aria-label={t('طريقة الدفع')} value={create} onChange={event => setCreate(event.target.value as Method)}>{methods.filter(method => caps?.[method.id] === true || (method.id === 'invoice' && gateway === 'telr')).map(method => <option key={method.id} value={method.id} disabled={!caps?.[method.id] && method.id !== 'invoice'}>{t(method.name)}{caps?.[method.id] || method.id === 'invoice' ? '' : ` — ${t('غير مهيأ')}`}</option>)}</select></label>{create === 'recurring' && <label>{t('التجديد التلقائي')}<select name="interval"><option value="monthly">{t('شهري')}</option><option value="yearly">{t('سنوي')}</option></select></label>}<button className="primary-button full-width" disabled={busy || !canCreate}>{t('إنشاء وإرسال الفاتورة')}<Link2 size={17} /></button></form>{error && <p className="form-error" role="alert">{t(error)}</p>}</Modal>}
     {openBuilder && <Modal title={t(openGatewayMode === 'all' ? 'رابط مفتوح لجميع البوابات (Multi-Gateway)' : 'رابط مفتوح لبوابة محددة (Single Gateway)')} close={() => setOpenBuilder(false)}><div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}><button type="button" className={openGatewayMode === 'all' ? 'primary-button' : 'outline-button'} style={{ flex: 1, padding: '8px 12px', fontSize: '0.9rem' }} onClick={() => setOpenGatewayMode('all')}><Sparkles size={15} />{t('لجميع البوابات')}</button><button type="button" className={openGatewayMode === 'single' ? 'primary-button' : 'outline-button'} style={{ flex: 1, padding: '8px 12px', fontSize: '0.9rem' }} onClick={() => setOpenGatewayMode('single')}><Link2 size={15} />{t('لبوابة واحدة')}</button></div><p className="modal-description">{t(openGatewayMode === 'all' ? 'رابط موحد يجمع بوابات Telr وPayTabs ومدى وApple Pay معاً؛ يحدد العميل مبلغه ويختار البوابة الأنسب.' : 'رابط مفتوح مخصص لبوابة دفع واحدة محددة (مثل Telr Store 35574 فقط).')}</p><form onSubmit={event => { event.preventDefault(); const data = new FormData(event.currentTarget); void run(async () => { await api('platform', { action: 'create-open-link', title: data.get('title'), minimum: data.get('minimum'), maximum: data.get('maximum'), allowedMethods: data.getAll('choices') }); setOpenBuilder(false); setView('links'); }); }}><label>{t('عنوان الرابط المفتوح')}<input name="title" defaultValue={openGatewayMode === 'all' ? 'رابط دفع عام - جميع البوابات المتاحة' : 'رابط دفع مخصص - بوابة Telr'} required maxLength={150} /></label><div className="form-row"><label>{t('الحد الأدنى')}<input name="minimum" type="number" defaultValue="1" min="1" max="9999999.99" step="0.01" required dir="ltr" /></label><label>{t('الحد الأعلى')}<input name="maximum" type="number" defaultValue="10000" min="1" max="9999999.99" step="0.01" required dir="ltr" /></label></div><fieldset className="method-choices"><legend>{t('طرق الدفع المسموحة بالرابط')}</legend>{choices.filter(choice => openGatewayMode === 'all' || (openGatewayMode === 'single' && choice.value.startsWith('telr'))).map(choice => <label className="consent" key={choice.value}><input type="checkbox" name="choices" value={choice.value} defaultChecked /><span>{choice.name}</span></label>)}{!choices.length && <p className="form-error">{t('لا توجد طريقة مهيأة. أكمل إعدادات التاجر أولاً.')}</p>}</fieldset><button className="primary-button full-width" disabled={busy || !choices.length || !canCreate || !policy.openLinksEnabled}>{t('إنشاء الرابط المفتوح')}<Link2 size={17} /></button></form>{error && <p className="form-error" role="alert">{t(error)}</p>}</Modal>}
     {reviewAttempt && <Modal title={t('مطابقة عملية غير مؤكدة')} close={() => setReviewAttempt(null)}><p className="modal-description">{t('انسخ المرجع من لوحة البوابة. يتحقق الخادم من التاجر والمبلغ والطلب.')}</p><form onSubmit={event => { event.preventDefault(); const reference = new FormData(event.currentTarget).get('reference'); void run(async () => { await api('platform', { action: 'verify', id: reviewAttempt, reference }); setReviewAttempt(null); }); }}><label>{t('مرجع العملية')}<input name="reference" required maxLength={100} dir="ltr" /></label><button className="primary-button" disabled={busy}>{t('مطابقة آمنة')}<ShieldCheck size={17} /></button></form>{error && <p className="form-error">{t(error)}</p>}</Modal>}
-  </div></TestingWorkspaceProvider>;
+  </div>;
 }
 
 function Stat({ title, value, suffix, icon, featured }: { title: string; value: string; suffix?: string; icon: ReactNode; featured?: boolean }) {
@@ -852,19 +852,62 @@ function AdminControls({ platform, onSave }: { platform: Platform; onSave: () =>
 
   return (
     <div className="admin-wrapper" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-      <nav className="admin-tools-nav" aria-label={tr('أدوات إدارة المنصة', 'Platform administration tools')}>
-        {([
-          ['marketer_approvals', tr('حسابات المسوّقين والعمولات', 'Marketers and commissions'), UserCheck],
-          ['ai_tiers', tr('تراخيص الخدمات وطبقات AI', 'Service licenses and AI tiers'), Award],
-          ['failures_dashboard', tr('تحليل حالات الرفض', 'Decline analysis'), BarChart3],
-          ['multi_bin_matcher', tr('مطابقة البوابات والـ BIN', 'Gateway and BIN matching'), Sparkles],
-          ['country_matrix', tr('توافق الدول والبطاقات', 'Country and card compatibility'), CreditCard],
-          ['ai_bin', tr('مركز ذكاء BIN', 'BIN intelligence'), BrainCircuit],
-          ['ip_spoofing', tr('محاكاة الموقع والشبكة', 'Location and network simulation'), Globe],
-          ['fraud_toolkit', tr('محاكاة قواعد مكافحة الاحتيال', 'Fraud rule simulation'), ShieldAlert],
-          ['policies', tr('سياسات المنصة والبوابات', 'Platform and gateway policies'), SlidersHorizontal],
-        ] as const).map(([id, label, Icon]) => <button key={id} type="button" className="outline-button" aria-pressed={adminTab === id} onClick={() => setAdminTab(id)}><Icon size={18} /><span>{label}{id === 'marketer_approvals' && pendingMarketersCount > 0 ? ` (${pendingMarketersCount})` : ''}</span></button>)}
-      </nav>
+      {document.getElementById('account-sidebar-tools') && createPortal((
+      <div className="admin-nav-tabs" style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+        <button
+          type="button"
+          className="outline-button"
+          style={adminTab === 'marketer_approvals' ? { background: '#ff5500', color: '#ffffff', borderColor: '#ff5500', fontWeight: 'bold' } : { fontWeight: '600' }}
+          onClick={() => setAdminTab('marketer_approvals')}
+        >
+          <UserCheck size={18} />
+          <span>
+            {tr('حسابات المسوّقين والعمولات', 'Marketer accounts and commissions')}
+            {pendingMarketersCount > 0 ? ` (${pendingMarketersCount})` : ''}
+          </span>
+        </button>
+
+
+
+        <button
+          type="button"
+          className="outline-button"
+          style={adminTab === 'failures_dashboard' ? { background: '#ef4444', color: '#ffffff', borderColor: '#ef4444', fontWeight: 'bold' } : { fontWeight: '600' }}
+          onClick={() => setAdminTab('failures_dashboard')}
+        >
+          <BarChart3 size={18} />
+          <span>{t('تحليل حالات رفض المدفوعات')}</span>
+        </button>
+
+
+
+        <button
+          type="button"
+          className="outline-button"
+          style={adminTab === 'country_matrix' ? { background: '#ff5500', color: '#ffffff', borderColor: '#ff5500', fontWeight: 'bold' } : { fontWeight: '600' }}
+          onClick={() => setAdminTab('country_matrix')}
+        >
+          <CreditCard size={18} />
+          <span>{t('فاحص توافقية الدول والبطاقات (Country Matrix & BIN)')}</span>
+        </button>
+
+
+
+
+
+
+
+        <button
+          type="button"
+          className="outline-button"
+          style={adminTab === 'policies' ? { background: '#ff5500', color: '#ffffff', borderColor: '#ff5500', fontWeight: 'bold' } : { fontWeight: '600' }}
+          onClick={() => setAdminTab('policies')}
+        >
+          <SlidersHorizontal size={18} />
+          <span>{t('سياسات المنصة وتراخيص البوابات')}</span>
+        </button>
+      </div>
+      ), document.getElementById('account-sidebar-tools')!)}
 
       {adminTab === 'marketer_approvals' && (
         <MarketerApprovalAdmin marketers={platform.adminMarketers ?? []} onRefresh={onSave} />
@@ -904,7 +947,7 @@ function AdminControls({ platform, onSave }: { platform: Platform; onSave: () =>
       )}
 
       {(platform?.isAdmin === true || platform?.accountRole === 'loader') && adminTab === 'ip_spoofing' && (
-        <TestingSettingsPanel><AdminIpSpoofingManager onNotify={setNotice} /></TestingSettingsPanel>
+        <AdminIpSpoofingManager onNotify={setNotice} />
       )}
 
       {adminTab === 'policies' && (
