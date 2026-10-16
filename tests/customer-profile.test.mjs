@@ -77,3 +77,93 @@ test('unsupported methods cannot modify profiles', async () => {
   const { handler } = await harness(user);
   assert.equal((await handler(new Request('https://example.test/profile', { method: 'DELETE' }))).status, 405);
 });
+
+async function loadRoutesModule(initialOrigin = 'https://www.1shotcam.com') {
+  const sessionMap = new Map();
+  const localMap = new Map();
+  const makeStorage = map => ({
+    getItem: key => (map.has(key) ? map.get(key) : null),
+    setItem: (key, value) => map.set(key, String(value)),
+    removeItem: key => map.delete(key),
+  });
+  const windowObj = {
+    location: {
+      origin: initialOrigin,
+      pathname: '/',
+      search: '',
+    },
+  };
+  const context = vm.createContext({
+    URL,
+    URLSearchParams,
+    window: windowObj,
+    sessionStorage: makeStorage(sessionMap),
+    localStorage: makeStorage(localMap),
+  });
+  const source = stripTypeScriptTypes(await readFile('src/storefront/routes.ts', 'utf8'), { mode: 'transform' });
+  const module = new vm.SourceTextModule(source, { context });
+  await module.link(async () => {
+    throw new Error('Unexpected dependency in routes.ts');
+  });
+  await module.evaluate();
+  return { routes: module.namespace, windowObj, sessionMap, localMap };
+}
+
+test('wallet route is recognized as a customer path and preserves selected SKU across auth and profile navigation', async () => {
+  const { routes } = await loadRoutesModule();
+
+  assert.equal(routes.isWalletPath('/wallet'), true);
+  assert.equal(routes.isWalletPath('/wallet/'), true);
+  assert.equal(routes.isCustomerPath('/wallet'), true);
+  assert.equal(routes.isStorefrontPath('/wallet'), false);
+
+  // Direct visit to /wallet?sku=AUT-01 resolves to /wallet?sku=AUT-01 with SKU preserved
+  const directWallet = routes.resolveCustomerReturnDestination('?sku=AUT-01', '/wallet');
+  assert.equal(directWallet.destination, '/wallet?sku=AUT-01');
+  assert.equal(directWallet.sku, 'AUT-01');
+  assert.equal(directWallet.shouldAutoRedirect, true);
+
+  // Persisting destination when unauthenticated at /wallet?sku=AUT-01 preserves it when visiting /customer
+  routes.persistReturnDestination('/wallet?sku=AUT-01', 'AUT-01');
+  const fromCustomer = routes.resolveCustomerReturnDestination('', '/customer');
+  assert.equal(fromCustomer.destination, '/wallet?sku=AUT-01');
+  assert.equal(fromCustomer.sku, 'AUT-01');
+  assert.equal(fromCustomer.shouldAutoRedirect, true);
+
+  // Once the user lands on /wallet, clearing return destination with keepSku: true stops auto-redirect loops on /customer while preserving the SKU
+  routes.clearStoredReturnDestination({ keepSku: true });
+  assert.equal(routes.readStoredReturnDestination(), null);
+  assert.equal(routes.readStoredPendingSku(), 'AUT-01');
+
+  const profileVisit = routes.resolveCustomerReturnDestination('', '/customer');
+  assert.equal(profileVisit.destination, '/wallet?sku=AUT-01');
+  assert.equal(profileVisit.sku, 'AUT-01');
+  assert.equal(profileVisit.shouldAutoRedirect, false);
+
+  // Returning to /wallet without query params restores the pending SKU into the wallet destination
+  const returnToWallet = routes.resolveCustomerReturnDestination('', '/wallet');
+  assert.equal(returnToWallet.destination, '/wallet?sku=AUT-01');
+  assert.equal(returnToWallet.sku, 'AUT-01');
+
+  // After purchase completion, clearing stored destination without keepSku removes both
+  routes.clearStoredReturnDestination();
+  assert.equal(routes.readStoredPendingSku(), null);
+  const cleanCustomer = routes.resolveCustomerReturnDestination('', '/customer');
+  assert.equal(cleanCustomer.destination, '/customer');
+  assert.equal(cleanCustomer.sku, null);
+});
+
+test('customer metadata fallback preserves pending_sku across confirmation callbacks and App.tsx routes /wallet to WalletRoute', async () => {
+  const { routes } = await loadRoutesModule();
+  const fromMetadata = routes.resolveCustomerReturnDestination('', '/dashboard', {
+    account_type: 'customer',
+    pending_sku: 'AUT-02',
+    return_to: '/wallet?sku=AUT-02',
+  });
+  assert.equal(fromMetadata.destination, '/wallet?sku=AUT-02');
+  assert.equal(fromMetadata.sku, 'AUT-02');
+
+  const appSource = await readFile('src/App.tsx', 'utf8');
+  assert.match(appSource, /isWalletPath\(window\.location\.pathname\)\s*\?\s*\(\s*<WalletRoute\s*\/>/);
+});
+
