@@ -21,26 +21,8 @@ export interface GatewayGeoRule {
   supportedCurrencies: string[];
 }
 
-export interface AdminIpSpoofingConfig {
-  enabled: boolean;
-  selectedCountryCode: string;
-  customIp: string;
-  customCountryName: string;
-  customCityName: string;
-  customIsp: string;
-  isCustomActive: boolean;
-  proxyMode: 'fixed' | 'auto_card_bin' | 'fraud_stress' | 'random_rotation';
-  injectHeaders: {
-    xForwardedFor: boolean;
-    cfConnectingIp: boolean;
-    xRealIp: boolean;
-    trueClientIp: boolean;
-    clientGeoCountry: boolean;
-  };
-  simulateVpnDetection: boolean;
-  simulateLatency: boolean;
-  strictGeoFence: boolean;
-}
+export { defaultIpSimulation as DEFAULT_ADMIN_IP_CONFIG } from '../shared/testing-workspace';
+export type { IpSimulationConfig as AdminIpSpoofingConfig } from '../shared/testing-workspace';
 
 export const SPOOFED_COUNTRIES_CATALOG: SpoofedCountry[] = [
   {
@@ -224,27 +206,6 @@ export const SPOOFED_COUNTRIES_CATALOG: SpoofedCountry[] = [
     supportedCards: ['PayNow', 'NETS', 'Visa', 'Mastercard']
   }
 ];
-
-export const DEFAULT_ADMIN_IP_CONFIG: AdminIpSpoofingConfig = {
-  enabled: true,
-  selectedCountryCode: 'SA_RUH',
-  customIp: '',
-  customCountryName: '',
-  customCityName: '',
-  customIsp: '',
-  isCustomActive: false,
-  proxyMode: 'fixed',
-  injectHeaders: {
-    xForwardedFor: true,
-    cfConnectingIp: true,
-    xRealIp: true,
-    trueClientIp: false,
-    clientGeoCountry: true
-  },
-  simulateVpnDetection: false,
-  simulateLatency: true,
-  strictGeoFence: true
-};
 
 export function getGatewayGeoRules(country: SpoofedCountry): GatewayGeoRule[] {
   const isKSA = country.code.startsWith('SA');
