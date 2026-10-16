@@ -21,18 +21,21 @@ type Mode = 'login' | 'signup' | 'reset' | 'password' | 'confirm';
 interface CustomerAccountProps {
   initialReturnTo?: string | null;
   initialSku?: string | null;
+  initialMode?: Mode;
   onAuthenticated?: (user: User) => void;
 }
 
 export default function CustomerAccount({
   initialReturnTo,
   initialSku,
+  initialMode: propInitialMode,
   onAuthenticated,
 }: CustomerAccountProps = {}) {
   const { tr, language, number } = useAppearance();
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [mode, setMode] = useState<Mode>(() => {
+    if (propInitialMode) return propInitialMode;
     const params = new URLSearchParams(window.location.search);
     const requestedMode = params.get('mode');
     if (requestedMode === 'password') return 'password';
@@ -51,7 +54,11 @@ export default function CustomerAccount({
   const [pendingPassword, setPendingPassword] = useState('');
   const initialization = useRef<Promise<Awaited<ReturnType<typeof handleAuthCallback>>> | null>(null);
 
-  const resolvedReturn = resolveCustomerReturnDestination(window.location.search, window.location.pathname);
+  const resolvedReturn = resolveCustomerReturnDestination(
+    window.location.search,
+    window.location.pathname,
+    user?.userMetadata,
+  );
   const targetDestination = initialReturnTo
     ? persistReturnDestination(initialReturnTo, initialSku) || resolvedReturn.destination
     : resolvedReturn.destination;
@@ -59,10 +66,12 @@ export default function CustomerAccount({
   const selectedService = activeSku ? walletServices.find(item => item.sku === activeSku) : undefined;
 
   useEffect(() => {
-    if (targetDestination && targetDestination !== '/customer') {
+    if ((initialReturnTo || resolvedReturn.shouldAutoRedirect) && targetDestination && targetDestination !== '/customer') {
       persistReturnDestination(targetDestination, activeSku);
+    } else if (activeSku) {
+      persistReturnDestination(null, activeSku);
     }
-  }, [targetDestination, activeSku]);
+  }, [initialReturnTo, resolvedReturn.shouldAutoRedirect, targetDestination, activeSku]);
 
   useEffect(() => {
     const onWalletRoute = normalizePathname(window.location.pathname) === '/wallet';
@@ -79,27 +88,35 @@ export default function CustomerAccount({
     }
   }, [language, tr]);
 
-  function redirectIfNeeded(authenticatedUser: User, currentMode: Mode) {
+  function redirectIfNeeded(authenticatedUser: User, currentMode: Mode, forceRedirect = false) {
     if (currentMode === 'password') return false;
     if (onAuthenticated) {
       onAuthenticated(authenticatedUser);
       return true;
     }
-    const { destination } = resolveCustomerReturnDestination(window.location.search, window.location.pathname);
+    const { destination, sku, shouldAutoRedirect } = resolveCustomerReturnDestination(
+      window.location.search,
+      window.location.pathname,
+      authenticatedUser.userMetadata,
+    );
+    if (!forceRedirect && !shouldAutoRedirect) {
+      return false;
+    }
     if (destination && destination !== '/customer' && normalizePathname(window.location.pathname) !== normalizePathname(destination.split('?')[0])) {
-      clearStoredReturnDestination();
+      if (sku) persistReturnDestination(null, sku);
+      clearStoredReturnDestination({ keepSku: true });
       window.location.replace(appearanceLink(destination));
       return true;
     }
     return false;
   }
 
-  async function refresh(currentMode = mode) {
+  async function refresh(currentMode = mode, forceRedirect = false) {
     const current = await getUser();
     setUser(current);
     setProfile(null);
     if (current) {
-      if (redirectIfNeeded(current, currentMode)) return;
+      if (redirectIfNeeded(current, currentMode, forceRedirect)) return;
       const result = await api<{ profile: Profile }>('customer-profile');
       setProfile(result.profile);
     }
@@ -113,7 +130,7 @@ export default function CustomerAccount({
         const callback = await initialization.current;
         if (!active) return;
         let initialMode: Mode = mode;
-        if (callback?.type === 'recovery') {
+        if (callback?.type === 'recovery' || propInitialMode === 'password') {
           initialMode = 'password';
           setMode('password');
         }
@@ -124,7 +141,7 @@ export default function CustomerAccount({
           // Keep signup enabled by default when settings endpoint is unreachable in local/offline preview
         }
         if (!active) return;
-        await refresh(initialMode);
+        await refresh(initialMode, false);
       } catch (caught) {
         if (active) setError(formatLocalizedAuthError(caught, tr));
       } finally {
@@ -158,9 +175,9 @@ export default function CustomerAccount({
         setMode('login');
         setNotice(tr('تم تحديث كلمة المرور بنجاح.', 'Password updated successfully.'));
         const current = await getUser();
-        if (current && redirectIfNeeded(current, 'login')) return;
+        if (current && redirectIfNeeded(current, 'login', true)) return;
         history.replaceState(null, '', appearanceLink(targetDestination || '/customer'));
-        await refresh('login');
+        await refresh('login', true);
       } else if (user) {
         const result = await api<{ profile: Profile }>('customer-profile', {
           fullName: data.get('fullName'),
@@ -193,8 +210,12 @@ export default function CustomerAccount({
           ...(activeSku ? { pending_sku: activeSku } : {}),
           ...(targetDestination ? { return_to: targetDestination } : {}),
         });
-        if (await getUser()) {
-          await refresh('login');
+        let authenticated = await getUser();
+        if (!authenticated) {
+          authenticated = await login(email, password).catch(() => null);
+        }
+        if (authenticated) {
+          await refresh('login', true);
         } else {
           setMode('confirm');
           setNotice(
@@ -206,7 +227,7 @@ export default function CustomerAccount({
         }
       } else {
         await login(email, password);
-        await refresh('login');
+        await refresh('login', true);
       }
     } catch (caught) {
       setError(formatLocalizedAuthError(caught, tr));
@@ -227,7 +248,7 @@ export default function CustomerAccount({
       if (pendingPassword) {
         try {
           await login(pendingEmail, pendingPassword);
-          await refresh('login');
+          await refresh('login', true);
           return;
         } catch {
           // Account not yet confirmed; attempt safe re-signup/resend
@@ -292,16 +313,19 @@ export default function CustomerAccount({
               'Your dedicated customer space at oneShot. One account to keep your details, top up your wallet, and purchase ready-to-sell services without becoming a merchant.',
             )}
           </p>
-          {selectedService && (
+          {activeSku && (
             <div className="customer-selected-service" role="status">
               <WalletCards size={20} />
               <div>
                 <strong>
-                  {selectedService.sku} · {tr(selectedService.nameAr, selectedService.nameEn)}
+                  {selectedService
+                    ? `${selectedService.sku} · ${tr(selectedService.nameAr, selectedService.nameEn)}`
+                    : activeSku}
                 </strong>
                 <span>
-                  {tr('الخدمة المختارة محفوظة لك — السعر الثابت: ', 'Selected service preserved — fixed price: ')}
-                  {number(selectedService.amount)} SAR
+                  {selectedService
+                    ? `${tr('الخدمة المختارة محفوظة لك — السعر الثابت: ', 'Selected service preserved — fixed price: ')}${number(selectedService.amount)} SAR`
+                    : tr('الخدمة المختارة محفوظة لك عند المتابعة إلى المحفظة.', 'Your selected service is preserved when you continue to the wallet.')}
                 </span>
               </div>
             </div>

@@ -1629,7 +1629,14 @@ function InquiryDialog({
           <MessageCircle size={17} />
           {tr("طلب عبر واتساب", "Request on WhatsApp")}
         </a>
-        <a className="store-button secondary" href={appearanceLink(`/wallet?sku=${encodeURIComponent(inquiry.sku)}`)}><CreditCard size={17} />{tr('الدفع من محفظة ونشوت', 'Pay with oneShot wallet')}</a>
+        <a
+          className="store-button secondary"
+          href={appearanceLink(`/wallet?sku=${encodeURIComponent(inquiry.sku)}`)}
+          onClick={() => persistReturnDestination(`/wallet?sku=${encodeURIComponent(inquiry.sku)}`, inquiry.sku)}
+        >
+          <CreditCard size={17} />
+          {tr('الدفع من محفظة ونشوت', 'Pay with oneShot wallet')}
+        </a>
         <a
           className="store-button secondary"
           href={`mailto:support@1shotcam.com?subject=${encodeURIComponent(`OneShot · ${inquiry.sku} · ${inquiry.title}`)}&body=${encodeURIComponent(message)}`}

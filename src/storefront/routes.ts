@@ -48,6 +48,10 @@ export function isCustomerPath(path: string): boolean {
   return customerPages.has(normalizePathname(path));
 }
 
+export function isWalletPath(path: string): boolean {
+  return normalizePathname(path) === "/wallet";
+}
+
 const PENDING_RETURN_STORAGE_KEY = "oneshot_pending_return_to";
 const PENDING_SKU_STORAGE_KEY = "oneshot_pending_sku";
 
@@ -93,6 +97,33 @@ export function validateInternalReturnUrl(raw: string | null | undefined): strin
   }
 }
 
+function extractSkuFromReturnUrl(urlPath: string | null | undefined): string | null {
+  if (!urlPath) return null;
+  try {
+    const base = typeof window !== "undefined" ? window.location.origin : "https://www.1shotcam.com";
+    const parsed = new URL(urlPath, base);
+    const sku = parsed.searchParams.get("sku")?.trim();
+    return sku ? sku.slice(0, 40) : null;
+  } catch {
+    return null;
+  }
+}
+
+function withSkuOnWalletUrl(urlPath: string, sku: string | null | undefined): string {
+  const cleanSku = sku?.trim();
+  if (!cleanSku) return urlPath;
+  try {
+    const base = typeof window !== "undefined" ? window.location.origin : "https://www.1shotcam.com";
+    const parsed = new URL(urlPath, base);
+    if (normalizePathname(parsed.pathname) === "/wallet" && !parsed.searchParams.has("sku")) {
+      parsed.searchParams.set("sku", cleanSku.slice(0, 40));
+    }
+    return validateInternalReturnUrl(`${parsed.pathname}${parsed.search}`) || urlPath;
+  } catch {
+    return urlPath;
+  }
+}
+
 export function persistReturnDestination(destination: string | null | undefined, sku?: string | null): string | null {
   const validated = validateInternalReturnUrl(destination);
   if (typeof window === "undefined") return validated;
@@ -101,7 +132,7 @@ export function persistReturnDestination(destination: string | null | undefined,
       sessionStorage.setItem(PENDING_RETURN_STORAGE_KEY, validated);
       localStorage.setItem(PENDING_RETURN_STORAGE_KEY, validated);
     }
-    const cleanSku = sku?.trim() || (validated ? new URL(validated, window.location.origin).searchParams.get("sku")?.trim() : null);
+    const cleanSku = sku?.trim() || extractSkuFromReturnUrl(validated);
     if (cleanSku) {
       sessionStorage.setItem(PENDING_SKU_STORAGE_KEY, cleanSku.slice(0, 40));
       localStorage.setItem(PENDING_SKU_STORAGE_KEY, cleanSku.slice(0, 40));
@@ -132,13 +163,15 @@ export function readStoredPendingSku(): string | null {
   }
 }
 
-export function clearStoredReturnDestination(): void {
+export function clearStoredReturnDestination(options?: { keepSku?: boolean }): void {
   if (typeof window === "undefined") return;
   try {
     sessionStorage.removeItem(PENDING_RETURN_STORAGE_KEY);
     localStorage.removeItem(PENDING_RETURN_STORAGE_KEY);
-    sessionStorage.removeItem(PENDING_SKU_STORAGE_KEY);
-    localStorage.removeItem(PENDING_SKU_STORAGE_KEY);
+    if (!options?.keepSku) {
+      sessionStorage.removeItem(PENDING_SKU_STORAGE_KEY);
+      localStorage.removeItem(PENDING_SKU_STORAGE_KEY);
+    }
   } catch {
     // Ignore storage errors
   }
@@ -147,28 +180,44 @@ export function clearStoredReturnDestination(): void {
 export function resolveCustomerReturnDestination(
   search = typeof window !== "undefined" ? window.location.search : "",
   pathname = typeof window !== "undefined" ? window.location.pathname : "/",
-): { destination: string; sku: string | null } {
+  userMetadata?: Record<string, unknown> | null,
+): { destination: string; sku: string | null; shouldAutoRedirect: boolean } {
   const params = new URLSearchParams(search);
   const explicitReturn = validateInternalReturnUrl(params.get("returnTo") || params.get("next"));
   const urlSku = params.get("sku")?.trim() || null;
   const storedSku = readStoredPendingSku();
   const storedReturn = readStoredReturnDestination();
+  const metadataSku =
+    typeof userMetadata?.pending_sku === "string" && userMetadata.pending_sku.trim()
+      ? userMetadata.pending_sku.trim().slice(0, 40)
+      : null;
+  const metadataReturn =
+    typeof userMetadata?.return_to === "string"
+      ? validateInternalReturnUrl(userMetadata.return_to)
+      : null;
+  const effectiveStoredSku = storedSku || metadataSku;
 
   if (explicitReturn) {
-    const base = typeof window !== "undefined" ? window.location.origin : "https://www.1shotcam.com";
-    const parsed = new URL(explicitReturn, base);
-    if (urlSku && !parsed.searchParams.has("sku")) {
-      parsed.searchParams.set("sku", urlSku);
-    }
-    const finalSku = parsed.searchParams.get("sku")?.trim() || urlSku || storedSku;
-    const finalDest = validateInternalReturnUrl(`${parsed.pathname}${parsed.search}`) || "/customer";
-    return { destination: finalDest, sku: finalSku };
+    const finalSku = extractSkuFromReturnUrl(explicitReturn) || urlSku || effectiveStoredSku;
+    const finalDest = withSkuOnWalletUrl(explicitReturn, finalSku) || "/customer";
+    return { destination: finalDest, sku: finalSku, shouldAutoRedirect: true };
   }
 
   if (urlSku) {
+    if (normalizePathname(pathname) === "/wallet") {
+      const validCurrent = validateInternalReturnUrl(`${pathname}${search}`);
+      if (validCurrent) {
+        return {
+          destination: withSkuOnWalletUrl(validCurrent, urlSku),
+          sku: urlSku,
+          shouldAutoRedirect: true,
+        };
+      }
+    }
     return {
       destination: `/wallet?sku=${encodeURIComponent(urlSku)}`,
       sku: urlSku,
+      shouldAutoRedirect: true,
     };
   }
 
@@ -176,29 +225,43 @@ export function resolveCustomerReturnDestination(
     const validCurrent = validateInternalReturnUrl(`${pathname}${search}`);
     if (validCurrent) {
       return {
-        destination: validCurrent,
-        sku: storedSku,
+        destination: withSkuOnWalletUrl(validCurrent, effectiveStoredSku),
+        sku: effectiveStoredSku,
+        shouldAutoRedirect: true,
       };
     }
   }
 
   if (storedReturn) {
+    const finalSku = extractSkuFromReturnUrl(storedReturn) || effectiveStoredSku;
     return {
-      destination: storedReturn,
-      sku: storedSku,
+      destination: withSkuOnWalletUrl(storedReturn, finalSku),
+      sku: finalSku,
+      shouldAutoRedirect: true,
     };
   }
 
-  if (storedSku) {
+  if (effectiveStoredSku) {
     return {
-      destination: `/wallet?sku=${encodeURIComponent(storedSku)}`,
-      sku: storedSku,
+      destination: `/wallet?sku=${encodeURIComponent(effectiveStoredSku)}`,
+      sku: effectiveStoredSku,
+      shouldAutoRedirect: false,
+    };
+  }
+
+  if (metadataReturn) {
+    const finalSku = extractSkuFromReturnUrl(metadataReturn);
+    return {
+      destination: withSkuOnWalletUrl(metadataReturn, finalSku),
+      sku: finalSku,
+      shouldAutoRedirect: false,
     };
   }
 
   return {
     destination: "/customer",
     sku: null,
+    shouldAutoRedirect: false,
   };
 }
 

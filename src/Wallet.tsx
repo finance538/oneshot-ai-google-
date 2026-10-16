@@ -8,6 +8,8 @@ import { getServiceEligibility, isWalletEligibleSku, walletServices } from '../s
 import { gatewayName } from '../shared/policy';
 import {
   clearStoredReturnDestination,
+  normalizePathname,
+  persistReturnDestination,
   readStoredPendingSku,
 } from './storefront/routes';
 import './Wallet.css';
@@ -41,10 +43,11 @@ interface WalletData {
 interface WalletProps {
   standalone?: boolean;
   userEmail?: string;
+  initialSku?: string | null;
   onSignOut?: () => void;
 }
 
-export default function Wallet({ standalone = false, userEmail, onSignOut }: WalletProps = {}) {
+export default function Wallet({ standalone = false, userEmail, initialSku, onSignOut }: WalletProps = {}) {
   const { tr, locale, language } = useAppearance();
   const [data, setData] = useState<WalletData | null>(null);
   const [error, setError] = useState('');
@@ -55,6 +58,7 @@ export default function Wallet({ standalone = false, userEmail, onSignOut }: Wal
   const [sku, setSku] = useState(() => {
     const urlSku = new URLSearchParams(window.location.search).get('sku')?.trim();
     if (urlSku) return urlSku;
+    if (initialSku?.trim()) return initialSku.trim();
     return readStoredPendingSku() || '';
   });
   const topupRequest = useRef(crypto.randomUUID());
@@ -69,18 +73,20 @@ export default function Wallet({ standalone = false, userEmail, onSignOut }: Wal
         'محفظة العميل وشراء الخدمات | oneShot Brand Studio',
         'Customer Wallet & Service Checkout | oneShot Brand Studio',
       );
+      clearStoredReturnDestination({ keepSku: true });
     }
   }, [standalone, language, tr]);
 
   useEffect(() => {
     if (!sku) return;
     const params = new URLSearchParams(window.location.search);
-    if (params.get('sku') !== sku && window.location.pathname.replace(/\/+$/, '') === '/wallet') {
+    if (params.get('sku') !== sku && normalizePathname(window.location.pathname) === '/wallet') {
       params.set('sku', sku);
       window.history.replaceState(null, '', `${window.location.pathname}?${params.toString()}`);
     }
+    persistReturnDestination(null, sku);
     if (isWalletEligibleSku(sku)) {
-      clearStoredReturnDestination();
+      clearStoredReturnDestination({ keepSku: true });
     }
   }, [sku]);
 
@@ -136,6 +142,9 @@ export default function Wallet({ standalone = false, userEmail, onSignOut }: Wal
   async function topup(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     await run(async () => {
+      if (sku) {
+        persistReturnDestination(`/wallet?sku=${encodeURIComponent(sku)}`, sku);
+      }
       const result = await api<{ documentId: string }>('wallet', { action: 'topup', amount, gateway, requestId: topupRequest.current });
       window.location.assign(paymentLink(result.documentId));
     });
@@ -145,6 +154,7 @@ export default function Wallet({ standalone = false, userEmail, onSignOut }: Wal
     event.preventDefault();
     await run(async () => {
       const result = await api<{ order: WalletOrder }>('wallet', { action: 'purchase', sku, requestId: purchaseRequest.current });
+      clearStoredReturnDestination();
       setNotice(tr('تم دفع الخدمة من المحفظة. رقم الطلب: ', 'Service paid from wallet. Order: ') + result.order.id);
     });
   }

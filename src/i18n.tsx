@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
-import { isStorefrontPath } from './storefront/routes';
+import { isCustomerPath, isStorefrontPath } from './storefront/routes';
 import { french, storefrontTranslations } from './locales';
 
 export type Language = 'ar' | 'en' | 'zh' | 'ru' | 'fr';

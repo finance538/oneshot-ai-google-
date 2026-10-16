@@ -35,7 +35,14 @@ import AiLicenseAdmin from './AiLicenseAdmin';
 import OnboardingGuide, { tourCompleted } from './OnboardingGuide';
 import { MarketerApprovalAdmin, MarketerDashboard, type MarketerTab } from './MarketerDashboard';
 import { getSavedOllamaConfig, saveOllamaConfig, type OllamaServerConfig } from './aiModelsData';
-import { isStorefrontPath } from './storefront/routes';
+import {
+  isStorefrontPath,
+  isWalletPath,
+  normalizePathname,
+  persistReturnDestination,
+  readStoredPendingSku,
+  resolveCustomerReturnDestination,
+} from './storefront/routes';
 import GeminiAiStudio from './GeminiAiStudio';
 import { Shield, FlaskConical, UserPlus, ShieldAlert, BrainCircuit, BarChart3, Award, Megaphone, ShoppingBag, UserCheck, Store } from 'lucide-react';
 
@@ -87,10 +94,93 @@ const marketerNavigation = [
 const allNavigation = [...navigation, ...marketerNavigation.filter(item => item.id !== 'wallet')];
 const guestNavigation: View[] = [];
 const merchantViews = ['overview', 'gemini_studio', 'ceo', 'links', 'invoices', 'subscriptions', 'integrations', 'settings', 'wallet'];
-const adminViews = ['admin', 'gemini_studio', 'ceo', 'integrations', 'loader'];
+const adminViews = ['admin', 'gemini_studio', 'ceo', 'integrations', 'loader', 'wallet'];
 const initialPlatform: Platform = { merchant: null, documents: [], subscriptions: [], attempts: [], openLinks: [] };
 
+function WalletRoute() {
+  const [user, setUser] = useState<User | null>(null);
+  const [ready, setReady] = useState(false);
+  const [recoveryMode, setRecoveryMode] = useState(() => new URLSearchParams(window.location.search).get('mode') === 'password');
+  const initialization = useRef<ReturnType<typeof handleAuthCallback> | null>(null);
+  const initialSku = useRef(
+    new URLSearchParams(window.location.search).get('sku')?.trim() || readStoredPendingSku() || null,
+  );
+  const initialReturnTo = useRef(`${window.location.pathname}${window.location.search}`);
+
+  useEffect(() => {
+    let active = true;
+    if (initialSku.current) {
+      persistReturnDestination(initialReturnTo.current, initialSku.current);
+    } else {
+      persistReturnDestination(initialReturnTo.current);
+    }
+    initialization.current ??= handleAuthCallback();
+    void (async () => {
+      try {
+        const callback = await initialization.current;
+        if (!active) return;
+        if (callback?.type === 'recovery') {
+          setRecoveryMode(true);
+        }
+        const current = await getUser();
+        if (active) setUser(current);
+      } catch {
+        // Identity offline or callback token already consumed; CustomerAccount handles interactive sign-in
+      } finally {
+        if (active) setReady(true);
+      }
+    })();
+    const unsubscribe = onAuthChange((event, nextUser) => {
+      if (!active) return;
+      if (event === 'logout') {
+        setUser(null);
+      } else if (nextUser) {
+        setUser(nextUser);
+      }
+    });
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, []);
+
+  if (!ready) {
+    return <LoadingPanel />;
+  }
+
+  if (!user || recoveryMode) {
+    return (
+      <CustomerAccount
+        initialReturnTo={initialReturnTo.current}
+        initialSku={initialSku.current}
+        initialMode={recoveryMode ? 'password' : undefined}
+        onAuthenticated={authenticatedUser => {
+          setRecoveryMode(false);
+          setUser(authenticatedUser);
+        }}
+      />
+    );
+  }
+
+  const resolvedSku =
+    new URLSearchParams(window.location.search).get('sku')?.trim() ||
+    initialSku.current ||
+    readStoredPendingSku() ||
+    (typeof user.userMetadata?.pending_sku === 'string' ? user.userMetadata.pending_sku.trim() : null);
+
+  return (
+    <Wallet
+      key={user.id}
+      standalone
+      userEmail={user.email}
+      initialSku={resolvedSku}
+      onSignOut={() => setUser(null)}
+    />
+  );
+}
+
 export default function App() {
+  const normalizedPath = normalizePathname(window.location.pathname);
   const payment = window.location.pathname.match(/^\/pay\/([a-f0-9-]{36})\/?$/i);
   const open = window.location.pathname.match(/^\/p\/([a-f0-9-]{36})\/?$/i);
   const sitePay = window.location.hostname.toLowerCase() === 'pay.1shotcam.com' || new URLSearchParams(window.location.search).get('site') === 'pay';
@@ -98,8 +188,10 @@ export default function App() {
 
   return (
     <>
-      {window.location.pathname.replace(/\/+$/, '') === '/customer' ? (
+      {normalizedPath === '/customer' ? (
         <CustomerAccount />
+      ) : isWalletPath(window.location.pathname) ? (
+        <WalletRoute />
       ) : payment ? (
         <Checkout id={payment[1]} />
       ) : open ? (
@@ -200,7 +292,18 @@ function MerchantPlatform() {
         if (!mounted) return;
         const current = await getUser();
         if (current?.userMetadata?.account_type === 'customer') {
-          window.location.replace(appearanceLink(callback?.type === 'recovery' ? '/customer?mode=password' : '/customer'));
+          const { destination, sku } = resolveCustomerReturnDestination(
+            window.location.search,
+            window.location.pathname,
+            current.userMetadata,
+          );
+          if (callback?.type === 'recovery') {
+            window.location.replace(
+              appearanceLink(sku ? `/customer?mode=password&sku=${encodeURIComponent(sku)}` : '/customer?mode=password'),
+            );
+            return;
+          }
+          window.location.replace(appearanceLink(destination || '/customer'));
           return;
         }
         if (callback?.type === 'recovery') setAuth('password');
@@ -352,7 +455,12 @@ function MerchantPlatform() {
         try {
           const signedIn = await login(email, password);
           if (signedIn.userMetadata?.account_type === 'customer') {
-            window.location.href = appearanceLink('/customer');
+            const { destination } = resolveCustomerReturnDestination(
+              window.location.search,
+              window.location.pathname,
+              signedIn.userMetadata,
+            );
+            window.location.href = appearanceLink(destination || '/customer');
             return;
           }
           closeAuth(true);
@@ -676,7 +784,7 @@ function MerchantPlatform() {
         </p>
       )}
       {auth === 'reset' && <button type="button" className="text-button auth-back" disabled={busy} onClick={() => { setError(''); setNotice(''); setAuth('login'); }}>{tr('العودة لتسجيل الدخول', 'Back to sign in')}</button>}
-      {['login', 'signup'].includes(auth) && <a className="auth-customer-link" href={appearanceLink('/customer')}>{tr('تبحث عن حساب العميل؟ الدخول وشراء الخدمات', 'Customer account · Sign in and shop')}</a>}
+      {['login', 'signup'].includes(auth) && <a className="auth-customer-link" href={appearanceLink(resolveCustomerReturnDestination(window.location.search, window.location.pathname).destination || '/customer')}>{tr('تبحث عن حساب العميل؟ الدخول وشراء الخدمات', 'Customer account · Sign in and shop')}</a>}
       {error && <p className="form-error" role="alert">{t(error)}</p>}
       {notice && <p className="message success" role="status">{t(notice)}</p>}
     </Modal>}
