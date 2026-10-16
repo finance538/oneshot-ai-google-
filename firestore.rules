@@ -1,0 +1,81 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 1. Default-deny catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    // User profiles
+    match /users/{userId} {
+      allow read: if isOwner(userId);
+      allow create, update: if isOwner(userId)
+        && incoming().id == userId
+        && incoming().email is string
+        && incoming().email.size() <= 150;
+      allow delete: if false;
+    }
+
+    // AI Chat Sessions
+    match /ai_chat_sessions/{sessionId} {
+      allow get: if isSignedIn() && existing().userId == request.auth.uid;
+      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn()
+        && incoming().userId == request.auth.uid
+        && incoming().title is string
+        && incoming().title.size() <= 200
+        && incoming().model is string;
+      allow update: if isSignedIn()
+        && existing().userId == request.auth.uid
+        && incoming().userId == existing().userId;
+      allow delete: if isSignedIn() && existing().userId == request.auth.uid;
+
+      // Nested chat messages
+      match /messages/{messageId} {
+        allow get: if isSignedIn() && existing().userId == request.auth.uid;
+        allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
+        allow create: if isSignedIn()
+          && incoming().userId == request.auth.uid
+          && incoming().sessionId == sessionId
+          && incoming().role in ['user', 'assistant', 'system']
+          && incoming().content is string
+          && incoming().content.size() <= 20000;
+        allow delete: if isSignedIn() && existing().userId == request.auth.uid;
+      }
+    }
+
+    // Voice Transcripts
+    match /voice_transcripts/{transcriptId} {
+      allow get: if isSignedIn() && existing().userId == request.auth.uid;
+      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn()
+        && incoming().userId == request.auth.uid
+        && incoming().transcriptText is string
+        && incoming().transcriptText.size() <= 30000;
+      allow update: if isSignedIn()
+        && existing().userId == request.auth.uid
+        && incoming().userId == existing().userId;
+      allow delete: if isSignedIn() && existing().userId == request.auth.uid;
+    }
+  }
+}

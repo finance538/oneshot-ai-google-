@@ -1,5 +1,6 @@
 import { defineConfig, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
+import { GoogleGenAI } from '@google/genai'
 
 const OLLAMA_KEY = process.env.OLLAMA_API_KEY || ''
 
@@ -483,6 +484,135 @@ function netlifyFunctionsMockPlugin(): Plugin {
               reply: aiAnswer || 'تم تأكيد معايير الحماية 3D-Secure والمعاملة مؤمنة بنسبة 100%.',
               confidence: 0.99,
               recommendation: 'يمكن إتمام العملية بأمان عبر البوابة المحددة.',
+            }),
+          )
+        }
+
+        // 6.5 Gemini Studio AI Workspace (Chat, Transcribe & Grounding)
+        if (functionName === 'gemini-studio') {
+          if (req.method === 'POST') {
+            const action = body.action || 'chat'
+            const geminiApiKey = process.env.GEMINI_API_KEY || ''
+            const aiClient = new GoogleGenAI({
+              apiKey: geminiApiKey,
+              httpOptions: {
+                headers: {
+                  'User-Agent': 'aistudio-build',
+                },
+              },
+            })
+
+            if (action === 'transcribe') {
+              const audioBase64 = body.audio || ''
+              const mimeType = body.mimeType || 'audio/webm'
+
+              if (geminiApiKey && audioBase64) {
+                try {
+                  const resp = await aiClient.models.generateContent({
+                    model: 'gemini-3.5-transcribe',
+                    contents: {
+                      parts: [
+                        { inlineData: { mimeType, data: audioBase64 } },
+                        { text: 'Transcribe this spoken Arabic audio accurately with punctuation.' },
+                      ],
+                    },
+                  })
+                  return res.end(JSON.stringify({ transcript: resp.text || '' }))
+                } catch (e: any) {
+                  console.warn('Gemini transcription failed, falling back:', e?.message)
+                }
+              }
+
+              return res.end(
+                JSON.stringify({
+                  transcript:
+                    'أهلاً بكم في استوديو OneShot. نود حجز جلسة تصوير منتجات إعلانية بالاستوديو وتفعيل بوابة PayTabs لربط وسائل الدفع مدى وApple Pay.',
+                }),
+              )
+            }
+
+            const prompt = body.message || ''
+            const history = Array.isArray(body.history) ? body.history : []
+            const selectedModel = body.model || 'gemini-3.8-flash'
+            const persona = body.persona || 'studio_director'
+            const enableSearch = Boolean(body.enableSearchGrounding)
+            const enableMaps = Boolean(body.enableMapsGrounding)
+
+            const systemPersonas: Record<string, string> = {
+              studio_director:
+                'أنت المستشار التنفيذي والمدير الإبداعي لاستوديو OneShot في السعودية. تقدم استشارات خبيرة في الإنتاج المرئي وتصوير المنتجات بدقة 4K واللوجستيات والتسعير بأسلوب عربي راقٍ ومهني.',
+              gateway_architect:
+                'أنت خبير بوابات الدفع والمعاملات المالية لمنصة OneShot (PayTabs, Telr, Tap, N-Genius, Mada, Apple Pay, 3D-Secure). تجيب بدقة تقنية وحلول بنكية مباشرة.',
+              campaign_strategist:
+                'أنت مخطط الحملات الإعلانية واستراتيجيات نمو العلامات التجارية لمنصة OneShot. تقدم خطط تسويق ومحتوى ريلز جذاب وأفكار زيادة المبيعات.',
+            }
+
+            if (geminiApiKey && prompt) {
+              try {
+                const contents: any[] = []
+                for (const turn of history.slice(-8)) {
+                  contents.push({
+                    role: turn.role === 'model' ? 'model' : 'user',
+                    parts: [{ text: turn.content }],
+                  })
+                }
+                contents.push({ role: 'user', parts: [{ text: prompt }] })
+
+                const config: any = {
+                  systemInstruction: systemPersonas[persona] || systemPersonas.studio_director,
+                }
+                if (enableMaps) {
+                  config.tools = [{ googleMaps: {} }]
+                } else if (enableSearch) {
+                  config.tools = [{ googleSearch: {} }]
+                }
+
+                const resp = await aiClient.models.generateContent({
+                  model: selectedModel,
+                  contents,
+                  config,
+                })
+
+                let groundingSources: string[] = []
+                const searchChunks = resp.candidates?.[0]?.groundingMetadata?.groundingChunks
+                if (Array.isArray(searchChunks)) {
+                  groundingSources = searchChunks
+                    .map((c: any) => c.web?.title || c.web?.uri)
+                    .filter(Boolean)
+                    .slice(0, 5)
+                }
+
+                return res.end(
+                  JSON.stringify({
+                    answer: resp.text || '',
+                    modelUsed: selectedModel,
+                    groundingSources,
+                  }),
+                )
+              } catch (e: any) {
+                console.warn('Gemini chat error in dev middleware:', e?.message)
+              }
+            }
+
+            const fallbackMap: Record<string, string> = {
+              studio_director: `مرحباً بك! بصفتي المدير الإبداعي لاستوديو OneShot:\n\n• باقة تصوير المنتجات (PHT-01) بقيمة 1,450 ريال تشمل جلسة استوديو كاملة وتعديل ألوان سينمائي.\n• باقة الريلز التجاري 4K (MED-01) بقيمة 2,200 ريال تتضمن 5 مقاطع إبداعية مع سيناريو مخصص.\n• الإجابة على استفسارك: "${prompt}".\n• التوصية: يمكنك إدراج متطلبات الجلسة مباشرة ضمن جدول المواعيد وتوليد رابط دفع موثق.`,
+              gateway_architect: `تحياتي! كمهندس بوابات الدفع لمنظومة OneShot:\n\n• بوابات PayTabs و Telr و Tap مفعلة وتدعم بطاقات مدى و Apple Pay و 3D-Secure.\n• بخصوص استفسارك: "${prompt}".\n• المعاملات مؤمنة بنظام التشفير القياسي PCI-DSS مع توجيه الـ Webhooks لحظياً.`,
+              campaign_strategist: `أهلاً بك! كخبير نمو واستراتيجيات الحملات في OneShot:\n\n• نوصي بإطلاق حملة تصوير المنتجات مع ربطها برابط دفع مفتوح (Open Link) لتسريع التحويلات.\n• تحليل استفسارك: "${prompt}".\n• التوصية: استهداف جمهور المنصات (تيك توك وإنستغرام) بمحتوى سريع ومؤثر.`,
+            }
+
+            return res.end(
+              JSON.stringify({
+                answer: fallbackMap[persona] || fallbackMap.studio_director,
+                modelUsed: selectedModel,
+                groundingSources: enableSearch ? ['بحث Google Grounding: استوديو تصوير المنتجات OneShot بالسعودية'] : [],
+              }),
+            )
+          }
+
+          return res.end(
+            JSON.stringify({
+              status: 'ready',
+              models: ['gemini-3.8-flash', 'gemini-3.1-flash-lite', 'gemini-4-argon', 'gemini-3.5-transcribe'],
             }),
           )
         }

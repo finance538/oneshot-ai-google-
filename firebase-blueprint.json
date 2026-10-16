@@ -1,0 +1,158 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User profile information",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique user ID matching auth.uid"
+        },
+        "email": {
+          "type": "string",
+          "description": "User email address"
+        },
+        "displayName": {
+          "type": "string",
+          "description": "User display name"
+        },
+        "role": {
+          "type": "string",
+          "description": "User role: merchant, admin, marketer"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "ISO timestamp of registration"
+        }
+      },
+      "required": ["id", "email", "createdAt"]
+    },
+    "AiChatSession": {
+      "title": "AiChatSession",
+      "description": "AI conversation thread",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Session UUID"
+        },
+        "userId": {
+          "type": "string",
+          "description": "Owner user ID"
+        },
+        "title": {
+          "type": "string",
+          "description": "Chat topic or summary title"
+        },
+        "model": {
+          "type": "string",
+          "description": "Gemini model used for session"
+        },
+        "persona": {
+          "type": "string",
+          "description": "System persona identifier"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "ISO creation timestamp"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "ISO update timestamp"
+        }
+      },
+      "required": ["id", "userId", "title", "model", "createdAt", "updatedAt"]
+    },
+    "AiChatMessage": {
+      "title": "AiChatMessage",
+      "description": "Single message inside an AI chat session",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Message UUID"
+        },
+        "sessionId": {
+          "type": "string",
+          "description": "Parent session UUID"
+        },
+        "userId": {
+          "type": "string",
+          "description": "Author user ID"
+        },
+        "role": {
+          "type": "string",
+          "description": "user or assistant"
+        },
+        "content": {
+          "type": "string",
+          "description": "Message text payload"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "ISO timestamp"
+        }
+      },
+      "required": ["id", "sessionId", "userId", "role", "content", "createdAt"]
+    },
+    "VoiceTranscript": {
+      "title": "VoiceTranscript",
+      "description": "Recorded microphone audio transcription archive",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Transcript UUID"
+        },
+        "userId": {
+          "type": "string",
+          "description": "Owner user ID"
+        },
+        "title": {
+          "type": "string",
+          "description": "Short label or first words"
+        },
+        "transcriptText": {
+          "type": "string",
+          "description": "Full text transcribed by gemini-3.5-transcribe"
+        },
+        "durationSeconds": {
+          "type": "number",
+          "description": "Duration in seconds"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "ISO timestamp"
+        }
+      },
+      "required": ["id", "userId", "transcriptText", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": {
+        "$ref": "#/entities/UserProfile"
+      },
+      "description": "User profiles stored per user"
+    },
+    "/ai_chat_sessions/{sessionId}": {
+      "schema": {
+        "$ref": "#/entities/AiChatSession"
+      },
+      "description": "User AI chat sessions"
+    },
+    "/ai_chat_sessions/{sessionId}/messages/{messageId}": {
+      "schema": {
+        "$ref": "#/entities/AiChatMessage"
+      },
+      "description": "Messages belonging to an AI chat session"
+    },
+    "/voice_transcripts/{transcriptId}": {
+      "schema": {
+        "$ref": "#/entities/VoiceTranscript"
+      },
+      "description": "Saved audio transcripts"
+    }
+  }
+}

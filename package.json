@@ -13,11 +13,13 @@
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^4.0.71",
+    "@google/genai": "^2.30.0",
     "@netlify/database": "^2.0.1",
     "@netlify/edge-functions": "^4.0.2",
     "@netlify/identity": "^2.0.0",
     "ai": "^7.0.127",
     "drizzle-orm": "1.0.0-beta.22",
+    "firebase": "^13.0.0",
     "lucide-react": "^1.51.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",

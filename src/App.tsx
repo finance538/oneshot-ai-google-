@@ -34,10 +34,12 @@ import OnboardingGuide, { tourCompleted } from './OnboardingGuide';
 import { MarketerApprovalAdmin, MarketerDashboard, type MarketerTab } from './MarketerDashboard';
 import { getSavedOllamaConfig, saveOllamaConfig, type OllamaServerConfig } from './aiModelsData';
 import { isStorefrontPath } from './storefront/routes';
+import GeminiAiStudio from './GeminiAiStudio';
 import { Shield, FlaskConical, UserPlus, ShieldAlert, BrainCircuit, BarChart3, Award, Megaphone, ShoppingBag, UserCheck, Store } from 'lucide-react';
 
 type View =
   | 'overview'
+  | 'gemini_studio'
   | 'staff'
   | 'wallet'
   | 'ceo'
@@ -58,6 +60,7 @@ type View =
 type Auth = 'login' | 'signup' | 'reset' | 'password' | 'invite';
 const navigation = [
   { id: 'overview' as const, name: 'نظرة عامة', icon: LayoutDashboard },
+  { id: 'gemini_studio' as const, name: 'استوديو الذكاء الاصطناعي (Gemini AI Suite)', icon: Sparkles },
   { id: 'staff' as const, name: 'سوق كوادر الـ AI (توظيف موظفين)', icon: UserPlus },
   { id: 'wallet' as const, name: 'محفظتي', icon: CreditCard },
   { id: 'ceo' as const, name: 'مكتب الرئيس التنفيذي (CEO Agents)', icon: Users },
@@ -81,8 +84,8 @@ const marketerNavigation = [
 ];
 const allNavigation = [...navigation, ...marketerNavigation.filter(item => item.id !== 'wallet')];
 const guestNavigation: View[] = [];
-const merchantViews = ['links', 'invoices', 'subscriptions', 'integrations', 'settings', 'wallet'];
-const adminViews = ['admin', 'integrations'];
+const merchantViews = ['overview', 'gemini_studio', 'links', 'invoices', 'subscriptions', 'integrations', 'settings', 'wallet'];
+const adminViews = ['admin', 'gemini_studio', 'integrations'];
 const initialPlatform: Platform = { merchant: null, documents: [], subscriptions: [], attempts: [], openLinks: [] };
 
 export default function App() {
@@ -476,6 +479,7 @@ function MerchantPlatform() {
             onRefresh={load}
           />
         )}
+        {!isMarketer && view === 'gemini_studio' && <GeminiAiStudio />}
         {!isMarketer && view === 'staff' && <AiStaffMarketplace />}
         {!isMarketer && view === 'ceo' && <CeoSuite />}
         {!isMarketer && view === 'overview' && <><div className="stats-grid"><Stat title={t('إجمالي المدفوعات')} value={money(metrics.totalPaid, locale)} suffix="SAR" icon={<CreditCard size={19} />} featured /><Stat title={t('عمليات مكتملة')} value={new Intl.NumberFormat(locale).format(metrics.paidCount)} icon={<Check size={19} />} /><Stat title={t('طلبات معلقة')} value={new Intl.NumberFormat(locale).format(metrics.pendingCount)} icon={<FileText size={19} />} /><Stat title={t('العملاء')} value={new Intl.NumberFormat(locale).format(metrics.customers)} icon={<Users size={19} />} /></div><VirtualMerchantStation />{platform.isAdmin && <div className="overview-grid"><section className="panel"><div className="section-heading"><div><span className="eyebrow">{tr('صفحة الدفع العامة', 'PUBLIC CHECKOUT PAGE')}</span><h2>{t('صفحة الدفع على pay.1shotcam.com')}</h2></div><Globe size={23} /></div><p>{t('صفحة واحدة يدفع منها عملاؤك مباشرة عبر بواباتك المفعّلة، بلا إنشاء رابط لكل عملية.')}</p><div className="open-amount-range"><span>{t('الرابط')} <strong dir="ltr">{sitePayUrl}</strong></span><span>{t('البوابات المفعّلة')} <strong>{liveGateways.length ? liveGateways.join(' · ') : t('لا توجد بوابة مفعّلة بعد')}</strong></span></div><div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}><button className="outline-button" onClick={() => void copy(sitePayUrl)}>{t('نسخ الرابط')}<Copy size={16} /></button><a className="outline-button" href={sitePayUrl} target="_blank" rel="noreferrer">{t('فتح الصفحة')}<ExternalLink size={16} /></a></div><p className="helper-note">{tr('تشغيل الدومين: أضف pay.1shotcam.com كـ Domain alias في Netlify ← Domain management، ثم في لوحة DNS لديك اجعل سجل CNAME باسم pay يشير إلى elegant-puppy-9ddbd7.netlify.app.', 'Going live: add pay.1shotcam.com as a domain alias in Netlify → Domain management, then point the `pay` CNAME in your DNS panel to elegant-puppy-9ddbd7.netlify.app.')}</p><p className="readiness">{liveGateways.length ? t('الصفحة فعّالة: تظهر فقط بوابات حساب المشرف المفعّلة.') : `${t('متغيرات Netlify المطلوبة قبل تفعيل الصفحة')}: ${readinessVariables.join(' · ')} — ${t('القيم تُدخل في لوحة Netlify مباشرة، ولا تُكتب في أي محادثة.')}`}</p></section></div>}<div className="overview-grid"><section className="panel activity-panel"><div className="section-heading"><h2>{t('نشاط آخر 7 أيام')}</h2><span className="subtle-tag">SAR</span></div><Activity daily={platform.daily || []} /></section><section className="panel quick-panel"><span className="eyebrow">{tr('أنشئ. شارك. حصّل.', 'CREATE. SHARE. COLLECT.')}</span><Link2 size={32} /><h2>{t('رابط مفتوح لجميع البوابات')}</h2><p>{t('رابط موحد يجمع بواباتك ويدعم التحويل والتوجيه الذكي بحسب بطاقة العميل.')}</p><div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}><button className="primary-button" disabled={!canCreate || !policy.openLinksEnabled} onClick={() => { setOpenGatewayMode('all'); setOpenBuilder(true); }}>{t('رابط مفتوح لجميع البوابات')}<Sparkles size={16} /></button><button className="outline-button" disabled={!canCreate || !policy.openLinksEnabled} onClick={() => { setOpenGatewayMode('single'); setOpenBuilder(true); }}>{t('رابط مفتوح لبوابة')}<Link2 size={16} /></button>{testButton}</div></section></div><div className="section-heading"><h2>{t('آخر الطلبات')}</h2></div><DocumentTable documents={platform.documents.slice(0, 6)} copy={copy} cancel={cancel} busy={busy} /></>}
