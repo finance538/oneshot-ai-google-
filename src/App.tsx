@@ -45,6 +45,8 @@ import {
   resolveCustomerReturnDestination,
 } from './storefront/routes';
 import GeminiAiStudio from './GeminiAiStudio';
+import AiGovernanceAdmin from './AiGovernanceAdmin';
+import PredictivePaymentAnalytics from './PredictivePaymentAnalytics';
 import { Shield, FlaskConical, UserPlus, ShieldAlert, BrainCircuit, BarChart3, Award, Megaphone, ShoppingBag, UserCheck, Store } from 'lucide-react';
 
 type View =
@@ -69,20 +71,27 @@ type View =
   | 'marketer_creatives';
 type Auth = 'login' | 'signup' | 'reset' | 'password' | 'invite';
 const navigation = [
+  // المجموعة 1: القيادة وموظفو الذكاء الاصطناعي (CEO & AI Staff)
   { id: 'overview' as const, name: 'نظرة عامة', icon: LayoutDashboard },
-  { id: 'gemini_studio' as const, name: 'استوديو الذكاء الاصطناعي (Gemini AI Suite)', icon: Sparkles },
-  { id: 'staff' as const, name: 'سوق كوادر الـ AI (توظيف موظفين)', icon: UserPlus },
-  { id: 'wallet' as const, name: 'محفظتي', icon: CreditCard },
   { id: 'ceo' as const, name: 'مكتب الرئيس التنفيذي (CEO Agents)', icon: Users },
+  { id: 'staff' as const, name: 'سوق كوادر الـ AI (موظفو المتجر)', icon: UserPlus },
+  { id: 'gemini_studio' as const, name: 'استوديو الذكاء الاصطناعي (Gemini Suite)', icon: Sparkles },
+
+  // المجموعة 2: أدوات الفوترة والمدفوعات (الأدوات الأساسية)
   { id: 'links' as const, name: 'روابط الدفع', icon: Link2 },
-  { id: 'invoices' as const, name: 'الفواتير', icon: FileText },
-  { id: 'subscriptions' as const, name: 'الاشتراكات', icon: Repeat2 },
+  { id: 'invoices' as const, name: 'الفواتير والمطالبات', icon: FileText },
+  { id: 'subscriptions' as const, name: 'الاشتراكات المجدولة', icon: Repeat2 },
+  { id: 'wallet' as const, name: 'محفظتي', icon: CreditCard },
+
+  // المجموعة 3: الربط والإعدادات
   { id: 'integrations' as const, name: 'طرق ربط البوابات', icon: Blocks },
-  { id: 'security' as const, name: 'أنظمة حماية البوابات (التاجر)', icon: Shield },
-  { id: 'loader' as const, name: 'أدوات اللودر واختبار البوابات', icon: FlaskConical },
   { id: 'settings' as const, name: 'إعدادات التاجر', icon: Settings2 },
-  { id: 'admin' as const, name: 'إدارة المنصة واستقبال الطلبات', icon: SlidersHorizontal },
+
+  // المجموعة 4: إدارة المنصة وحوكمة الـ AI (Admin Suite - قوة 100%)
+  { id: 'admin' as const, name: 'إدارة المنصة وحوكمة الـ AI', icon: SlidersHorizontal },
   { id: 'assistant' as const, name: 'مركز عمليات AI (Full Admin)', icon: Sparkles },
+  { id: 'security' as const, name: 'أنظمة حماية البوابات', icon: Shield },
+  { id: 'loader' as const, name: 'أدوات اللودر واختبار البوابات', icon: FlaskConical },
 ];
 const marketerNavigation = [
   { id: 'marketer_overview' as const, name: 'الإحالات والعمولات', icon: LayoutDashboard },
@@ -206,6 +215,16 @@ export default function App() {
   );
 }
 
+function getNavCategory(id: View, isAdmin: boolean): string {
+  if (isAdmin) {
+    if (['admin', 'assistant', 'security', 'loader'].includes(id)) return 'إدارة المنصة وحوكمة الـ AI';
+    if (['ceo', 'staff', 'gemini_studio'].includes(id)) return 'القيادة وموظفو الذكاء الاصطناعي';
+    return 'المدفوعات والفوترة';
+  }
+  if (['overview', 'ceo', 'staff', 'gemini_studio'].includes(id)) return 'القيادة وموظفو الذكاء الاصطناعي';
+  if (['links', 'invoices', 'subscriptions', 'wallet'].includes(id)) return 'أدوات الفوترة والمدفوعات';
+  return 'الربط والإعدادات';
+}
 
 function MerchantPlatform() {
   const { t, tr, locale } = useAppearance();
@@ -529,7 +548,31 @@ function MerchantPlatform() {
     {tour && user && !platform.isAdmin && !isMarketer && <OnboardingGuide userId={user.id} onNavigate={next => setView(next as View)} onOpenChat={() => setView('staff')} onClose={() => setTour(false)} />}
     {sidebar && <button className="sidebar-scrim" aria-label={t('إغلاق')} onClick={() => setSidebar(false)} />}
     <aside className={`sidebar ${sidebar ? 'is-open' : ''}`}><Brand /><span className="workspace-label">{workspaceLabel}</span>
-      <nav aria-label={tr('قائمة الحساب', 'Account navigation')}>{visibleNavigation.map(item => <button key={item.id} className={`nav-item ${view === item.id ? 'active' : ''}`} aria-current={view === item.id ? 'page' : undefined} onClick={() => { setView(item.id); setSidebar(false); }}><item.icon size={19} /><span>{t(item.name)}</span>{view === item.id && <span className="nav-active-dot" />}</button>)}</nav><div id="account-sidebar-tools" />
+      <nav aria-label={tr('قائمة الحساب', 'Account navigation')}>
+        {(() => {
+          let lastCat = '';
+          return visibleNavigation.map(item => {
+            const cat = isMarketer ? tr('بوابة المسوّقين', 'Marketer Tools') : t(getNavCategory(item.id, Boolean(platform.isAdmin)));
+            const showHeading = Boolean(cat && cat !== lastCat);
+            lastCat = cat;
+            return (
+              <div key={item.id} style={{ display: 'flex', flexDirection: 'column' }}>
+                {showHeading && <span className="nav-section-title">{cat}</span>}
+                <button
+                  key={item.id}
+                  className={`nav-item ${view === item.id ? 'active' : ''}`}
+                  aria-current={view === item.id ? 'page' : undefined}
+                  onClick={() => { setView(item.id); setSidebar(false); }}
+                >
+                  <item.icon size={19} />
+                  <span>{t(item.name)}</span>
+                  {view === item.id && <span className="nav-active-dot" />}
+                </button>
+              </div>
+            );
+          });
+        })()}
+      </nav><div id="account-sidebar-tools" />
       {!user && <button className="nav-item nav-signup" onClick={() => setAuth('signup')}><UserPlus size={19} /><span>{t('إنشاء حساب')}</span></button>}
       {!user && <p className="nav-locked-hint">{t('بقية الأدوات تظهر بحسب صلاحية حسابك بعد تسجيل الدخول.')}</p>}
       <div className="sidebar-note"><ShieldCheck size={23} /><strong>{t('عزل الصلاحيات والحمايات دائمة')}</strong><p>{isMarketer ? tr('صلاحيات المسوّق معزولة بالكامل عن الإدارة وبوابات التجار.', 'Marketer permissions are strictly isolated from Admin and Merchant controls.') : t('المبالغ مؤكدة من بوابة الدفع، وليست من عودة المتصفح.')}</p></div><a className="sidebar-external" href={appearanceLink('/')}>{t('العودة إلى oneShot')}<ArrowUpLeft size={16} /></a>
@@ -616,10 +659,80 @@ function MerchantPlatform() {
             onRefresh={load}
           />
         )}
-        {user && !isMarketer && view === 'gemini_studio' && <GeminiAiStudio key={user.id} />}
+        {user && !isMarketer && view === 'gemini_studio' && (
+          <GeminiAiStudio key={user.id} isAdmin={Boolean(platform.isAdmin)} accountRole={platform.accountRole} />
+        )}
         {!isMarketer && view === 'staff' && <AiStaffMarketplace />}
         {user && !isMarketer && view === 'ceo' && <CeoSuite key={user.id} documents={platform.documents} walletBalance={walletBalance} />}
-        {!isMarketer && view === 'overview' && <>{user && canUseAdvancedTools && <TestingWorkspaceShortcut onOpen={() => setView('loader')} />}<div className="stats-grid"><Stat title={t('إجمالي المدفوعات')} value={money(metrics.totalPaid, locale)} suffix="SAR" icon={<CreditCard size={19} />} featured /><Stat title={t('عمليات مكتملة')} value={new Intl.NumberFormat(locale).format(metrics.paidCount)} icon={<Check size={19} />} /><Stat title={t('طلبات معلقة')} value={new Intl.NumberFormat(locale).format(metrics.pendingCount)} icon={<FileText size={19} />} /><Stat title={t('العملاء')} value={new Intl.NumberFormat(locale).format(metrics.customers)} icon={<Users size={19} />} /></div><VirtualMerchantStation />{platform.isAdmin && <div className="overview-grid"><section className="panel"><div className="section-heading"><div><span className="eyebrow">{tr('صفحة الدفع العامة', 'PUBLIC CHECKOUT PAGE')}</span><h2>{t('صفحة الدفع على pay.1shotcam.com')}</h2></div><Globe size={23} /></div><p>{t('صفحة واحدة يدفع منها عملاؤك مباشرة عبر بواباتك المفعّلة، بلا إنشاء رابط لكل عملية.')}</p><div className="open-amount-range"><span>{t('الرابط')} <strong dir="ltr">{sitePayUrl}</strong></span><span>{t('البوابات المفعّلة')} <strong>{liveGateways.length ? liveGateways.join(' · ') : t('لا توجد بوابة مفعّلة بعد')}</strong></span></div><div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}><button className="outline-button" onClick={() => void copy(sitePayUrl)}>{t('نسخ الرابط')}<Copy size={16} /></button><a className="outline-button" href={sitePayUrl} target="_blank" rel="noreferrer">{t('فتح الصفحة')}<ExternalLink size={16} /></a></div><p className="helper-note">{tr('تشغيل الدومين: أضف pay.1shotcam.com كـ Domain alias في Netlify ← Domain management، ثم في لوحة DNS لديك اجعل سجل CNAME باسم pay يشير إلى elegant-puppy-9ddbd7.netlify.app.', 'Going live: add pay.1shotcam.com as a domain alias in Netlify → Domain management, then point the `pay` CNAME in your DNS panel to elegant-puppy-9ddbd7.netlify.app.')}</p><p className="readiness">{liveGateways.length ? t('الصفحة فعّالة: تظهر فقط بوابات حساب المشرف المفعّلة.') : `${t('متغيرات Netlify المطلوبة قبل تفعيل الصفحة')}: ${readinessVariables.join(' · ')} — ${t('القيم تُدخل في لوحة Netlify مباشرة، ولا تُكتب في أي محادثة.')}`}</p></section></div>}<div className="overview-grid"><section className="panel activity-panel"><div className="section-heading"><h2>{t('نشاط آخر 7 أيام')}</h2><span className="subtle-tag">SAR</span></div><Activity daily={platform.daily || []} /></section><section className="panel quick-panel"><span className="eyebrow">{tr('أنشئ. شارك. حصّل.', 'CREATE. SHARE. COLLECT.')}</span><Link2 size={32} /><h2>{t('رابط مفتوح لجميع البوابات')}</h2><p>{t('رابط موحد يجمع بواباتك ويدعم التحويل والتوجيه الذكي بحسب بطاقة العميل.')}</p><div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}><button className="primary-button" disabled={!canCreate || !policy.openLinksEnabled} onClick={() => { setOpenGatewayMode('all'); setOpenBuilder(true); }}>{t('رابط مفتوح لجميع البوابات')}<Sparkles size={16} /></button><button className="outline-button" disabled={!canCreate || !policy.openLinksEnabled} onClick={() => { setOpenGatewayMode('single'); setOpenBuilder(true); }}>{t('رابط مفتوح لبوابة')}<Link2 size={16} /></button>{testButton}</div></section></div><div className="section-heading"><h2>{t('آخر الطلبات')}</h2></div><DocumentTable documents={platform.documents.slice(0, 6)} copy={copy} cancel={cancel} busy={busy} /></>}
+        {!isMarketer && view === 'overview' && (
+          <>
+            {user && canUseAdvancedTools && <TestingWorkspaceShortcut onOpen={() => setView('loader')} />}
+            
+            {/* لوحة القيادة وموظفي الذكاء الاصطناعي المنظمة للتاجر */}
+            <div className="merchant-hub-grid">
+              <article className="merchant-hub-card primary-hub">
+                <div className="hub-card-header">
+                  <div>
+                    <span className="eyebrow" style={{ color: '#ff7744' }}>EXECUTIVE SUITE · مكتب القيادة</span>
+                    <h3>مكتب الرئيس التنفيذي (CEO Suite)</h3>
+                    <p>اتخاذ القرارات المالية والاستراتيجية، تسعير الخدمات وتوجيه موظفي الاستوديو.</p>
+                  </div>
+                  <Users size={28} color="#f05b2b" />
+                </div>
+                <div className="hub-card-actions">
+                  <button className="primary-button" onClick={() => setView('ceo')}>
+                    <Users size={16} />
+                    <span>دخول مكتب الـ CEO</span>
+                  </button>
+                </div>
+              </article>
+
+              <article className="merchant-hub-card">
+                <div className="hub-card-header">
+                  <div>
+                    <span className="eyebrow" style={{ color: '#ff7744' }}>AI EMPLOYEES · الموظفون الآليون</span>
+                    <h3>سوق كوادر الـ AI (موظفو المتجر)</h3>
+                    <p>توظيف وتكليف وكلاء الذكاء الاصطناعي لإصدار الفواتير ومتابعة الدفعات والتسويق.</p>
+                  </div>
+                  <UserPlus size={28} color="#f05b2b" />
+                </div>
+                <div className="hub-card-actions">
+                  <button className="outline-button" onClick={() => setView('staff')}>
+                    <UserPlus size={16} />
+                    <span>سوق الكوادر والموظفين</span>
+                  </button>
+                </div>
+              </article>
+
+              <article className="merchant-hub-card">
+                <div className="hub-card-header">
+                  <div>
+                    <span className="eyebrow" style={{ color: '#ff7744' }}>GEMINI AI SUITE · استوديو الذكاء</span>
+                    <h3>استوديو الذكاء الاصطناعي (Gemini Suite)</h3>
+                    <p>تفريغ مباشر للأوامر الصوتية عبر الميكروفون ومحادثات ذكية فورية عبر Gemini 3.8 Flash.</p>
+                  </div>
+                  <Sparkles size={28} color="#f05b2b" />
+                </div>
+                <div className="hub-card-actions">
+                  <button className="outline-button" onClick={() => setView('gemini_studio')}>
+                    <Sparkles size={16} />
+                    <span>فتح استوديو AI</span>
+                  </button>
+                </div>
+              </article>
+            </div>
+
+            <div className="stats-grid"><Stat title={t('إجمالي المدفوعات')} value={money(metrics.totalPaid, locale)} suffix="SAR" icon={<CreditCard size={19} />} featured /><Stat title={t('عمليات مكتملة')} value={new Intl.NumberFormat(locale).format(metrics.paidCount)} icon={<Check size={19} />} /><Stat title={t('طلبات معلقة')} value={new Intl.NumberFormat(locale).format(metrics.pendingCount)} icon={<FileText size={19} />} /><Stat title={t('العملاء')} value={new Intl.NumberFormat(locale).format(metrics.customers)} icon={<Users size={19} />} /></div>
+            
+            {/* ودجت التحليلات التنبؤية عبر Gemini AI */}
+            <PredictivePaymentAnalytics
+              metrics={{ ...metrics, daily: platform.daily || [] }}
+              onNavigate={next => setView(next as View)}
+              onNotify={setNotice}
+            />
+
+            <VirtualMerchantStation />{platform.isAdmin && <div className="overview-grid"><section className="panel"><div className="section-heading"><div><span className="eyebrow">{tr('صفحة الدفع العامة', 'PUBLIC CHECKOUT PAGE')}</span><h2>{t('صفحة الدفع على pay.1shotcam.com')}</h2></div><Globe size={23} /></div><p>{t('صفحة واحدة يدفع منها عملاؤك مباشرة عبر بواباتك المفعّلة، بلا إنشاء رابط لكل عملية.')}</p><div className="open-amount-range"><span>{t('الرابط')} <strong dir="ltr">{sitePayUrl}</strong></span><span>{t('البوابات المفعّلة')} <strong>{liveGateways.length ? liveGateways.join(' · ') : t('لا توجد بوابة مفعّلة بعد')}</strong></span></div><div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}><button className="outline-button" onClick={() => void copy(sitePayUrl)}>{t('نسخ الرابط')}<Copy size={16} /></button><a className="outline-button" href={sitePayUrl} target="_blank" rel="noreferrer">{t('فتح الصفحة')}<ExternalLink size={16} /></a></div><p className="helper-note">{tr('تشغيل الدومين: أضف pay.1shotcam.com كـ Domain alias في Netlify ← Domain management، ثم في لوحة DNS لديك اجعل سجل CNAME باسم pay يشير إلى elegant-puppy-9ddbd7.netlify.app.', 'Going live: add pay.1shotcam.com as a domain alias in Netlify ← Domain management, then point the `pay` CNAME in your DNS panel to elegant-puppy-9ddbd7.netlify.app.')}</p><p className="readiness">{liveGateways.length ? t('الصفحة فعّالة: تظهر فقط بوابات حساب المشرف المفعّلة.') : `${t('متغيرات Netlify المطلوبة قبل تفعيل الصفحة')}: ${readinessVariables.join(' · ')} — ${t('القيم تُدخل في لوحة Netlify مباشرة، ولا تُكتب في أي محادثة.')}`}</p></section></div>}<div className="overview-grid"><section className="panel activity-panel"><div className="section-heading"><h2>{t('نشاط آخر 7 أيام')}</h2><span className="subtle-tag">SAR</span></div><Activity daily={platform.daily || []} /></section><section className="panel quick-panel"><span className="eyebrow">{tr('أنشئ. شارك. حصّل.', 'CREATE. SHARE. COLLECT.')}</span><Link2 size={32} /><h2>{t('رابط مفتوح لجميع البوابات')}</h2><p>{t('رابط موحد يجمع بواباتك ويدعم التحويل والتوجيه الذكي بحسب بطاقة العميل.')}</p><div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}><button className="primary-button" disabled={!canCreate || !policy.openLinksEnabled} onClick={() => { setOpenGatewayMode('all'); setOpenBuilder(true); }}>{t('رابط مفتوح لجميع البوابات')}<Sparkles size={16} /></button><button className="outline-button" disabled={!canCreate || !policy.openLinksEnabled} onClick={() => { setOpenGatewayMode('single'); setOpenBuilder(true); }}>{t('رابط مفتوح لبوابة')}<Link2 size={16} /></button>{testButton}</div></section></div><div className="section-heading"><h2>{t('آخر الطلبات')}</h2></div><DocumentTable documents={platform.documents.slice(0, 6)} copy={copy} cancel={cancel} busy={busy} /></>
+        )}
         {!isMarketer && ['links', 'invoices'].includes(view) && <>{view === 'links' && <section className="panel open-links-panel"><div className="section-heading"><div><span className="eyebrow">{tr('رابط مرن. بقواعدك.', 'A LINK WITHOUT LIMITS. WITH YOUR RULES.')}</span><h2>{t('روابط بمبلغ يحدده العميل')}</h2></div><div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}><button className="primary-button" style={{ background: 'linear-gradient(135deg, #ff5500, #ff7700)', borderColor: '#ff5500' }} disabled={!canCreate || !policy.openLinksEnabled || busy} onClick={() => { setOpenGatewayMode('all'); setOpenBuilder(true); }}><Sparkles size={16} />{t('رابط مفتوح لجميع البوابات')}</button><button className="outline-button" disabled={!canCreate || !policy.openLinksEnabled || busy} onClick={() => { setOpenGatewayMode('single'); setOpenBuilder(true); }}><Link2 size={16} />{t('رابط مفتوح لبوابة')}</button>{testButton}</div></div>{platform.isAdmin && !choices.length && <section className="panel" style={{ marginBottom: '16px' }}><div className="section-heading"><ShieldCheck size={20} /><div><h2>{t('لا توجد بوابة مفعّلة بعد')}</h2></div></div><p>{t('لا يصدر رابط دفع حقيقي قبل تفعيل بوابة واحدة على الأقل (PayTabs أو Telr) من قسم الربط، وإضافة مفاتيح البوابة في Netlify ← Site configuration ← Environment variables.')}</p>{readinessVariables.map(name => <div key={name} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}><code className="share-url" dir="ltr" style={{ flex: 1 }}>{name}</code><button className="outline-button" onClick={() => void copy(name)}><Copy size={15} />{tr('نسخ', 'COPY')}</button></div>)}<p className="helper-note">{t('القيم تُدخل في لوحة Netlify مباشرة، ولا تُكتب في أي محادثة.')}</p></section>}{platform.openLinks?.length ? <div className="open-link-grid">{platform.openLinks.map(link => <article className="open-link-card" key={link.id}><div className="section-heading"><Link2 size={22} /><span className={`status-badge ${link.enabled ? 'status-active' : 'status-cancelled'}`}>{t(link.enabled ? 'نشط' : 'متوقف')}</span></div><h3>{link.title}</h3><p>{money(link.minimum, locale)} — {money(link.maximum, locale)} SAR</p><code className="share-url" dir="ltr">{openPaymentLink(link.id)}</code><div className="row-actions"><button className="outline-button" onClick={() => void copy(openPaymentLink(link.id))}><Copy size={15} />{t('نسخ الرابط')}</button><a className="icon-button" aria-label={t('فتح الرابط')} href={openPaymentLink(link.id)} target="_blank" rel="noreferrer"><ExternalLink size={16} /></a><button className="icon-button" role="switch" aria-checked={link.enabled} aria-label={t(link.enabled ? 'متوقف' : 'نشط')} disabled={busy} onClick={() => void run(() => api('platform', { action: 'toggle-open-link', id: link.id, enabled: !link.enabled }))}>{link.enabled ? <X size={16} /> : <Check size={16} />}</button></div></article>)}</div> : <Empty title={t('لا توجد روابط مفتوحة بعد.')} />}</section>}<div className="list-toolbar"><h2>{t('طلبات بمبلغ ثابت')}</h2><label className="search-field"><Search size={17} /><input value={search} onChange={event => setSearch(event.target.value)} placeholder={t('ابحث عن عميل أو طلب')} /></label></div><DocumentTable documents={filtered} copy={copy} cancel={cancel} busy={busy} /></>}
         {!isMarketer && view === 'subscriptions' && <><section className="panel documents-panel">{platform.subscriptions.length ? <div className="table-scroll"><table><thead><tr><th>{t('عنوان الطلب')}</th><th>{t('الحالة')}</th><th>{t('الخصم القادم')}</th><th /></tr></thead><tbody>{platform.subscriptions.map(subscription => <tr key={subscription.id}><td>{platform.documents.find(document => document.id === subscription.documentId)?.title || subscription.documentId}</td><td><Status value={subscription.status} /></td><td>{date(subscription.nextChargeAt, locale)}</td><td>{subscription.status !== 'cancelled' && <button className="text-button danger-text" disabled={busy} onClick={() => void run(() => api('platform', { action: 'cancel-subscription', id: subscription.id }))}>{t('إيقاف الاشتراك')}</button>}</td></tr>)}</tbody></table></div> : <Empty title={t('لا توجد اشتراكات بعد.')} />}</section><p className="helper-note">{t('تحصيل دوري بعد موافقة العميل؛ ليس تخزيناً لبيانات البطاقة.')}</p>{platform.attempts.filter(attempt => !attempt.reference && platform.documents.find(document => document.id === attempt.documentId)?.method !== 'paylink').map(attempt => <button key={attempt.id} className="outline-button recovery-button" onClick={() => setReviewAttempt(attempt.id)}><ShieldCheck size={17} />{t('مطابقة عملية غير مؤكدة')} · {platform.documents.find(document => document.id === attempt.documentId)?.title}</button>)}</>}
         {!isMarketer && view === 'integrations' && (
@@ -831,7 +944,7 @@ function Modal({ title, close, children, className = '' }: { title: string; clos
 
 function AdminControls({ platform, onSave }: { platform: Platform; onSave: () => Promise<void> }) {
   const { t, tr } = useAppearance();
-  const [adminTab, setAdminTab] = useState<'marketer_approvals' | 'ai_tiers' | 'failures_dashboard' | 'multi_bin_matcher' | 'country_matrix' | 'ai_bin' | 'ip_spoofing' | 'fraud_toolkit' | 'policies'>('marketer_approvals');
+  const [adminTab, setAdminTab] = useState<'marketer_approvals' | 'ai_governance' | 'ai_tiers' | 'failures_dashboard' | 'multi_bin_matcher' | 'country_matrix' | 'ai_bin' | 'ip_spoofing' | 'fraud_toolkit' | 'policies'>('marketer_approvals');
   const [ollamaConfig, setOllamaConfig] = useState<OllamaServerConfig>(getSavedOllamaConfig);
   const [policy, setPolicy] = useState<PaymentPolicy | null>(null);
   const [version, setVersion] = useState(0);
@@ -855,6 +968,7 @@ function AdminControls({ platform, onSave }: { platform: Platform; onSave: () =>
       <nav className="admin-tools-nav" aria-label={tr('أدوات إدارة المنصة', 'Platform administration tools')}>
         {([
           ['marketer_approvals', tr('حسابات المسوّقين والعمولات', 'Marketers and commissions'), UserCheck],
+          ['ai_governance', tr('تحديد وحوكمة صلاحيات الـ AI (قوة 100% للأدمن)', 'AI Governance & Permissions'), Sparkles],
           ['ai_tiers', tr('تراخيص الخدمات وطبقات AI', 'Service licenses and AI tiers'), Award],
           ['failures_dashboard', tr('تحليل حالات الرفض', 'Decline analysis'), BarChart3],
           ['multi_bin_matcher', tr('مطابقة البوابات والـ BIN', 'Gateway and BIN matching'), Sparkles],
@@ -868,6 +982,10 @@ function AdminControls({ platform, onSave }: { platform: Platform; onSave: () =>
 
       {adminTab === 'marketer_approvals' && (
         <MarketerApprovalAdmin marketers={platform.adminMarketers ?? []} onRefresh={onSave} />
+      )}
+
+      {adminTab === 'ai_governance' && (
+        <AiGovernanceAdmin adminEmail="finance@1shotcam.com" onNotify={setNotice} />
       )}
 
       {adminTab === 'ai_tiers' && (

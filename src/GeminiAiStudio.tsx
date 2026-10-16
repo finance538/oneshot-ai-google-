@@ -16,12 +16,15 @@ import {
   Zap,
   ShieldCheck,
   Clock,
-  ExternalLink
+  ExternalLink,
+  Flame,
+  Lock
 } from 'lucide-react';
 import { getUser, onAuthChange, type User as PlatformUser } from '@netlify/identity';
 import { api } from './platform';
 import { useVoiceRecorder } from './useVoiceRecorder';
 import { useVoiceTranscripts } from './useVoiceTranscripts';
+import { getRolePermissions, subscribeToAiGovernance, type RoleAiPermissions } from './aiGovernanceData';
 import './GeminiAiStudio.css';
 
 interface Message {
@@ -36,13 +39,29 @@ interface Message {
 type ModelTier = 'gemini-3.8-flash' | 'gemini-3.1-flash-lite' | 'gemini-4-argon';
 type PersonaKey = 'studio_director' | 'gateway_architect' | 'campaign_strategist' | 'coo_operations';
 
-export default function GeminiAiStudio() {
+interface GeminiAiStudioProps {
+  isAdmin?: boolean;
+  accountRole?: string;
+}
+
+export default function GeminiAiStudio({ isAdmin = false, accountRole = 'merchant' }: GeminiAiStudioProps) {
   const [activeTab, setActiveTab] = useState<'chat' | 'transcripts'>('chat');
   const [user, setUser] = useState<PlatformUser | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
+  const [permissions, setPermissions] = useState<RoleAiPermissions>(() => getRolePermissions(accountRole, isAdmin));
+
+  useEffect(() => {
+    const unsub = subscribeToAiGovernance(() => {
+      setPermissions(getRolePermissions(accountRole, isAdmin));
+    });
+    return unsub;
+  }, [accountRole, isAdmin]);
 
   // Model & Persona Configuration
-  const [selectedModel, setSelectedModel] = useState<ModelTier>('gemini-3.8-flash');
+  const [selectedModel, setSelectedModel] = useState<ModelTier>(() => {
+    if (isAdmin) return 'gemini-4-argon';
+    return 'gemini-3.8-flash';
+  });
   const [selectedPersona, setSelectedPersona] = useState<PersonaKey>('studio_director');
   const [enableSearchGrounding, setEnableSearchGrounding] = useState(false);
   const [enableMapsGrounding, setEnableMapsGrounding] = useState(false);
@@ -171,6 +190,15 @@ export default function GeminiAiStudio() {
             <span className="eyebrow" style={{ margin: 0 }}>استوديو الذكاء الاصطناعي المتقدم</span>
           </div>
           <h1>OneShot Gemini AI Suite</h1>
+          {isAdmin ? (
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '4px 10px', background: 'rgba(240, 91, 43, 0.2)', border: '1px solid #f05b2b', borderRadius: '6px', color: '#ff7744', fontSize: '0.78rem', fontWeight: 700, margin: '6px 0' }}>
+              <Flame size={14} /> قوة 100% غير مقيدة · حساب الأدمن الشامل
+            </div>
+          ) : (
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '4px 10px', background: 'rgba(255, 255, 255, 0.06)', border: '1px solid rgba(255, 255, 255, 0.12)', borderRadius: '6px', color: '#eaeaea', fontSize: '0.78rem', fontWeight: 600, margin: '6px 0' }}>
+              <Sparkles size={14} style={{ color: '#f05b2b' }} /> مساحة التاجر التنفيذي · مكتب الـ CEO وموظفي الذكاء الاصطناعي
+            </div>
+          )}
           <p>
             تكامل متعدد الأدوار للمحادثات الذكية وتوليد الأفكار الإنتاجية، مع تحويل الصوت إلى نصوص عبر الميكروفون
             وحفظ أرشيف التفريغ الصوتي في حسابك مع نسخة محلية فورية.
@@ -179,7 +207,7 @@ export default function GeminiAiStudio() {
 
         <div className="gemini-auth-status" role="status">
           {authLoading ? 'جارٍ التحقق من حساب المنصة...' : user ? (
-            <><ShieldCheck size={16} /><span>{user.name || user.email}</span><span>أرشيف حسابك جاهز</span></>
+            <><ShieldCheck size={16} /><span>{user.name || user.email}</span><span>{isAdmin ? 'صلاحيات الإدارة 100%' : 'أرشيف حسابك جاهز'}</span></>
           ) : <span>سجّل الدخول إلى المنصة لاستخدام الاستوديو.</span>}
         </div>
       </div>
@@ -221,7 +249,7 @@ export default function GeminiAiStudio() {
               className={`segmented-btn ${selectedPersona === 'coo_operations' ? 'active' : ''}`}
               onClick={() => setSelectedPersona('coo_operations')}
             >
-              مدير التشغيل (COO)
+              مستشار الـ CEO (التنفيذي)
             </button>
           </div>
         </div>
@@ -235,6 +263,7 @@ export default function GeminiAiStudio() {
           <div className="segmented-control">
             <button
               type="button"
+              disabled={!isAdmin && !permissions.allowedModels.includes('gemini-3.8-flash')}
               className={`segmented-btn ${selectedModel === 'gemini-3.8-flash' ? 'active' : ''}`}
               onClick={() => setSelectedModel('gemini-3.8-flash')}
             >
@@ -242,6 +271,7 @@ export default function GeminiAiStudio() {
             </button>
             <button
               type="button"
+              disabled={!isAdmin && !permissions.allowedModels.includes('gemini-3.1-flash-lite')}
               className={`segmented-btn ${selectedModel === 'gemini-3.1-flash-lite' ? 'active' : ''}`}
               onClick={() => setSelectedModel('gemini-3.1-flash-lite')}
             >
@@ -249,10 +279,12 @@ export default function GeminiAiStudio() {
             </button>
             <button
               type="button"
+              disabled={!isAdmin && !permissions.allowedModels.includes('gemini-4-argon')}
               className={`segmented-btn ${selectedModel === 'gemini-4-argon' ? 'active' : ''}`}
               onClick={() => setSelectedModel('gemini-4-argon')}
+              title={!isAdmin && !permissions.allowedModels.includes('gemini-4-argon') ? 'يتطلب تفعيل من حساب الأدمن' : ''}
             >
-              Argon (تفكير معمّق)
+              Argon (تفكير معمّق) {!isAdmin && !permissions.allowedModels.includes('gemini-4-argon') && <Lock size={12} />}
             </button>
           </div>
         </div>
@@ -266,6 +298,7 @@ export default function GeminiAiStudio() {
           <div className="grounding-toggles">
             <button
               type="button"
+              disabled={!isAdmin && !permissions.allowSearchGrounding}
               className={`toggle-chip ${enableSearchGrounding ? 'active' : ''}`}
               onClick={() => {
                 setEnableSearchGrounding(!enableSearchGrounding);
@@ -277,6 +310,7 @@ export default function GeminiAiStudio() {
             </button>
             <button
               type="button"
+              disabled={!isAdmin && !permissions.allowMapsGrounding}
               className={`toggle-chip ${enableMapsGrounding ? 'active' : ''}`}
               onClick={() => {
                 setEnableMapsGrounding(!enableMapsGrounding);
@@ -297,8 +331,8 @@ export default function GeminiAiStudio() {
             type="button"
             className={`mic-circle-btn ${isRecording ? 'recording' : ''}`}
             onClick={() => isRecording ? stopRecording() : void startRecording()}
-            disabled={!user || transcribing || isStarting}
-            title={isRecording ? 'إيقاف التسجيل والتحويل إلى نص' : 'بدء تسجيل صوتي عبر الميكروفون'}
+            disabled={!user || transcribing || isStarting || (!isAdmin && !permissions.allowVoiceTranscription)}
+            title={!isAdmin && !permissions.allowVoiceTranscription ? 'التسجيل الصوتي مقفل من حساب الأدمن' : isRecording ? 'إيقاف التسجيل والتحويل إلى نص' : 'بدء تسجيل صوتي عبر الميكروفون'}
           >
             {isRecording ? <Square size={18} /> : <Mic size={20} />}
           </button>
