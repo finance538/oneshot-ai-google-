@@ -71,7 +71,7 @@ export function MarketerDashboard({
 
   const referralCode = marketerAccount?.referralCode || 'MKT-PENDING';
   const commissionRate = marketerAccount?.commissionRate ?? 10;
-  const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://www.1shotcam.com';
+  const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://1shotcam.com';
   const mainReferralLink = `${baseUrl}/?ref=${encodeURIComponent(referralCode)}`;
 
   async function copyText(key: string, value: string) {

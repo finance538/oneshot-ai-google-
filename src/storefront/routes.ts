@@ -73,7 +73,7 @@ export function validateInternalReturnUrl(raw: string | null | undefined): strin
     return null;
   }
   try {
-    const base = typeof window !== "undefined" ? window.location.origin : "https://www.1shotcam.com";
+    const base = typeof window !== "undefined" ? window.location.origin : "https://1shotcam.com";
     const parsed = new URL(trimmed, base);
     if (parsed.origin !== base) return null;
     const pathname = normalizePathname(parsed.pathname);
@@ -100,7 +100,7 @@ export function validateInternalReturnUrl(raw: string | null | undefined): strin
 function extractSkuFromReturnUrl(urlPath: string | null | undefined): string | null {
   if (!urlPath) return null;
   try {
-    const base = typeof window !== "undefined" ? window.location.origin : "https://www.1shotcam.com";
+    const base = typeof window !== "undefined" ? window.location.origin : "https://1shotcam.com";
     const parsed = new URL(urlPath, base);
     const sku = parsed.searchParams.get("sku")?.trim();
     return sku ? sku.slice(0, 40) : null;
@@ -113,7 +113,7 @@ function withSkuOnWalletUrl(urlPath: string, sku: string | null | undefined): st
   const cleanSku = sku?.trim();
   if (!cleanSku) return urlPath;
   try {
-    const base = typeof window !== "undefined" ? window.location.origin : "https://www.1shotcam.com";
+    const base = typeof window !== "undefined" ? window.location.origin : "https://1shotcam.com";
     const parsed = new URL(urlPath, base);
     if (normalizePathname(parsed.pathname) === "/wallet" && !parsed.searchParams.has("sku")) {
       parsed.searchParams.set("sku", cleanSku.slice(0, 40));

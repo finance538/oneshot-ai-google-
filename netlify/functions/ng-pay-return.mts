@@ -25,7 +25,7 @@ h1{font-size:22px;margin:0 0 12px;color:${color}}
 p{margin:8px 0;color:#9fb0c3;line-height:1.7}
 a{display:inline-block;margin-top:20px;padding:12px 22px;border-radius:12px;background:#1f6feb;color:#fff;text-decoration:none}
 code{color:#9fb0c3;font-size:12px}</style></head>
-<body><div class="card"><h1>${title}</h1>${body}<a href="https://www.1shotcam.com">العودة إلى الموقع</a></div></body></html>`;
+<body><div class="card"><h1>${title}</h1>${body}<a href="https://1shotcam.com">العودة إلى الموقع</a></div></body></html>`;
   return new Response(html, { status, headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' } });
 }
 

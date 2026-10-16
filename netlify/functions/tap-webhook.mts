@@ -14,7 +14,7 @@ import {
 } from '../lib/tap.js';
 
 // مستلم Webhooks لبوابة Tap Payments — الرابط الذي يُسجَّل في لوحة Tap:
-//   https://www.1shotcam.com/.netlify/functions/tap-webhook?merchant=<معرّف التاجر>
+//   https://1shotcam.com/.netlify/functions/tap-webhook?merchant=<معرّف التاجر>
 // Tap يرسل غلافًا: { method, url, headers: [{name,value}], body: "<نص الشحنة JSON>" }،
 // ويوقّع الحمولة بقيمة hashstring محسوبة HMAC-SHA256 بمفتاح السري نفسه:
 //   x_id{id}x_amount{amount}x_currency{currency}x_gateway_reference{ref}x_payment_reference{ref}x_status{status}x_created{created}

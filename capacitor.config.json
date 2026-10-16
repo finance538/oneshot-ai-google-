@@ -4,7 +4,7 @@
   "webDir": "dist",
   "bundledWebRuntime": false,
   "server": {
-    "url": "https://www.1shotcam.com",
+    "url": "https://1shotcam.com",
     "cleartext": false
   },
   "android": {
