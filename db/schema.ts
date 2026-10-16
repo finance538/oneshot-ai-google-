@@ -4,6 +4,18 @@ import type { OperationKind } from '../shared/operations.js';
 import type { PaymentPolicy } from '../shared/policy.js';
 import type { AssistantAction } from '../shared/admin-assistant.js';
 
+export const voiceTranscripts = pgTable('voice_transcripts', {
+  ownerId: text('owner_id').notNull(),
+  id: uuid().notNull(),
+  title: text().notNull(),
+  transcriptText: text('transcript_text').notNull(),
+  durationSeconds: integer('duration_seconds').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+}, table => [
+  primaryKey({ columns: [table.ownerId, table.id] }),
+  index('voice_transcripts_owner_created').on(table.ownerId, table.createdAt),
+]);
+
 export const merchants = pgTable('merchants', {
   id: uuid().defaultRandom().primaryKey(),
   ownerId: text('owner_id').notNull().unique(),

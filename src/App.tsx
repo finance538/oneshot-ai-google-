@@ -84,8 +84,8 @@ const marketerNavigation = [
 ];
 const allNavigation = [...navigation, ...marketerNavigation.filter(item => item.id !== 'wallet')];
 const guestNavigation: View[] = [];
-const merchantViews = ['overview', 'gemini_studio', 'links', 'invoices', 'subscriptions', 'integrations', 'settings', 'wallet'];
-const adminViews = ['admin', 'gemini_studio', 'integrations'];
+const merchantViews = ['overview', 'gemini_studio', 'ceo', 'links', 'invoices', 'subscriptions', 'integrations', 'settings', 'wallet'];
+const adminViews = ['admin', 'gemini_studio', 'ceo', 'integrations', 'loader'];
 const initialPlatform: Platform = { merchant: null, documents: [], subscriptions: [], attempts: [], openLinks: [] };
 
 export default function App() {
@@ -116,6 +116,7 @@ function MerchantPlatform() {
   const { t, tr, locale } = useAppearance();
   const [user, setUser] = useState<User | null>(null);
   const [platform, setPlatform] = useState<Platform>(initialPlatform);
+  const [walletBalance, setWalletBalance] = useState<number | undefined>(undefined);
   const [view, setView] = useState<View>(window.location.pathname === '/wallet' ? 'wallet' : 'links');
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -350,6 +351,17 @@ function MerchantPlatform() {
     finally { setBusy(false); }
   }
 
+  useEffect(() => {
+    setWalletBalance(undefined);
+    if (!user || view !== 'ceo') return;
+    let active = true;
+    void api<{ wallet: { balance: number } }>('wallet')
+      .then(result => { if (active) setWalletBalance(result.wallet.balance); })
+      .catch(() => { /* An unavailable balance is shown as unknown, never as zero. */ });
+    return () => { active = false; };
+  }, [user?.id, view]);
+
+  const canUseAdvancedTools = platform?.isAdmin === true || platform?.accountRole === 'loader';
   const policy = platform.policy ?? defaultPolicy;
   const merchant = platform.merchant;
   const isMarketer = Boolean(user && platform.accountRole === 'marketer' && !platform.isAdmin);
@@ -379,7 +391,7 @@ function MerchantPlatform() {
 
   const visibleNavigation = isMarketer
     ? marketerNavigation.filter(item => isMarketerApproved || item.id === 'marketer_overview')
-    : navigation.filter(item => !user ? guestNavigation.includes(item.id)
+    : navigation.filter(item => item.id !== 'loader' || canUseAdvancedTools).filter(item => !user ? guestNavigation.includes(item.id)
       : platform.isAdmin ? adminViews.includes(item.id)
       : platform.accountRole === 'loader' ? item.id === 'loader'
       : platform.accountRole === 'admin' ? false : merchantViews.includes(item.id));
@@ -479,9 +491,9 @@ function MerchantPlatform() {
             onRefresh={load}
           />
         )}
-        {!isMarketer && view === 'gemini_studio' && <GeminiAiStudio />}
+        {user && !isMarketer && view === 'gemini_studio' && <GeminiAiStudio key={user.id} />}
         {!isMarketer && view === 'staff' && <AiStaffMarketplace />}
-        {!isMarketer && view === 'ceo' && <CeoSuite />}
+        {user && !isMarketer && view === 'ceo' && <CeoSuite key={user.id} documents={platform.documents} walletBalance={walletBalance} />}
         {!isMarketer && view === 'overview' && <><div className="stats-grid"><Stat title={t('إجمالي المدفوعات')} value={money(metrics.totalPaid, locale)} suffix="SAR" icon={<CreditCard size={19} />} featured /><Stat title={t('عمليات مكتملة')} value={new Intl.NumberFormat(locale).format(metrics.paidCount)} icon={<Check size={19} />} /><Stat title={t('طلبات معلقة')} value={new Intl.NumberFormat(locale).format(metrics.pendingCount)} icon={<FileText size={19} />} /><Stat title={t('العملاء')} value={new Intl.NumberFormat(locale).format(metrics.customers)} icon={<Users size={19} />} /></div><VirtualMerchantStation />{platform.isAdmin && <div className="overview-grid"><section className="panel"><div className="section-heading"><div><span className="eyebrow">{tr('صفحة الدفع العامة', 'PUBLIC CHECKOUT PAGE')}</span><h2>{t('صفحة الدفع على pay.1shotcam.com')}</h2></div><Globe size={23} /></div><p>{t('صفحة واحدة يدفع منها عملاؤك مباشرة عبر بواباتك المفعّلة، بلا إنشاء رابط لكل عملية.')}</p><div className="open-amount-range"><span>{t('الرابط')} <strong dir="ltr">{sitePayUrl}</strong></span><span>{t('البوابات المفعّلة')} <strong>{liveGateways.length ? liveGateways.join(' · ') : t('لا توجد بوابة مفعّلة بعد')}</strong></span></div><div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}><button className="outline-button" onClick={() => void copy(sitePayUrl)}>{t('نسخ الرابط')}<Copy size={16} /></button><a className="outline-button" href={sitePayUrl} target="_blank" rel="noreferrer">{t('فتح الصفحة')}<ExternalLink size={16} /></a></div><p className="helper-note">{tr('تشغيل الدومين: أضف pay.1shotcam.com كـ Domain alias في Netlify ← Domain management، ثم في لوحة DNS لديك اجعل سجل CNAME باسم pay يشير إلى elegant-puppy-9ddbd7.netlify.app.', 'Going live: add pay.1shotcam.com as a domain alias in Netlify → Domain management, then point the `pay` CNAME in your DNS panel to elegant-puppy-9ddbd7.netlify.app.')}</p><p className="readiness">{liveGateways.length ? t('الصفحة فعّالة: تظهر فقط بوابات حساب المشرف المفعّلة.') : `${t('متغيرات Netlify المطلوبة قبل تفعيل الصفحة')}: ${readinessVariables.join(' · ')} — ${t('القيم تُدخل في لوحة Netlify مباشرة، ولا تُكتب في أي محادثة.')}`}</p></section></div>}<div className="overview-grid"><section className="panel activity-panel"><div className="section-heading"><h2>{t('نشاط آخر 7 أيام')}</h2><span className="subtle-tag">SAR</span></div><Activity daily={platform.daily || []} /></section><section className="panel quick-panel"><span className="eyebrow">{tr('أنشئ. شارك. حصّل.', 'CREATE. SHARE. COLLECT.')}</span><Link2 size={32} /><h2>{t('رابط مفتوح لجميع البوابات')}</h2><p>{t('رابط موحد يجمع بواباتك ويدعم التحويل والتوجيه الذكي بحسب بطاقة العميل.')}</p><div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}><button className="primary-button" disabled={!canCreate || !policy.openLinksEnabled} onClick={() => { setOpenGatewayMode('all'); setOpenBuilder(true); }}>{t('رابط مفتوح لجميع البوابات')}<Sparkles size={16} /></button><button className="outline-button" disabled={!canCreate || !policy.openLinksEnabled} onClick={() => { setOpenGatewayMode('single'); setOpenBuilder(true); }}>{t('رابط مفتوح لبوابة')}<Link2 size={16} /></button>{testButton}</div></section></div><div className="section-heading"><h2>{t('آخر الطلبات')}</h2></div><DocumentTable documents={platform.documents.slice(0, 6)} copy={copy} cancel={cancel} busy={busy} /></>}
         {!isMarketer && ['links', 'invoices'].includes(view) && <>{view === 'links' && <section className="panel open-links-panel"><div className="section-heading"><div><span className="eyebrow">{tr('رابط مرن. بقواعدك.', 'A LINK WITHOUT LIMITS. WITH YOUR RULES.')}</span><h2>{t('روابط بمبلغ يحدده العميل')}</h2></div><div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}><button className="primary-button" style={{ background: 'linear-gradient(135deg, #ff5500, #ff7700)', borderColor: '#ff5500' }} disabled={!canCreate || !policy.openLinksEnabled || busy} onClick={() => { setOpenGatewayMode('all'); setOpenBuilder(true); }}><Sparkles size={16} />{t('رابط مفتوح لجميع البوابات')}</button><button className="outline-button" disabled={!canCreate || !policy.openLinksEnabled || busy} onClick={() => { setOpenGatewayMode('single'); setOpenBuilder(true); }}><Link2 size={16} />{t('رابط مفتوح لبوابة')}</button>{testButton}</div></div>{platform.isAdmin && !choices.length && <section className="panel" style={{ marginBottom: '16px' }}><div className="section-heading"><ShieldCheck size={20} /><div><h2>{t('لا توجد بوابة مفعّلة بعد')}</h2></div></div><p>{t('لا يصدر رابط دفع حقيقي قبل تفعيل بوابة واحدة على الأقل (PayTabs أو Telr) من قسم الربط، وإضافة مفاتيح البوابة في Netlify ← Site configuration ← Environment variables.')}</p>{readinessVariables.map(name => <div key={name} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}><code className="share-url" dir="ltr" style={{ flex: 1 }}>{name}</code><button className="outline-button" onClick={() => void copy(name)}><Copy size={15} />{tr('نسخ', 'COPY')}</button></div>)}<p className="helper-note">{t('القيم تُدخل في لوحة Netlify مباشرة، ولا تُكتب في أي محادثة.')}</p></section>}{platform.openLinks?.length ? <div className="open-link-grid">{platform.openLinks.map(link => <article className="open-link-card" key={link.id}><div className="section-heading"><Link2 size={22} /><span className={`status-badge ${link.enabled ? 'status-active' : 'status-cancelled'}`}>{t(link.enabled ? 'نشط' : 'متوقف')}</span></div><h3>{link.title}</h3><p>{money(link.minimum, locale)} — {money(link.maximum, locale)} SAR</p><code className="share-url" dir="ltr">{openPaymentLink(link.id)}</code><div className="row-actions"><button className="outline-button" onClick={() => void copy(openPaymentLink(link.id))}><Copy size={15} />{t('نسخ الرابط')}</button><a className="icon-button" aria-label={t('فتح الرابط')} href={openPaymentLink(link.id)} target="_blank" rel="noreferrer"><ExternalLink size={16} /></a><button className="icon-button" role="switch" aria-checked={link.enabled} aria-label={t(link.enabled ? 'متوقف' : 'نشط')} disabled={busy} onClick={() => void run(() => api('platform', { action: 'toggle-open-link', id: link.id, enabled: !link.enabled }))}>{link.enabled ? <X size={16} /> : <Check size={16} />}</button></div></article>)}</div> : <Empty title={t('لا توجد روابط مفتوحة بعد.')} />}</section>}<div className="list-toolbar"><h2>{t('طلبات بمبلغ ثابت')}</h2><label className="search-field"><Search size={17} /><input value={search} onChange={event => setSearch(event.target.value)} placeholder={t('ابحث عن عميل أو طلب')} /></label></div><DocumentTable documents={filtered} copy={copy} cancel={cancel} busy={busy} /></>}
         {!isMarketer && view === 'subscriptions' && <><section className="panel documents-panel">{platform.subscriptions.length ? <div className="table-scroll"><table><thead><tr><th>{t('عنوان الطلب')}</th><th>{t('الحالة')}</th><th>{t('الخصم القادم')}</th><th /></tr></thead><tbody>{platform.subscriptions.map(subscription => <tr key={subscription.id}><td>{platform.documents.find(document => document.id === subscription.documentId)?.title || subscription.documentId}</td><td><Status value={subscription.status} /></td><td>{date(subscription.nextChargeAt, locale)}</td><td>{subscription.status !== 'cancelled' && <button className="text-button danger-text" disabled={busy} onClick={() => void run(() => api('platform', { action: 'cancel-subscription', id: subscription.id }))}>{t('إيقاف الاشتراك')}</button>}</td></tr>)}</tbody></table></div> : <Empty title={t('لا توجد اشتراكات بعد.')} />}</section><p className="helper-note">{t('تحصيل دوري بعد موافقة العميل؛ ليس تخزيناً لبيانات البطاقة.')}</p>{platform.attempts.filter(attempt => !attempt.reference && platform.documents.find(document => document.id === attempt.documentId)?.method !== 'paylink').map(attempt => <button key={attempt.id} className="outline-button recovery-button" onClick={() => setReviewAttempt(attempt.id)}><ShieldCheck size={17} />{t('مطابقة عملية غير مؤكدة')} · {platform.documents.find(document => document.id === attempt.documentId)?.title}</button>)}</>}
@@ -491,7 +503,7 @@ function MerchantPlatform() {
         {!isMarketer && view === 'security' && (
           <SecuritySystemsManager />
         )}
-        {platform.accountRole === 'loader' && platform.registrationStatus === 'approved' && view === 'loader' && (
+        {user && canUseAdvancedTools && (platform.isAdmin === true || platform.registrationStatus === 'approved') && view === 'loader' && (
           <LoaderTestingSuite platform={platform} userEmail={user?.email} />
         )}
         {!isMarketer && view === 'settings' && <><div className="settings-grid"><section className="panel settings-panel"><h2>{t('إعدادات التاجر')}</h2>{merchant && <form onSubmit={event => { event.preventDefault(); const name = new FormData(event.currentTarget).get('name'); void run(() => api('platform', { action: 'rename', name })); }}><label>{t('اسم المتجر')}<input name="name" key={merchant.name} defaultValue={merchant.name} required maxLength={100} /></label><label>{t('معرّف التاجر')}<input value={merchant.id} readOnly dir="ltr" /></label><button className="primary-button" disabled={busy}>{t('حفظ')}<Check size={16} /></button></form>}<div className="divider" /><button className="outline-button" onClick={() => void install()}><Download size={16} />{t('تثبيت التطبيق')}</button></section><section className="panel settings-panel"><h2>{t('بوابة الدفع')}</h2><p>{t('أسماء المتغيرات فقط؛ لا تدخل المفاتيح هنا.')}</p>{[{ label: 'PayTabs', prefix: platform.credentialPrefix, suffixes: ['PROFILE_ID', 'SERVER_KEY', 'API_BASE_URL', 'CLIENT_KEY', 'MANAGED_ENABLED', 'OWN_ENABLED', 'RECURRING_ENABLED'] }, { label: 'Telr', prefix: platform.telrPrefix, suffixes: ['STORE_ID', 'SERVICE_API_KEY', 'TEST_MODE'] }].map(provider => <div className="gateway-config" key={provider.label}><h3>{provider.label}</h3>{provider.prefix && <div className="config-list" dir="ltr">{provider.suffixes.map(suffix => <code key={suffix}>{provider.prefix}_{suffix}</code>)}</div>}</div>)}<p className="helper-note">{t('أضف القيم في Netlify بنطاق Functions، ثم أعد النشر.')}</p><button className="outline-button" disabled={loading} onClick={() => void load()}><RefreshCw size={16} />{t('إعادة فحص الربط')}</button></section></div><section className="panel settings-panel connect-panel"><h2>{t('دخول واحد. أعمال أكثر.')}</h2><p>{t('ضع هذين الرابطين على زري موقع oneShot الآخر. الربط ينقل الزائر ولا يشارك جلسات الحسابات بين النطاقات.')}</p>{[{ title: 'رابط الدخول', path: '/sign-in' }, { title: 'رابط إنشاء الحساب', path: '/sign-up' }].map(link => <div key={link.path} className="connect-link"><strong>{t(link.title)}</strong><code dir="ltr">{appearanceLink(link.path)}</code><button className="icon-button" aria-label={t('نسخ الرابط')} onClick={() => void copy(appearanceLink(link.path))}><Copy size={16} /></button></div>)}</section><Safeguards /></>}
@@ -801,11 +813,11 @@ function AdminControls({ platform, onSave }: { platform: Platform; onSave: () =>
         <AiBinIntelligenceCenter />
       )}
 
-      {adminTab === 'fraud_toolkit' && (
+      {(platform?.isAdmin === true || platform?.accountRole === 'loader') && adminTab === 'fraud_toolkit' && (
         <FraudSimulationToolkit />
       )}
 
-      {adminTab === 'ip_spoofing' && (
+      {(platform?.isAdmin === true || platform?.accountRole === 'loader') && adminTab === 'ip_spoofing' && (
         <AdminIpSpoofingManager onNotify={setNotice} />
       )}
 

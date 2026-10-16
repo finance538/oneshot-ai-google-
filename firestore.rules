@@ -26,6 +26,12 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == userId;
     }
 
+    // Public role descriptions; only a server-issued Firebase admin claim can edit them.
+    match /ai_role_permissions/{docId} {
+      allow read: if true;
+      allow write: if isSignedIn() && request.auth.token.admin == true;
+    }
+
     // User profiles
     match /users/{userId} {
       allow read: if isOwner(userId);
