@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import {
+  AlertTriangle,
   ArrowLeft,
   ArrowRight,
   Blocks,
@@ -35,19 +36,24 @@ import { appearanceLink, useAppearance } from "./i18n";
 import { AppearanceControls } from "./Brand";
 import { useStudioReveal } from "./useStudioReveal";
 import { categories, products, type Product } from "./storefront/catalog";
+import { getLocalizedProductContent } from "./storefront/catalog-en";
 import { documents, type DocumentPage } from "./storefront/documents";
 import { googleAdsPackage, mediaPackages } from "./storefront/media";
-import AppInstallBanner from "./AppInstallBanner";
-import CustomerAssistant from "./CustomerAssistant";
+import { persistReturnDestination } from "./storefront/routes";
+import { getServiceEligibility } from "../shared/services";
+import { useDialogAccessibility } from "./useDialogAccessibility";
 import type { InstallPrompt } from "./platform";
 import "./storefront.css";
 
+const AppInstallBanner = lazy(() => import("./AppInstallBanner"));
+const CustomerAssistant = lazy(() => import("./CustomerAssistant"));
 
 type Inquiry = {
   sku: string;
   title: string;
   amount: number;
   monthly?: boolean;
+  startsAt?: boolean;
 };
 const categoryIcons = {
   ALL: Layers3,
@@ -66,12 +72,12 @@ function Logo() {
     <a
       className="store-logo"
       href={appearanceLink("/")}
-      aria-label={`oneShot · ${tr('الرئيسية', 'Home')}`}
+      aria-label={`oneShot Brand Studio · ${tr('الرئيسية', 'Home')}`}
     >
       <img className="store-logo-emblem" src="/oneshot.svg" alt="" width="44" height="44" />
       <span dir="ltr">
         one<b>Shot</b>
-        <small>PAYMENT HUB</small>
+        <small>Brand Studio</small>
       </span>
     </a>
   );
@@ -83,10 +89,7 @@ export default function Storefront() {
   const [menu, setMenu] = useState(false);
   const [inquiry, setInquiry] = useState<Inquiry | null>(null);
   const [installPrompt, setInstallPrompt] = useState<InstallPrompt | null>(null);
-  const [showInstallBanner, setShowInstallBanner] = useState(() => {
-    // Show banner on visit unless dismissed during the session
-    return !sessionStorage.getItem('oneshot_install_banner_dismissed');
-  });
+  const [showInstallBanner, setShowInstallBanner] = useState(false);
 
   const path = window.location.pathname.replace(/\/+$/, "") || "/";
   useStudioReveal(path);
@@ -99,6 +102,30 @@ export default function Storefront() {
     window.addEventListener('beforeinstallprompt', onPrompt);
     return () => window.removeEventListener('beforeinstallprompt', onPrompt);
   }, []);
+
+  // Defer automatic install prompt until meaningful engagement (scroll > 75% after 30s) and only when browser install prompt is available
+  useEffect(() => {
+    if (!installPrompt) return;
+    if (sessionStorage.getItem('oneshot_install_banner_dismissed')) return;
+    let readyByTime = false;
+    const timer = window.setTimeout(() => {
+      readyByTime = true;
+    }, 30000);
+    const onScroll = () => {
+      if (!readyByTime) return;
+      const doc = document.documentElement;
+      const scrollable = doc.scrollHeight - window.innerHeight;
+      if (scrollable > 400 && window.scrollY / scrollable >= 0.75) {
+        setShowInstallBanner(true);
+        window.removeEventListener('scroll', onScroll);
+      }
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener('scroll', onScroll);
+    };
+  }, [installPrompt]);
 
   const handleBannerDismiss = () => {
     sessionStorage.setItem('oneshot_install_banner_dismissed', 'true');
@@ -117,14 +144,18 @@ export default function Storefront() {
     : null;
   const title = documentPage
     ? tr(documentPage.titleAr, documentPage.titleEn)
-    : product
-      ? tr(product.nameAr, product.nameEn)
-      : tr(
-          "التصوير والتسويق والتصميم والتكاملات الرقمية",
-          "Photography, Marketing, Design & Business Integrations",
-        );
+    : path.startsWith("/products/")
+      ? product
+        ? `${tr(product.nameAr, product.nameEn)} (${product.sku})`
+        : tr("المنتج غير موجود", "Product Not Found")
+      : path === "/products"
+        ? tr("كتالوج المنتجات والخدمات الرقمية", "Products & Digital Services Catalog")
+        : tr(
+            "التصوير والتسويق والتصميم والتكاملات الرقمية",
+            "Photography, Marketing, Design & Business Integrations",
+          );
   useEffect(() => {
-    document.title = `OneShot | ${title}`;
+    document.title = `${title} | oneShot Brand Studio`;
   }, [title]);
   useEffect(() => {
     const close = (event: KeyboardEvent) => {
@@ -135,7 +166,19 @@ export default function Storefront() {
   }, []);
 
   const nav = [
-    { href: '/wallet', ar: 'محفظتي', en: 'My wallet', Icon: CreditCard },
+    {
+      href: "/products",
+      ar: "كتالوج الخدمات",
+      en: "Services Catalog",
+      Icon: ShoppingBag,
+    },
+    { href: '/wallet', ar: 'محفظتي', en: 'My Wallet', Icon: CreditCard },
+    {
+      href: "/customer",
+      ar: "حساب العميل / دخول",
+      en: "Customer Account / Sign In",
+      Icon: KeyRound,
+    },
     {
       href: "/api-integration",
       ar: "ربط الـ API والداشبورد",
@@ -153,12 +196,6 @@ export default function Storefront() {
       ar: "التصوير والإنتاج",
       en: "Media & Production",
       Icon: Video,
-    },
-    {
-      href: "/#section-google-ads",
-      ar: "التسويق الرقمي",
-      en: "Digital Marketing",
-      Icon: Target,
     },
     {
       href: "/#section-contact",
@@ -180,17 +217,22 @@ export default function Storefront() {
             id="store-navigation"
             aria-label={tr("القائمة الرئيسية", "Main navigation")}
           >
-            {nav.map(({ href, ar: labelAr, en, Icon }, index) => (
-              <a
-                key={href}
-                className={index === 0 && path === "/" ? "active" : ""}
-                href={appearanceLink(href)}
-                onClick={() => setMenu(false)}
-              >
-                <Icon size={13} />
-                {tr(labelAr, en)}
-              </a>
-            ))}
+            {nav.map(({ href, ar: labelAr, en, Icon }) => {
+              const isActive =
+                (href === "/products" && path.startsWith("/products")) ||
+                (href !== "/products" && path === href);
+              return (
+                <a
+                  key={href}
+                  className={isActive ? "active" : ""}
+                  href={appearanceLink(href)}
+                  onClick={() => setMenu(false)}
+                >
+                  <Icon size={13} />
+                  {tr(labelAr, en)}
+                </a>
+              );
+            })}
           </nav>
           <div className="store-header-actions">
             <a
@@ -203,11 +245,12 @@ export default function Storefront() {
             </a>
             <AppearanceControls />
             <a
-              className="store-button compact"
+              className="store-button compact store-customer-entry"
               href={appearanceLink("/customer")}
+              aria-label={tr("دخول حساب العميل", "Customer sign in")}
             >
               <KeyRound size={14} />
-              {tr("دخول", "Sign in")}
+              <span>{tr("دخول", "Sign in")}</span>
             </a>
             <button
               className="store-icon store-menu"

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Download,
   Smartphone,
@@ -9,7 +9,9 @@ import {
 } from 'lucide-react';
 
 import './AppInstallBanner.css';
+import { useAppearance } from './i18n';
 import type { InstallPrompt } from './platform';
+import { useDialogAccessibility } from './useDialogAccessibility';
 
 interface AppInstallBannerProps {
   installPrompt: InstallPrompt | null;
@@ -20,15 +22,23 @@ interface AppInstallBannerProps {
 export default function AppInstallBanner({
   installPrompt,
   onDismiss,
-  autoCloseSeconds = 3,
+  autoCloseSeconds = 12,
 }: AppInstallBannerProps) {
+  const { tr, language } = useAppearance();
   const [secondsLeft, setSecondsLeft] = useState(autoCloseSeconds);
   const [isPaused, setIsPaused] = useState(false);
   const [visible, setVisible] = useState(true);
   const [platformType, setPlatformType] = useState<'ios' | 'android' | 'other'>('other');
+  const cardRef = useRef<HTMLDivElement>(null);
+
+  const handleClose = () => {
+    setVisible(false);
+    if (onDismiss) onDismiss();
+  };
+
+  useDialogAccessibility(cardRef, visible, handleClose);
 
   useEffect(() => {
-    // Detect iOS vs Android
     const ua = navigator.userAgent || '';
     const isIOS = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
     const isAndroid = /Android/.test(ua);
@@ -54,11 +64,6 @@ export default function AppInstallBanner({
     return () => clearInterval(timer);
   }, [isPaused, secondsLeft, onDismiss]);
 
-  const handleClose = () => {
-    setVisible(false);
-    if (onDismiss) onDismiss();
-  };
-
   const handleNativeInstall = async () => {
     if (installPrompt) {
       await installPrompt.prompt();
@@ -75,91 +80,124 @@ export default function AppInstallBanner({
       role="dialog"
       aria-modal="true"
       aria-labelledby="install-modal-title"
+      dir={language === 'ar' ? 'rtl' : 'ltr'}
       onMouseEnter={() => setIsPaused(true)}
       onMouseLeave={() => setIsPaused(false)}
       onTouchStart={() => setIsPaused(true)}
+      onClick={(event) => {
+        if (event.target === event.currentTarget) handleClose();
+      }}
     >
-      <div className="install-modal-card">
-        {/* Header with Close X and Timer */}
+      <div className="install-modal-card" ref={cardRef} tabIndex={-1}>
         <div className="install-modal-header">
-          <div className="timer-badge" title="سيغلق تلقائياً ما لم يتم التفاعل">
+          <div
+            className="timer-badge"
+            title={tr('سيغلق تلقائياً ما لم يتم التفاعل', 'Auto-closes unless interacted with')}
+          >
             <span>{secondsLeft}s</span>
           </div>
           <button
+            type="button"
             className="install-modal-close"
             onClick={handleClose}
-            aria-label="إغلاق التنبيه"
+            aria-label={tr('إغلاق نافذة التثبيت', 'Close install dialog')}
           >
             <X size={20} />
           </button>
         </div>
 
-        {/* Brand App Icon & Title */}
         <div className="install-modal-hero">
           <div className="app-icon-wrapper">
-            <img src="/icons/icon-192.png" alt="OneShot Icon" width="64" height="64" />
+            <img src="/icons/icon-192.png" alt="oneShot Brand Studio Icon" width="64" height="64" />
             <span className="app-icon-badge">PWA</span>
           </div>
           <div className="install-hero-text">
             <span className="install-kicker">
               <Sparkles size={14} />
-              <span>تطبيق OneShot الذكي</span>
+              <span>{tr('تطبيق oneShot الذكي', 'oneShot Smart App')}</span>
             </span>
-            <h2 id="install-modal-title">قم بتثبيت التطبيق لتجربة أسرع وأفضل</h2>
+            <h2 id="install-modal-title">
+              {tr('قم بتثبيت التطبيق لتجربة أسرع وأفضل', 'Install the oneShot App for Faster Access')}
+            </h2>
             <p>
-              التثبيت يتم مباشرة عبر المتصفح ليتحمل كأيقونة تطبيق على هاتفك سواء للآيفون أو الأندرويد، أو عبر حزمة الـ APK.
+              {tr(
+                'التثبيت يتم مباشرة عبر المتصفح ليتحمل كأيقونة تطبيق على هاتفك سواء للآيفون أو الأندرويد، أو عبر حزمة الـ APK.',
+                'Install directly from your browser as a home-screen web app on iOS or Android, or download the direct Android APK package.',
+              )}
             </p>
           </div>
         </div>
 
-        {/* Steps for iOS / Android */}
         <div className="install-guides-tabs">
-          {/* iOS Safari Guide */}
           <div className={`install-guide-box ${platformType === 'ios' ? 'highlighted' : ''}`}>
             <div className="guide-title">
               <Smartphone size={18} />
-              <strong>تثبيت على الآيفون (iOS Safari)</strong>
+              <strong>{tr('تثبيت على الآيفون (iOS Safari)', 'Install on iPhone / iPad (iOS Safari)')}</strong>
             </div>
             <ol className="guide-steps">
               <li>
-                اضغط على زر المشاركة <Share2 size={15} className="inline-icon" /> في أسفل شريط سفاري.
+                {tr('اضغط على زر المشاركة', 'Tap the Share button')}{' '}
+                <Share2 size={15} className="inline-icon" aria-hidden="true" />{' '}
+                {tr('في أسفل شريط سفاري.', 'in the Safari toolbar.')}
               </li>
               <li>
-                مرر للأسفل واختر <strong>«إضافة إلى الشاشة الرئيسية»</strong> (Add to Home Screen) <PlusSquare size={15} className="inline-icon" />.
+                {tr('مرر للأسفل واختر', 'Scroll down and select')}{' '}
+                <strong>{tr('«إضافة إلى الشاشة الرئيسية» (Add to Home Screen)', '“Add to Home Screen”')}</strong>{' '}
+                <PlusSquare size={15} className="inline-icon" aria-hidden="true" />.
               </li>
-              <li>اضغط <strong>إضافة (Add)</strong>، وسيظهر تطبيق OneShot كأيقونة رسمية على شاشتك.</li>
+              <li>
+                {tr(
+                  'اضغط إضافة (Add)، وسيظهر تطبيق oneShot كأيقونة رسمية على شاشتك.',
+                  'Tap Add to place the official oneShot icon on your home screen.',
+                )}
+              </li>
             </ol>
           </div>
 
-          {/* Android Chrome Guide */}
           <div className={`install-guide-box ${platformType === 'android' ? 'highlighted' : ''}`}>
             <div className="guide-title">
               <Smartphone size={18} />
-              <strong>تثبيت على أندرويد (Android)</strong>
+              <strong>{tr('تثبيت على أندرويد (Android)', 'Install on Android')}</strong>
             </div>
             <ol className="guide-steps">
               {installPrompt ? (
                 <li>
-                  يمكنك الضغط على زر التثبيت المباشر أدناه وسيُضاف فوراً.
+                  {tr(
+                    'يمكنك الضغط على زر التثبيت المباشر أدناه وسيُضاف فوراً.',
+                    'Tap the direct browser install button below to add the app immediately.',
+                  )}
                 </li>
               ) : (
-                <li>اضغط على قائمة المتصفح (⋮) أعلى اليمين.</li>
+                <li>
+                  {tr(
+                    'اضغط على قائمة المتصفح (⋮) في الأعلى.',
+                    'Open the browser menu (⋮) in the top corner.',
+                  )}
+                </li>
               )}
-              <li>اختر <strong>«تثبيت التطبيق»</strong> أو «إضافة إلى الشاشة الرئيسية».</li>
-              <li>أو قم بتحميل حزمة الـ APK المباشرة للمعاينة السريعة.</li>
+              <li>
+                {tr('اختر', 'Select')}{' '}
+                <strong>{tr('«تثبيت التطبيق» أو «إضافة إلى الشاشة الرئيسية».', '“Install app” or “Add to Home screen”.')}</strong>
+              </li>
+              <li>
+                {tr(
+                  'أو قم بتحميل حزمة الـ APK المباشرة للمعاينة السريعة.',
+                  'Or download the direct Android APK package below.',
+                )}
+              </li>
             </ol>
           </div>
         </div>
 
-        {/* Action Buttons */}
         <div className="install-modal-actions">
           {installPrompt && (
             <button
+              type="button"
               className="install-btn-primary"
               onClick={handleNativeInstall}
             >
               <Smartphone size={18} />
-              <span>تثبيت عبر المتصفح فوراً</span>
+              <span>{tr('تثبيت عبر المتصفح فوراً', 'Install in Browser Now')}</span>
             </button>
           )}
 
@@ -172,14 +210,15 @@ export default function AppInstallBanner({
             onClick={() => handleClose()}
           >
             <Download size={18} />
-            <span>تحميل بصيغة APK (للأندرويد)</span>
+            <span>{tr('تحميل بصيغة APK (للأندرويد)', 'Download Android APK')}</span>
           </a>
 
-          <button className="install-btn-text" onClick={handleClose}>
-            المتابعة عبر الويب
+          <button type="button" className="install-btn-text" onClick={handleClose}>
+            {tr('المتابعة عبر الويب', 'Continue in Browser')}
           </button>
         </div>
       </div>
     </div>
   );
 }
+

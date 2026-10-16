@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomInt } from 'node:crypto';
 import type { User } from '@netlify/identity';
 import { desc, eq } from 'drizzle-orm';
 import { database } from '../../db/index.js';
@@ -6,13 +6,67 @@ import { accountRegistrations, marketerCampaigns, merchants } from '../../db/sch
 import { captureOperation } from './operations.js';
 import { HttpError, isAdmin } from './platform.js';
 
-export type AccountRole = 'admin' | 'merchant' | 'marketer' | 'loader';
+export type AccountRole = 'admin' | 'merchant' | 'marketer' | 'loader' | 'customer';
 export type AccountStatus = 'pending' | 'approved' | 'rejected';
 
-export function generateAccountId(ownerId: string): string {
-  const hash = createHash('sha256').update(`oneshot-account:${ownerId}`).digest('hex');
+export function generateAccountId(ownerId: string, attempt = 0): string {
+  if (attempt >= 8) {
+    return String(randomInt(1000000, 10000000));
+  }
+  const seed = attempt === 0 ? `oneshot-account:${ownerId}` : `oneshot-account:${ownerId}:retry:${attempt}`;
+  const hash = createHash('sha256').update(seed).digest('hex');
   const numeric = (parseInt(hash.slice(0, 8), 16) % 9000000) + 1000000;
   return String(numeric);
+}
+
+async function provisionMerchantRecord(
+  db: ReturnType<typeof database>,
+  ownerId: string,
+  storeName: string,
+) {
+  const [existingByOwner] = await db.select().from(merchants).where(eq(merchants.ownerId, ownerId));
+  if (existingByOwner) return existingByOwner;
+
+  const MAX_ATTEMPTS = 12;
+  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+    const accountId = generateAccountId(ownerId, attempt);
+    let createdMerchant: typeof existingByOwner | null = null;
+    try {
+      await db.transaction(async tx => {
+        const [created] = await tx
+          .insert(merchants)
+          .values({
+            ownerId,
+            name: storeName,
+            accountId,
+          })
+          .onConflictDoNothing()
+          .returning();
+        if (created) {
+          createdMerchant = created;
+          await captureOperation(tx, {
+            sourceKey: `merchant:${created.id}`,
+            kind: 'merchant_registration',
+            subjectId: created.id,
+            merchantId: created.id,
+          });
+        }
+      });
+    } catch (error) {
+      const code = (error as { code?: string })?.code;
+      const message = error instanceof Error ? error.message.toLowerCase() : '';
+      if (code !== '23505' && !message.includes('unique') && !message.includes('duplicate')) {
+        throw error;
+      }
+    }
+
+    if (createdMerchant) return createdMerchant;
+
+    const [reloaded] = await db.select().from(merchants).where(eq(merchants.ownerId, ownerId));
+    if (reloaded) return reloaded;
+  }
+
+  throw new HttpError(503, 'تعذر تخصيص رقم حساب فريد للتاجر حالياً. حاول مرة أخرى.');
 }
 
 export function generateReferralCode(ownerId: string): string {
@@ -48,18 +102,24 @@ export async function ensureAccountProvisioned(user: User) {
     };
   }
 
-  const [existingRegistration] = await db
-    .select()
-    .from(accountRegistrations)
-    .where(eq(accountRegistrations.ownerId, user.id));
-
-  const [existingMerchant] = await db
-    .select()
-    .from(merchants)
-    .where(eq(merchants.ownerId, user.id));
+  const [[existingRegistration], [existingMerchant]] = await Promise.all([
+    db.select().from(accountRegistrations).where(eq(accountRegistrations.ownerId, user.id)),
+    db.select().from(merchants).where(eq(merchants.ownerId, user.id)),
+  ]);
 
   const meta = readUserMetadata(user);
-  const metaRole = ['marketer', 'loader', 'admin'].includes(String(meta.account_type)) ? String(meta.account_type) : 'merchant';
+  const rawAccountType = String(meta.account_type || '');
+  if (!existingRegistration && !existingMerchant && rawAccountType === 'customer') {
+    return {
+      accountRole: 'customer' as AccountRole,
+      registrationStatus: 'approved' as AccountStatus,
+      merchant: null,
+      marketerAccount: null,
+      marketerCampaigns: [],
+    };
+  }
+
+  const metaRole = ['marketer', 'loader', 'admin'].includes(rawAccountType) ? rawAccountType : 'merchant';
   const metaNotes = typeof meta.marketing_notes === 'string' ? meta.marketing_notes.trim().slice(0, 400) : null;
   const fullName = deriveDisplayName(user);
   const userEmail = String(user.email || `${user.id}@oneshot.local`).trim().toLowerCase();
@@ -132,35 +192,7 @@ export async function ensureAccountProvisioned(user: User) {
       .onConflictDoNothing();
   }
 
-  let merchant = existingMerchant ?? null;
-  if (!merchant) {
-    const storeName = deriveDisplayName(user);
-    const accountId = generateAccountId(user.id);
-    await db.transaction(async tx => {
-      const [created] = await tx
-        .insert(merchants)
-        .values({
-          ownerId: user.id,
-          name: storeName,
-          accountId,
-        })
-        .onConflictDoNothing()
-        .returning();
-      if (created) {
-        merchant = created;
-        await captureOperation(tx, {
-          sourceKey: `merchant:${created.id}`,
-          kind: 'merchant_registration',
-          subjectId: created.id,
-          merchantId: created.id,
-        });
-      }
-    });
-    if (!merchant) {
-      const [reloaded] = await db.select().from(merchants).where(eq(merchants.ownerId, user.id));
-      merchant = reloaded ?? null;
-    }
-  }
+  const merchant = existingMerchant ?? await provisionMerchantRecord(db, user.id, deriveDisplayName(user));
 
   return {
     accountRole: 'merchant' as AccountRole,
@@ -173,10 +205,19 @@ export async function ensureAccountProvisioned(user: User) {
 
 export async function registerUserAccount(
   user: User,
-  params: { role: 'merchant' | 'marketer' | 'loader' | 'admin'; name?: string; storeName?: string; notes?: string | null },
+  params: { role: 'merchant' | 'marketer' | 'loader' | 'admin' | 'customer'; name?: string; storeName?: string; notes?: string | null },
 ) {
   if (isAdmin(user)) {
     throw new HttpError(403, 'حساب الإدارة منفصل تماماً عن قسم تسجيل التجار والمسوّقين.');
+  }
+
+  if (params.role === 'customer') {
+    return {
+      accountRole: 'customer' as AccountRole,
+      registrationStatus: 'approved' as AccountStatus,
+      marketerAccount: null,
+      merchant: null,
+    };
   }
 
   const db = database();
@@ -257,33 +298,7 @@ export async function registerUserAccount(
       .onConflictDoNothing();
   }
 
-  let [merchant] = await db.select().from(merchants).where(eq(merchants.ownerId, user.id));
-  if (!merchant) {
-    const accountId = generateAccountId(user.id);
-    await db.transaction(async tx => {
-      const [created] = await tx
-        .insert(merchants)
-        .values({
-          ownerId: user.id,
-          name: storeName,
-          accountId,
-        })
-        .onConflictDoNothing()
-        .returning();
-      if (created) {
-        merchant = created;
-        await captureOperation(tx, {
-          sourceKey: `merchant:${created.id}`,
-          kind: 'merchant_registration',
-          subjectId: created.id,
-          merchantId: created.id,
-        });
-      }
-    });
-    if (!merchant) {
-      [merchant] = await db.select().from(merchants).where(eq(merchants.ownerId, user.id));
-    }
-  }
+  const merchant = await provisionMerchantRecord(db, user.id, storeName);
 
   return {
     accountRole: 'merchant' as AccountRole,

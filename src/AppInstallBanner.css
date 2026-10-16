@@ -58,10 +58,10 @@
   display: inline-flex;
   align-items: center;
   padding: 4px 10px;
-  background: rgba(255, 85, 0, 0.12);
-  border: 1px solid rgba(255, 85, 0, 0.3);
+  background: rgba(255, 85, 0, 0.14);
+  border: 1px solid rgba(255, 85, 0, 0.35);
   border-radius: 999px;
-  color: #ff5500;
+  color: #ff8a50;
   font-weight: 700;
   font-size: 0.8rem;
   letter-spacing: 0.05em;
@@ -70,7 +70,7 @@
 .install-modal-close {
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.1);
-  color: #c0c4cc;
+  color: #d6dae2;
   width: 36px;
   height: 36px;
   border-radius: 50%;
@@ -118,7 +118,7 @@
   left: 50%;
   transform: translateX(-50%);
   background: #ff5500;
-  color: #ffffff;
+  color: #0a0b0e;
   font-size: 0.65rem;
   font-weight: 800;
   padding: 1px 6px;
@@ -128,13 +128,14 @@
 
 .install-hero-text {
   flex: 1;
+  min-width: 0;
 }
 
 .install-kicker {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  color: #ff5500;
+  color: #ff8a50;
   font-size: 0.75rem;
   font-weight: 700;
   margin-bottom: 4px;
@@ -149,7 +150,7 @@
 }
 
 .install-modal-hero p {
-  color: #9ba1b0;
+  color: #b4bac8;
   font-size: 0.85rem;
   line-height: 1.5;
   margin: 0;
@@ -179,18 +180,19 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  color: #ff5500;
+  color: #ff8a50;
   font-size: 0.9rem;
   margin-bottom: 8px;
 }
 
 .guide-steps {
   margin: 0;
-  padding-right: 20px;
+  padding-inline-start: 20px;
+  padding-inline-end: 0;
   display: flex;
   flex-direction: column;
   gap: 6px;
-  color: #d1d5db;
+  color: #d6dae2;
   font-size: 0.82rem;
   line-height: 1.45;
 }
@@ -202,7 +204,7 @@
 .inline-icon {
   display: inline-block;
   vertical-align: middle;
-  color: #ff5500;
+  color: #ff8a50;
 }
 
 /* Actions */
@@ -218,19 +220,20 @@
   align-items: center;
   justify-content: center;
   gap: 8px;
-  background: linear-gradient(135deg, #ff5500 0%, #e04400 100%);
-  color: #ffffff;
+  background: #ff5500;
+  color: #0a0b0e;
   border: none;
   border-radius: 12px;
   padding: 12px 18px;
   font-size: 0.92rem;
-  font-weight: 700;
+  font-weight: 800;
   cursor: pointer;
   box-shadow: 0 4px 15px rgba(255, 85, 0, 0.35);
   transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
 .install-btn-primary:hover {
+  background: #ff6a22;
   transform: translateY(-2px);
   box-shadow: 0 6px 20px rgba(255, 85, 0, 0.5);
 }
@@ -260,7 +263,7 @@
 .install-btn-text {
   background: transparent;
   border: none;
-  color: #8c92a0;
+  color: #b4bac8;
   font-size: 0.8rem;
   cursor: pointer;
   padding: 6px;
