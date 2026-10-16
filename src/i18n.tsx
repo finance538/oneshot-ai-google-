@@ -265,17 +265,22 @@ const Appearance = createContext<{ language: Language; theme: Theme; setLanguage
 export function AppearanceProvider({ children }: { children: ReactNode }) {
   const params = new URLSearchParams(window.location.search);
   const [language, setLanguage] = useState<Language>(languages.some(item => item.id === params.get('lang')) ? params.get('lang') as Language : 'ar');
-  const [theme, setTheme] = useState<Theme>(params.get('theme') === 'light' ? 'light' : 'dark');
+  const [theme, setTheme] = useState<Theme>(() => {
+    const requested = params.get('theme');
+    if (requested === 'light' || requested === 'dark') return requested;
+    try { return localStorage.getItem('oneshot:theme') === 'light' ? 'light' : 'dark'; } catch { return 'dark'; }
+  });
   useEffect(() => {
     document.documentElement.lang = language;
     document.documentElement.dir = language === 'ar' ? 'rtl' : 'ltr';
     document.documentElement.dataset.theme = theme;
+    try { localStorage.setItem('oneshot:theme', theme); } catch { /* Storage may be disabled. */ }
     if (!isStorefrontPath(window.location.pathname)) document.title = `oneShot Payments | ${translate('مساحة التاجر', language)}`;
     const url = new URL(window.location.href);
     url.searchParams.set('lang', language);
     url.searchParams.set('theme', theme);
     window.history.replaceState(null, '', url);
-    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'dark' ? '#0a0b0e' : '#f5f4f1');
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'dark' ? '#0b0d0f' : '#f7f7f5');
   }, [language, theme]);
   return <Appearance.Provider value={{ language, theme, setLanguage, setTheme }}>{children}</Appearance.Provider>;
 }
