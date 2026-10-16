@@ -18,6 +18,7 @@ const workspacePages = new Set([
   "/admin",
   "/marketer",
   "/loader",
+  "/tester",
   "/sign-in",
   "/signin",
   "/login",

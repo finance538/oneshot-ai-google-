@@ -1,0 +1,30 @@
+.testing-sync, .testing-product-context, .testing-shortcut { margin-block-end: 22px; padding: 24px; }
+.testing-sync-heading, .testing-actions, .testing-notice { display: flex; align-items: center; gap: 12px; }
+.testing-sync-heading > svg, .testing-shortcut > svg { flex-shrink: 0; color: var(--flame, #f05b2b); }
+.testing-sync p, .testing-product-context p, .testing-shortcut p { color: var(--muted, #8c939f); line-height: 1.7; margin-block: 6px 12px; }
+.testing-actions { flex-wrap: wrap; margin-block: 14px; }
+.testing-import { border-block-start: 1px solid var(--border, #303438); padding-block-start: 12px; }
+.testing-import summary { cursor: pointer; font-weight: 600; }
+.testing-import button { margin-block-end: 8px; }
+.testing-body { margin: 0; padding: 0; border: 0; min-inline-size: 0; }
+.testing-product-context { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; border-inline-start: 3px solid var(--flame, #f05b2b); }
+.testing-product-context h2, .testing-shortcut h2 { margin-block: 6px 8px; }
+.testing-product-context label { display: grid; gap: 10px; }
+.testing-product-context select { width: 100%; min-width: 0; }
+.testing-gateways { display: flex; flex-wrap: wrap; gap: 8px; margin-block-start: 14px; }
+.testing-gateways span { border: 1px solid var(--border, #303438); border-radius: 6px; padding: 6px 9px; font-size: .75rem; }
+.testing-gateways .connected { border-color: #527c60; }
+.testing-shortcut { display: flex; align-items: center; gap: 20px; }
+.testing-shortcut > div { flex: 1; }
+.admin-tools-nav { display: flex; flex-wrap: wrap; gap: 8px; }
+.admin-tools-nav button[aria-pressed="true"] { color: #fff; background: #c74c23; border-color: #c74c23; }
+.testing-sync button:focus-visible, .admin-tools-nav button:focus-visible, .testing-import summary:focus-visible { outline: 2px solid var(--flame, #f05b2b); outline-offset: 4px; }
+@media (max-width: 760px) {
+  .testing-sync, .testing-product-context, .testing-shortcut { padding: 18px; }
+  .testing-product-context { grid-template-columns: 1fr; gap: 14px; }
+  .testing-shortcut { flex-wrap: wrap; }
+  .testing-shortcut > div { flex-basis: calc(100% - 60px); }
+  .testing-shortcut > button { width: 100%; }
+  .testing-actions > button { flex: 1 1 160px; }
+  .admin-tools-nav button { flex: 1 1 150px; }
+}
