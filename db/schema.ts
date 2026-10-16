@@ -3,14 +3,6 @@ import { sql } from 'drizzle-orm';
 import type { OperationKind } from '../shared/operations.js';
 import type { PaymentPolicy } from '../shared/policy.js';
 import type { AssistantAction } from '../shared/admin-assistant.js';
-import type { TestingSettings } from '../shared/testing-workspace.js';
-
-export const testingWorkspaces = pgTable('testing_workspaces', {
-  ownerId: text('owner_id').primaryKey(),
-  settings: jsonb().$type<TestingSettings>().notNull(),
-  version: integer().notNull().default(1),
-  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
-});
 
 export const customerProfiles = pgTable('customer_profiles', {
   ownerId: text('owner_id').primaryKey(),

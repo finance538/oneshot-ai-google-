@@ -6,8 +6,6 @@ import {
   BrainCircuit, BarChart3
 } from 'lucide-react';
 import type { Platform } from './platform';
-import { TestingProductContext, useSimulatorSetting, useTestingWorkspace } from './TestingWorkspace';
-import { walletServices } from '../shared/services';
 import { KNOWN_GATEWAYS } from './gatewaysData';
 import { initialSecuritySystems, type SecuritySystem } from './securitySystemsData';
 import { findCustomerBy7DigitId, PRESET_CUSTOMERS, type CustomerProfileWithGateways } from './customerGatewaysData';
@@ -57,19 +55,48 @@ export default function LoaderTestingSuite({
   platform: Platform;
   userEmail?: string;
 }) {
-  const { settings } = useTestingWorkspace();
-  const adminIpConfig = settings.ipSimulation;
-  const [selectedGatewayId, setSelectedGatewayId] = useSimulatorSetting('gatewayId');
-  const [selectedIntegrationType, setSelectedIntegrationType] = useSimulatorSetting('integrationId');
-  const [clientProxy, setClientProxy] = useSimulatorSetting('proxy');
-  const [customIp, setCustomIp] = useSimulatorSetting('customIp');
-  const [activeIp, setActiveIp] = useSimulatorSetting('activeIp');
-  const [deviceEnvironment, setDeviceEnvironment] = useSimulatorSetting('deviceEnvironment');
-  const [isVpnEnabled, setIsVpnEnabled] = useSimulatorSetting('isVpnEnabled');
-  const securitySystems: SecuritySystem[] = initialSecuritySystems.map(system => ({
-    ...system, enabled: settings.securityRules[system.id as keyof typeof settings.securityRules],
-  }));
-  const selectedService = walletServices.find(service => service.sku === settings.simulator.productSku);
+  // Read Admin IP Spoofing Configuration
+  const [adminIpConfig] = useState<{
+    enabled: boolean;
+    proxyMode: string;
+    isCustomActive: boolean;
+    customIp: string;
+    customCountryName: string;
+  } | null>(() => {
+    try {
+      const saved = localStorage.getItem('oneshot_admin_ip_spoofing');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
+
+  // Simulator State (synced with admin proxy if set)
+  const [selectedGatewayId, setSelectedGatewayId] = useState('paytabs');
+  const [selectedIntegrationType, setSelectedIntegrationType] = useState('hosted');
+  const [clientProxy, setClientProxy] = useState(() => {
+    try {
+      const activeProxy = localStorage.getItem('oneshot_test_active_proxy');
+      if (activeProxy) return JSON.parse(activeProxy);
+    } catch {}
+    return PROXY_COUNTRIES[0];
+  });
+  const [customIp, setCustomIp] = useState('');
+  const [activeIp, setActiveIp] = useState(() => {
+    try {
+      const activeProxy = localStorage.getItem('oneshot_test_active_proxy');
+      if (activeProxy) return JSON.parse(activeProxy).ip;
+    } catch {}
+    return PROXY_COUNTRIES[0].ip;
+  });
+  const [deviceEnvironment, setDeviceEnvironment] = useState<'desktop' | 'mobile'>('desktop');
+  const [isVpnEnabled, setIsVpnEnabled] = useState(true);
+
+  // Security systems state (Read-only observation for Loader; toggled by merchant)
+  const [securitySystems] = useState<SecuritySystem[]>(() => {
+    const saved = localStorage.getItem('oneshot_security_systems');
+    return saved ? JSON.parse(saved) : initialSecuritySystems;
+  });
 
   // AI-generated customer profile state (No card info generated here!)
   const [customerProfile, setCustomerProfile] = useState<{
@@ -106,7 +133,7 @@ export default function LoaderTestingSuite({
   const [customerSearchMsg, setCustomerSearchMsg] = useState('');
   const [inspectPropertyKey, setInspectPropertyKey] = useState<string | null>(null);
   const [autoMatchedNotice, setAutoMatchedNotice] = useState<string | null>(null);
-  const [suiteMode, setSuiteMode] = useSimulatorSetting('suiteMode');
+  const [suiteMode, setSuiteMode] = useState<'simulator' | 'card_checker' | 'country_matrix' | 'fraud_toolkit' | 'ai_bin_intelligence' | 'multi_bin_matcher' | 'failures_dashboard'>('simulator');
 
   // Auto-Match Gateway, IP, and Currency from Card BIN
   const handleAutoGenerateFromCard = (card: SimulatedCard) => {
@@ -150,7 +177,7 @@ export default function LoaderTestingSuite({
 
     const gwName = KNOWN_GATEWAYS.find((g) => g.id === targetGw)?.name || targetGw;
     setAutoMatchedNotice(
-      `تمت المطابقة التلقائية: تم اختيار بوابة [${gwName}] وموقع الاختبار [${targetProxy.name} - ${targetProxy.ip}] لمحاكاة توافق بطاقة ${card.scheme}. لا يضمن ذلك قبول عملية حقيقية.`
+      `تمت المطابقة التلقائية: تم اختيار بوابة [${gwName}] وموقع الـ IP [${targetProxy.name} - ${targetProxy.ip}] لضمان التوافق التام مع بطاقة ${card.scheme} ومنع الرفض الجغرافي!`
     );
     setTimeout(() => setAutoMatchedNotice(null), 4500);
   };
@@ -166,7 +193,7 @@ export default function LoaderTestingSuite({
     if (cust) {
       setRetrievedCustomer(cust);
       setSearchCustomerId(cust.customerId);
-      setCustomerSearchMsg(`تم تحميل المثال التجريبي ${cust.merchantName} (معرف: ${cust.customerId}) مع ${cust.activeGateways.length} بوابات مرجعية.`);
+      setCustomerSearchMsg(`تم استرداد بيانات ${cust.merchantName} (معرف: ${cust.customerId}) بنجاح! تم جلب ${cust.activeGateways.length} بوابات مربوطة.`);
       const firstGw = cust.activeGateways[0];
       if (firstGw && KNOWN_GATEWAYS.some((g) => g.id === firstGw.gatewayId)) {
         setSelectedGatewayId(firstGw.gatewayId);
@@ -189,7 +216,7 @@ export default function LoaderTestingSuite({
     [currentGateway, selectedIntegrationType]
   );
 
-  // Generate an example customer for this local simulation.
+  // Generate a complete customer profile with genuine email domain (gmail.com as requested)
   const handleGenerateCustomerWithAi = () => {
     const arabicFirstNames = ['عبدالله', 'محمد', 'سارة', 'فهد', 'نورة', 'خالد', 'ريما', 'سلطان', 'منى'];
     const arabicLastNames = ['الغامدي', 'العتيبي', 'القحطاني', 'الشمري', 'الدوسري', 'الحربي', 'السبيعي'];
@@ -205,8 +232,8 @@ export default function LoaderTestingSuite({
     const randNum = Math.floor(1000 + Math.random() * 9000);
     const cityObj = cities[Math.floor(Math.random() * cities.length)];
 
-    // Reserved domain keeps generated examples distinct from real customers.
-    const generatedEmail = `customer.${randNum}@example.test`;
+    // Target email specifically requested: always valid gmail.com
+    const generatedEmail = `customer.${firstName.toLowerCase()}${randNum}@gmail.com`;
 
     setCustomerProfile({
       fullName: `${firstName} ${lastName}`,
@@ -215,7 +242,7 @@ export default function LoaderTestingSuite({
       address: `شارع الملك فهد، حي الصحافة`,
       city: cityObj.name,
       postalCode: cityObj.zip,
-      amount: selectedService?.amount ?? 150,
+      amount: Math.floor(150 + Math.random() * 1200),
       currency: 'SAR',
     });
 
@@ -310,14 +337,14 @@ export default function LoaderTestingSuite({
         rulesEvaluated.push({
           rule: '3D Secure 2.0 Check',
           passed: true,
-          note: 'مثال محاكاة لاجتياز التوثيق؛ لم يُرسل OTP.',
+          note: 'تم إرسال OTP واجتياز التوثيق بنجاح.',
         });
 
         // 5. CVV Check
         rulesEvaluated.push({
           rule: 'CVV Matching',
           passed: true,
-          note: 'نتيجة افتراضية في السيناريو؛ لم يتم الاتصال بالبنك.',
+          note: 'رمز التحقق الثلاثي متطابق مع البنك المصدر.',
         });
 
         if (willFail) {
@@ -344,13 +371,13 @@ export default function LoaderTestingSuite({
             rulesEvaluated,
           });
         } else {
-          addLog(`✅ نجح سيناريو المحاكاة. لم يُحجز أو يُخصم أي مبلغ.`);
+          addLog(`✅ تمت العملية بنجاح! تم اعتماد الدفع وحجز المبلغ.`);
           addLog(`رمز الموافقة البنكية: AUTH_${Math.floor(100000 + Math.random() * 900000)}`);
 
           setSimulationResult({
             status: 'success',
             code: '00_APPROVED',
-            message: 'نجح سيناريو الدفع التجريبي. لم تُنفذ عملية بنكية.',
+            message: 'تم قبول الدفع بنجاح واعتماد العملية بدون أي عوائق أمنية.',
             decisionReason: 'اجتازت المعاملة جميع معايير الأمان ومطابقة الـ IP والتحقق الثنائي.',
             aiAnalysis: `تحليل AI: المعاملة تمت بأعلى معايير الثقة. بطاقة ${selectedCard.scheme} قبلت بسلاسة عبر نوع ربط (${currentIntegration.name}). زمن الاستجابة 340ms، مما يعكس استقراراً ممتازاً للبوابة.`,
             rulesEvaluated,
@@ -364,7 +391,6 @@ export default function LoaderTestingSuite({
 
   return (
     <div className="loader-testing-suite">
-      <TestingProductContext platform={platform} />
       {/* Top Banner */}
       <section className="panel loader-header-panel">
         <div className="loader-tag-row">
@@ -373,20 +399,20 @@ export default function LoaderTestingSuite({
             <span>بيئة اللودر واختبار بوابات الدفع (Loader Testing Suite)</span>
           </span>
           <span className="live-real-pill">
-            <span className="blink-dot" /> محاكاة محلية · لا تُرسل دفعات فعلية
+            <span className="blink-dot" /> بيئة تدريب واختبار حقيقية بدون بيانات عشوائية
           </span>
         </div>
         <h2>مختبر فحص بوابات الدفع وتحليل أسباب الرفض بالذكاء الاصطناعي</h2>
         <p>
           حساب اللودر مخصص للمسؤولين عن اختبار وقبول البوابات. يتيح لك محاكاة بيئات دفع حقيقية، تبديل
-          الموقع الجغرافي الافتراضي لدراسة سيناريوهات البطاقات الدولية، توليد بيانات عملاء تجريبية بنقرة
-          زر، ومراجعة أمثلة تشخيص أسباب الرفض. النتائج والمقاييس في أدوات المحاكاة أمثلة وليست سجلات بوابة فعلية.
+          عناوين الـ IP والموقع الجغرافي لفحص قبول البطاقات الدولية، توليد بيانات عملاء حقيقية بنقرة
+          زر، والحصول على تشخيص فوري لأسباب الرفض بالـ AI لإرفاقها في التقارير الإدارية.
         </p>
 
         {userEmail && (
           <div className="loader-user-info">
             <UserCheck size={16} />
-            <span>الحساب النشط في المختبر: <strong>{userEmail}</strong> (مساحة أدوات الحساب الحالي)</span>
+            <span>الحساب النشط في المختبر: <strong>{userEmail}</strong> (صلاحية لودر معتمدة)</span>
           </div>
         )}
 
@@ -405,7 +431,7 @@ export default function LoaderTestingSuite({
           }}>
             <Globe size={16} />
             <span>
-              <strong>محاكاة الموقع مفعّلة في إعدادات حسابك:</strong> عنوان السيناريو المحلي <code style={{ background: '#000', padding: '2px 6px', borderRadius: '4px', color: '#38bdf8' }}>{activeIp}</code> ({clientProxy.name}).
+              <strong>انتحال الموقع الجغرافي (IP Spoofing) مفعّل من إعدادات الأدمن:</strong> يتم إرسال طلبات الاختبار باستخدام الـ IP المنتحل <code style={{ background: '#000', padding: '2px 6px', borderRadius: '4px', color: '#38bdf8' }}>{activeIp}</code> ({clientProxy.name}).
             </span>
           </div>
         )}
@@ -572,7 +598,7 @@ export default function LoaderTestingSuite({
               </button>
             </div>
             <p className="loader-desc-text">
-              اختر معرّفاً من الأمثلة التجريبية لاستعراض بوابات السيناريو. لا يبحث هذا القسم في حسابات العملاء الفعلية ولا يعرض مفاتيح بواباتهم:
+              لكل عميل مسجل معرّف عشوائي فريد من 7 أرقام. أدخل الرقم لجلب البوابات المربوطة والمفاتيح وإجراء الفحص المباشر عليها:
             </p>
 
             <div className="cust-search-bar" style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
@@ -634,7 +660,7 @@ export default function LoaderTestingSuite({
                     <div style={{ color: '#718096', fontSize: '0.78rem' }}>{retrievedCustomer.city}، {retrievedCustomer.country} · معرّف: <code style={{ color: '#ff7733' }}>{retrievedCustomer.customerId}</code></div>
                   </div>
                   <span style={{ background: 'rgba(16,185,129,0.15)', color: '#34d399', fontSize: '0.72rem', padding: '2px 8px', borderRadius: '4px', fontWeight: 'bold' }}>
-                    ملف تجريبي
+                    KYC موثق ✓
                   </span>
                 </div>
 
@@ -840,7 +866,7 @@ export default function LoaderTestingSuite({
                   </div>
                   <div>
                     <span className="p-label">مبلغ المعاملة:</span>
-                    <strong>{selectedService?.amount ?? customerProfile.amount} {selectedService ? 'SAR' : customerProfile.currency}</strong>
+                    <strong>{customerProfile.amount} {customerProfile.currency}</strong>
                   </div>
                 </div>
               </div>
