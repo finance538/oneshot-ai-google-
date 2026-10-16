@@ -416,7 +416,7 @@ export const KNOWN_GATEWAYS: GatewayDefinition[] = [
           'إنشاء أمر عبر POST /transactions/outlets/{outletRef}/orders بـ application/vnd.ni-payment.v2+json ثم توجيه العميل إلى paypage.ksa.ngenius-payments.com. هذا هو الربط العامل الآن عبر دالتي ng-pay و ng-pay-return.',
         suitableFor: 'المتاجر الإلكترونية وصفحات الدفع العامة دون رفع مسؤولية PCI.',
         requiredFields: [
-          { key: 'OUTLET_REFERENCE', label: 'معرّف المنفذ (Outlet Reference)', placeholder: 'f3602f61-4e1c-4da5-9b98-142466334ae9' },
+          { key: 'OUTLET_REFERENCE', label: 'معرّف المنفذ (Outlet Reference)', placeholder: 'Outlet Reference (UUID)' },
           { key: 'API_KEY', label: 'مفتاح حساب الخدمة (Service Account API Key)', placeholder: 'base64(UUID:UUID)', isSecret: true },
           { key: 'API_BASE_URL', label: 'نطاق الخادم (Identity API)', placeholder: 'https://api-gateway.ksa.ngenius-payments.com' },
           { key: 'PAYPAGE_URL', label: 'نطاق صفحة الدفع (PayPage)', placeholder: 'https://paypage.ksa.ngenius-payments.com' },
@@ -431,7 +431,7 @@ export const KNOWN_GATEWAYS: GatewayDefinition[] = [
           'إطار داخل موقعك يجمع بيانات البطاقة ويحوّلها توكن لدى البوابة قبل وصولها لخادمك. يحتاج حساب خدمة نوعه Hosted Session Service Account (في حساب المنصة يوجد حساب من هذا النوع).',
         suitableFor: 'الواجهات الحديثة الراغبة بجمع البطاقة داخل الموقع دون مسؤولية تخزين.',
         requiredFields: [
-          { key: 'OUTLET_REFERENCE', label: 'معرّف المنفذ (Outlet Reference)', placeholder: 'f3602f61-4e1c-4da5-9b98-142466334ae9' },
+          { key: 'OUTLET_REFERENCE', label: 'معرّف المنفذ (Outlet Reference)', placeholder: 'Outlet Reference (UUID)' },
           { key: 'SESSION_API_KEY', label: 'مفتاح حساب الجلسة المستضافة (Hosted Session Key)', placeholder: 'base64(UUID:UUID)', isSecret: true },
           { key: 'API_BASE_URL', label: 'نطاق الخادم (API Base URL)', placeholder: 'https://api-gateway.ksa.ngenius-payments.com' },
         ],
@@ -445,7 +445,7 @@ export const KNOWN_GATEWAYS: GatewayDefinition[] = [
           'واجهة REST JSON كاملة: أمر بمرحلة واحدة (PURCHASE) أو مرحلتين (AUTH ثم CAPTURE)، مع الإلغاء والعكس والاسترجاع والاستعلام. تُرسل بيانات البطاقة من خادمك، ويلزم التزام PCI-DSS.',
         suitableFor: 'المنصات والشركات الحاصلة على متطلبات PCI-DSS والمعالجة الخلفية للاشتراكات.',
         requiredFields: [
-          { key: 'OUTLET_REFERENCE', label: 'معرّف المنفذ (Outlet Reference)', placeholder: 'f3602f61-4e1c-4da5-9b98-142466334ae9' },
+          { key: 'OUTLET_REFERENCE', label: 'معرّف المنفذ (Outlet Reference)', placeholder: 'Outlet Reference (UUID)' },
           { key: 'API_KEY', label: 'مفتاح حساب الخدمة (Service Account API Key)', placeholder: 'base64(UUID:UUID)', isSecret: true },
           { key: 'WEBHOOK_SECRET', label: 'مفتاح توقيع الويب هوك (Webhook Signature Key)', placeholder: 'whsec_...', isSecret: true },
         ],
@@ -459,7 +459,7 @@ export const KNOWN_GATEWAYS: GatewayDefinition[] = [
           'حزم رسمية لتطبيقات iOS وAndroid وReact Native لتحصيل الدفع داخل التطبيق. تطبيق المنصة الحالي WebView على الموقع الحيّ فيعمل تلقائيًا، وتُستخدم الحزمة عند بناء تجربة دفع أصلية.',
         suitableFor: 'تطبيقات الجوال الأصلية والهجينة.',
         requiredFields: [
-          { key: 'OUTLET_REFERENCE', label: 'معرّف المنفذ (Outlet Reference)', placeholder: 'f3602f61-4e1c-4da5-9b98-142466334ae9' },
+          { key: 'OUTLET_REFERENCE', label: 'معرّف المنفذ (Outlet Reference)', placeholder: 'Outlet Reference (UUID)' },
           { key: 'API_KEY', label: 'مفتاح حساب الخدمة (Service Account API Key)', placeholder: 'base64(UUID:UUID)', isSecret: true },
           { key: 'APP_BUNDLE_ID', label: 'معرّف التطبيق (Bundle / Package ID)', placeholder: 'com.oneshotcam.hub' },
         ],
@@ -474,7 +474,7 @@ export const KNOWN_GATEWAYS: GatewayDefinition[] = [
         suitableFor: 'المتاجر المبنية على منصات جاهزة دون تطوير مخصص.',
         requiredFields: [
           { key: 'PLUGIN_PLATFORM', label: 'منصة المتجر (Platform)', placeholder: 'Shopify / WooCommerce / Magento / PrestaShop / OpenCart' },
-          { key: 'OUTLET_REFERENCE', label: 'معرّف المنفذ (Outlet Reference)', placeholder: 'f3602f61-4e1c-4da5-9b98-142466334ae9' },
+          { key: 'OUTLET_REFERENCE', label: 'معرّف المنفذ (Outlet Reference)', placeholder: 'Outlet Reference (UUID)' },
           { key: 'API_KEY', label: 'مفتاح حساب الخدمة (Service Account API Key)', placeholder: 'base64(UUID:UUID)', isSecret: true },
         ],
       },
