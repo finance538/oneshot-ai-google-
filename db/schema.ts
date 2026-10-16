@@ -4,6 +4,15 @@ import type { OperationKind } from '../shared/operations.js';
 import type { PaymentPolicy } from '../shared/policy.js';
 import type { AssistantAction } from '../shared/admin-assistant.js';
 
+export const customerProfiles = pgTable('customer_profiles', {
+  ownerId: text('owner_id').primaryKey(),
+  email: text().notNull(),
+  fullName: text('full_name').notNull(),
+  phone: text().notNull().default(''),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
 export const voiceTranscripts = pgTable('voice_transcripts', {
   ownerId: text('owner_id').notNull(),
   id: uuid().notNull(),

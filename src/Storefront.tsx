@@ -204,7 +204,7 @@ export default function Storefront() {
             <AppearanceControls />
             <a
               className="store-button compact"
-              href={appearanceLink("/sign-in")}
+              href={appearanceLink("/customer")}
             >
               <KeyRound size={14} />
               {tr("دخول", "Sign in")}
