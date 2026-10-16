@@ -90,16 +90,6 @@ fun OneShotApp(
         NavItem(ScreenTab.OPERATIONS, Icons.Default.AdminPanelSettings, "إدارة AI")
     )
 
-    if (currentTab != ScreenTab.STOREFRONT) {
-        androidx.activity.compose.BackHandler {
-            if (currentTab == ScreenTab.CHECKOUT) {
-                viewModel.setTab(ScreenTab.DASHBOARD)
-            } else {
-                viewModel.setTab(ScreenTab.STOREFRONT)
-            }
-        }
-    }
-
     Box(modifier = Modifier.fillMaxSize()) {
         Scaffold(
             topBar = {

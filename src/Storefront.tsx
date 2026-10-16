@@ -1,0 +1,1555 @@
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  ArrowLeft,
+  ArrowRight,
+  Blocks,
+  Bot,
+  Camera,
+  Check,
+  CheckCircle2,
+  ChevronDown,
+  Clock3,
+  Code2,
+  Copy,
+  CreditCard,
+  Download,
+  FileText,
+  Globe2,
+  KeyRound,
+  Layers3,
+  Mail,
+  Menu,
+  MessageCircle,
+  Palette,
+  PhoneCall,
+  Search,
+  ShieldCheck,
+  ShoppingBag,
+  Sparkles,
+  Target,
+  Video,
+  X,
+  Zap,
+} from "lucide-react";
+import { appearanceLink, useAppearance } from "./i18n";
+import { AppearanceControls } from "./Brand";
+import { useStudioReveal } from "./useStudioReveal";
+import { categories, products, type Product } from "./storefront/catalog";
+import { documents, type DocumentPage } from "./storefront/documents";
+import { googleAdsPackage, mediaPackages } from "./storefront/media";
+import AppInstallBanner from "./AppInstallBanner";
+import CustomerAssistant from "./CustomerAssistant";
+import type { InstallPrompt } from "./platform";
+import "./storefront.css";
+
+
+type Inquiry = {
+  sku: string;
+  title: string;
+  amount: number;
+  monthly?: boolean;
+};
+const categoryIcons = {
+  ALL: Layers3,
+  AUT: Zap,
+  DIG: FileText,
+  AI: Bot,
+  WEB: Globe2,
+  BRD: Palette,
+  SOC: Target,
+  MED: Video,
+  MKT: Target,
+};
+function Logo() {
+  const { tr } = useAppearance();
+  return (
+    <a
+      className="store-logo"
+      href={appearanceLink("/")}
+      aria-label={`oneShot · ${tr('الرئيسية', 'Home')}`}
+    >
+      <img className="store-logo-emblem" src="/oneshot.svg" alt="" width="44" height="44" />
+      <span dir="ltr">
+        one<b>Shot</b>
+        <small>PAYMENT HUB</small>
+      </span>
+    </a>
+  );
+}
+
+export default function Storefront() {
+  const { language, tr, number } = useAppearance();
+  const ar = language === "ar";
+  const [menu, setMenu] = useState(false);
+  const [inquiry, setInquiry] = useState<Inquiry | null>(null);
+  const [installPrompt, setInstallPrompt] = useState<InstallPrompt | null>(null);
+  const [showInstallBanner, setShowInstallBanner] = useState(() => {
+    // Show banner on visit unless dismissed during the session
+    return !sessionStorage.getItem('oneshot_install_banner_dismissed');
+  });
+
+  const path = window.location.pathname.replace(/\/+$/, "") || "/";
+  useStudioReveal(path);
+
+  useEffect(() => {
+    const onPrompt = (event: Event) => {
+      event.preventDefault();
+      setInstallPrompt(event as InstallPrompt);
+    };
+    window.addEventListener('beforeinstallprompt', onPrompt);
+    return () => window.removeEventListener('beforeinstallprompt', onPrompt);
+  }, []);
+
+  const handleBannerDismiss = () => {
+    sessionStorage.setItem('oneshot_install_banner_dismissed', 'true');
+    setShowInstallBanner(false);
+  };
+
+  const documentKey = path.slice(1) as DocumentPage;
+  const documentPage = Object.prototype.hasOwnProperty.call(
+    documents,
+    documentKey,
+  )
+    ? documents[documentKey]
+    : null;
+  const product = path.startsWith("/products/")
+    ? products.find((item) => item.sku === path.split("/")[2])
+    : null;
+  const title = documentPage
+    ? tr(documentPage.titleAr, documentPage.titleEn)
+    : product
+      ? tr(product.nameAr, product.nameEn)
+      : tr(
+          "التصوير والتسويق والتصميم والتكاملات الرقمية",
+          "Photography, Marketing, Design & Business Integrations",
+        );
+  useEffect(() => {
+    document.title = `OneShot | ${title}`;
+  }, [title]);
+  useEffect(() => {
+    const close = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setMenu(false);
+    };
+    window.addEventListener("keydown", close);
+    return () => window.removeEventListener("keydown", close);
+  }, []);
+
+  const nav = [
+    { href: '/wallet', ar: 'محفظتي', en: 'My wallet', Icon: CreditCard },
+    {
+      href: "/api-integration",
+      ar: "ربط الـ API والداشبورد",
+      en: "API & Dashboard",
+      Icon: Code2,
+    },
+    {
+      href: "/#section-ai-staff",
+      ar: "كوادر الـ AI الذكية",
+      en: "AI Workforce",
+      Icon: Bot,
+    },
+    {
+      href: "/#section-media",
+      ar: "التصوير والإنتاج",
+      en: "Media & Production",
+      Icon: Video,
+    },
+    {
+      href: "/#section-google-ads",
+      ar: "التسويق الرقمي",
+      en: "Digital Marketing",
+      Icon: Target,
+    },
+    {
+      href: "/#section-contact",
+      ar: "تواصل معنا",
+      en: "Contact",
+      Icon: PhoneCall,
+    },
+  ];
+  return (
+    <div className="storefront">
+      <a className="store-skip" href="#store-main">
+        {tr("انتقل إلى المحتوى", "Skip to content")}
+      </a>
+      <header className="store-header">
+        <div className="store-header-inner">
+          <Logo />
+          <nav
+            className={`store-nav ${menu ? "is-open" : ""}`}
+            id="store-navigation"
+            aria-label={tr("القائمة الرئيسية", "Main navigation")}
+          >
+            {nav.map(({ href, ar: labelAr, en, Icon }, index) => (
+              <a
+                key={href}
+                className={index === 0 && path === "/" ? "active" : ""}
+                href={appearanceLink(href)}
+                onClick={() => setMenu(false)}
+              >
+                <Icon size={13} />
+                {tr(labelAr, en)}
+              </a>
+            ))}
+          </nav>
+          <div className="store-header-actions">
+            <a
+              className="store-ai-link"
+              href={appearanceLink("/products?category=AI")}
+              title={tr("خدمات الذكاء الاصطناعي", "AI services")}
+            >
+              <Sparkles size={13} />
+              <span>AI</span>
+            </a>
+            <AppearanceControls />
+            <a
+              className="store-button compact"
+              href={appearanceLink("/sign-in")}
+            >
+              <KeyRound size={14} />
+              {tr("دخول", "Sign in")}
+            </a>
+            <button
+              className="store-icon store-menu"
+              aria-label={tr(
+                menu ? "إغلاق القائمة" : "فتح القائمة",
+                menu ? "Close menu" : "Open menu",
+              )}
+              aria-expanded={menu}
+              aria-controls="store-navigation"
+              onClick={() => setMenu(!menu)}
+            >
+              {menu ? <X size={21} /> : <Menu size={21} />}
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <main className="store-main" id="store-main">
+        {documentPage ? (
+          <article className="store-document">
+            <a className="store-back" href={appearanceLink("/")}>
+              <ArrowRight size={17} />
+              {tr("العودة إلى الموقع", "Back to website")}
+            </a>
+            <div className="store-document-body">
+              <div className="store-document-title">
+                <span className="store-feature-icon">
+                  <FileText size={26} />
+                </span>
+                <div>
+                  <span className="store-kicker">
+                    OneShot Photography · 1shotcam.com
+                  </span>
+                  <h1>{title}</h1>
+                </div>
+              </div>
+              {(ar ? documentPage.bodyAr : documentPage.bodyEn).map(
+                (paragraph) => (
+                  <p key={paragraph}>{paragraph}</p>
+                ),
+              )}
+              {["support", "accounts"].includes(documentKey) && (
+                <div className="store-actions">
+                  <a
+                    className="store-button"
+                    href="mailto:support@1shotcam.com"
+                  >
+                    <Mail size={16} />
+                    support@1shotcam.com
+                  </a>
+                  <a
+                    className="store-button secondary"
+                    href="mailto:finance@1shotcam.com"
+                  >
+                    finance@1shotcam.com
+                  </a>
+                </div>
+              )}
+            </div>
+          </article>
+        ) : path.startsWith("/products/") ? (
+          product ? (
+            <ProductDetails product={product} onOrder={setInquiry} />
+          ) : (
+            <div className="store-empty">
+              <Search size={38} />
+              <h1>{tr("المنتج غير موجود", "Product not found")}</h1>
+              <a className="store-button" href={appearanceLink("/products")}>
+                {tr("تصفح الكتالوج", "Browse the catalog")}
+              </a>
+            </div>
+          )
+        ) : path === "/products" ? (
+          <Catalog onOrder={setInquiry} />
+        ) : (
+          <>
+            <section className="store-hero" id="section-hero">
+              <div className="store-hero-copy">
+                <span className="store-pill">
+                  <Sparkles size={15} />
+                  {tr(
+                    "OneShot • عصر الأتمتة والذكاء الاصطناعي وربط الـ API الموحد",
+                    "OneShot • The Era of AI Workforce & Payment API",
+                  )}
+                </span>
+                <h1>
+                  {tr(
+                    "عصر الـ AI الجديد: طاقم موظفين أذكياء يمسك لك الشغل،",
+                    "The New AI Era: Intelligent Staff Running Your Business,",
+                  )}{" "}
+                  <span>
+                    {tr("وربط API احترافي يوحد مدفوعاتك ويمنع الفوضى", "& A Unified API Dashboard Ending Payment Chaos")}
+                  </span>
+                </h1>
+                <p>
+                  {tr(
+                    "وداعاً لإدارة المهام اليدوية وتشتت الفواتير العشوائية! وفّر وقتك وجهدك مع كوادر ذكاء اصطناعي (AI Staff) متكاملة تدير العمليات والتسويق والدعم، مع ربط API موحد يجمع بواباتك (PayTabs و Telr) في داشبورد احترافي منظم وفواتير دقيقة 100%.",
+                    "Say goodbye to manual chaos and messy customer invoices. Employ an autonomous AI workforce managing your operations, marketing, and support, backed by a unified API dashboard uniting PayTabs and Telr.",
+                  )}
+                </p>
+                <div className="store-actions">
+                  <a className="store-button" href={appearanceLink("/api-integration")}>
+                    <Code2 size={17} />
+                    {tr(
+                      "تفاصيل ومزايا ربط الـ API الموحد",
+                      "Unified API Details & Dashboard",
+                    )}
+                    <ArrowLeft size={16} />
+                  </a>
+                  <a className="store-button secondary" href={appearanceLink("/sign-in")}>
+                    <Bot size={16} />
+                    {tr(
+                      "سوق كوادر الـ AI وتوظيف موظفيك",
+                      "AI Staff Marketplace",
+                    )}
+                  </a>
+                  <a
+                    className="store-button whatsapp"
+                    href="https://wa.me/966501234567"
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    <MessageCircle size={16} />
+                    {tr("استشارة فورية واتساب", "WhatsApp Consultation")}
+                  </a>
+                </div>
+                <div className="store-trust">
+                  {[
+                    ["ربط API موحد وداشبورد تنفيذي", "Unified API & Dashboard"],
+                    ["موظفو ذكاء اصطناعي 24/7", "Autonomous 24/7 AI Staff"],
+                    ["منع الفواتير الملخبطة والعشوائية", "Zero Chaotic Invoices"],
+                    ["تطبيق ون شوت باي للدفع السريع", "OneShot Pay Fast App"],
+                  ].map(([arabic, english]) => (
+                    <span key={english}>
+                      <CheckCircle2 size={15} />
+                      {tr(arabic, english)}
+                    </span>
+                  ))}
+                </div>
+              </div>
+              <div className="store-highlights">
+                <Highlight
+                  badge={tr("الخدمة الأساسية الأولى", "CORE SERVICE · NO MORE CHAOS")}
+                  title={tr(
+                    "ربط الـ API الموحد: لماذا هو أفضل 100 مرة من الفواتير المباشرة؟",
+                    "Unified API: Why It Beats Manual Invoicing",
+                  )}
+                  description={tr(
+                    "كتاجر، ربط الـ API الموحد يلغي الفوضى تماماً! يمنع العملاء من وضع فواتير عشوائية أو ملخبطة، ويمنحك داشبورد احترافي يربط PayTabs وTelr ومدى وApple Pay برقم مرجعي دقيق وتحقق فوري من الخادم.",
+                    "Manual invoices cause duplicate submissions and messy accounting. Unified API integration stops chaos, validates amounts, and unifies all gateways in one executive dashboard.",
+                  )}
+                  href="/api-integration"
+                  link={tr("اقرأ صفحة تفاصيل ومزايا ربط الـ API", "Explore Full API Details")}
+                />
+                <Highlight
+                  image="marketing"
+                  badge={tr("العصر الجديد في الـ AI", "AI WORKFORCE ERA")}
+                  title={tr(
+                    "موظفو AI يمسكون لك الشغل: وظّف فريقك التنفيذي",
+                    "AI Staff Running Your Entire Storefront",
+                  )}
+                  description={tr(
+                    "لا تشيل هم إدارة المهام اليومية! كوادر ذكاء اصطناعي جاهزة للعمل فوراً: مدير عمليات وربط مالي، أخصائي حملات جوجل، حارس رصد الاحتيال، ومساعد خدمة عملاء فوري 24/7.",
+                    "An elite virtual team working round the clock: Operations & gateway manager, Google Ads marketer, fraud prevention officer, and customer care specialist.",
+                  )}
+                  href="#section-ai-staff"
+                  link={tr("استكشف كوادر وموظفي الـ AI", "View AI Staff Profiles")}
+                />
+                <Highlight
+                  badge={tr("بوابة الدفع السريع", "ONESHOT PAY CHECKOUT")}
+                  title={tr(
+                    "تطبيق OneShot Pay: دفع فوري بالدايركت API",
+                    "OneShot Pay: Direct In-Page & Mobile Checkout",
+                  )}
+                  description={tr(
+                    "العميل يفتح الفاتورة ويدفع فوراً بضغطة زر واحدة داخل صفحتنا (Direct API) أو عبر تطبيق ون شوت باي، مع توجيه ذكي حسب نوع بطاقة العميل (مدى، فيزا، ماستركارد، Apple Pay).",
+                    "Seamless payment links directing clients into OneShot Pay app or direct in-page checkout without external redirects, maximizing conversions.",
+                  )}
+                  href="#section-apk"
+                  link={tr("تحميل وتثبيت تطبيق ون شوت باي", "Download OneShot Pay App")}
+                />
+              </div>
+            </section>
+
+            <section className="store-section" id="section-ai-staff">
+              <div className="store-section-heading">
+                <div>
+                  <span className="store-kicker">
+                    <Bot size={16} />
+                    {tr(
+                      "سوق كوادر الـ AI • AI Staff Marketplace",
+                      "AI WORKFORCE & AUTONOMOUS AGENTS",
+                    )}
+                  </span>
+                  <h2>
+                    {tr(
+                      "فريق عمل كامل من موظفي الـ AI جاهز لاستلام المهام فوراً",
+                      "Your Autonomous AI Employees Ready to Work",
+                    )}
+                  </h2>
+                  <p>
+                    {tr(
+                      "في العصر الجديد، أنت لست وحدك! عيّن موظفي ذكاء اصطناعي متخصصين يديرون شؤون متجرك، من الربط المالي ومتابعة العمليات وحتى الرد على استفسارات العملاء.",
+                      "Deploy trained AI specialists running your operations, financial matching, fraud protection, and customer inquiries around the clock.",
+                    )}
+                  </p>
+                </div>
+                <a className="store-button secondary" href={appearanceLink("/sign-in")}>
+                  {tr("دخول لتوظيف موظفي الـ AI", "Hire AI Staff in Workspace")}
+                  <ArrowLeft size={16} />
+                </a>
+              </div>
+              <div className="store-media-grid">
+                {[
+                  {
+                    titleAr: "مدير العمليات والربط المالي (Operations AI)",
+                    titleEn: "Operations & Payment Routing AI",
+                    descAr: "يراقب سير عمليات الربط مع PayTabs وTelr لحظياً، ويطابق الدفعات برقم مرجعي تلقائي دون أي تدخل يدوي.",
+                    descEn: "Monitors PayTabs and Telr gateway traffic, validates server callbacks, and matches orders automatically.",
+                    tagAr: "العمليات والمالية",
+                    tagEn: "Operations",
+                    icon: Zap,
+                  },
+                  {
+                    titleAr: "أخصائي التسويق الرقمي وإعلانات جوجل (Growth AI)",
+                    titleEn: "Google Ads & Marketing AI",
+                    descAr: "يضبط ميزانيات الحملات الإعلانية ومعدل التحويل (ROAS) ويربط أكواد Conversion API لتعظيم المبيعات.",
+                    descEn: "Optimizes Google Ads Performance Max campaigns, monitors CAC, and connects conversion tracking.",
+                    tagAr: "التسويق والنمو",
+                    tagEn: "Marketing",
+                    icon: Target,
+                  },
+                  {
+                    titleAr: "حارس مكافحة الاحتيال وفاحص الـ BINs (Risk Guard AI)",
+                    titleEn: "Fraud Prevention & BIN Intel AI",
+                    descAr: "يحلل بيانات بطاقات العملاء والدول، ويوجه كل بطاقة إلى البوابة صاحبة أعلى نسبة قبول 100% مع منع الرفض.",
+                    descEn: "Evaluates card country schemes, BIN ranges, and routes transactions to optimal gateways for zero decline.",
+                    tagAr: "الأمان والحماية",
+                    tagEn: "Security",
+                    icon: ShieldCheck,
+                  },
+                  {
+                    titleAr: "مستشار خدمة العملاء والدعم الفوري (Customer Care AI)",
+                    titleEn: "Instant Customer Experience AI",
+                    descAr: "يتواجد في صفحة الدفع والمتجر لمساعدة العملاء، والإجابة على أي استفسار حول الخدمة أو وسائل الدفع فوراً.",
+                    descEn: "Embedded in checkout to guide clients, answer product questions, and ensure complete payment completion.",
+                    tagAr: "الدعم المباشر",
+                    tagEn: "Support",
+                    icon: Bot,
+                  },
+                ].map((item, idx) => {
+                  const ItemIcon = item.icon;
+                  return (
+                    <article className="store-media-card" key={idx} style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '14px', background: 'var(--surface, #12141a)', borderRadius: '16px', border: '1px solid rgba(255, 85, 0, 0.15)' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <span style={{ display: 'inline-flex', padding: '8px', background: 'rgba(255, 85, 0, 0.1)', color: '#ff5500', borderRadius: '10px' }}>
+                          <ItemIcon size={22} />
+                        </span>
+                        <span className="store-image-badge" style={{ position: 'static' }}>
+                          {tr(item.tagAr, item.tagEn)}
+                        </span>
+                      </div>
+                      <h3 style={{ margin: 0, fontSize: '1.15rem' }}>{tr(item.titleAr, item.titleEn)}</h3>
+                      <p style={{ margin: 0, color: 'var(--text-muted, #94a3b8)', lineHeight: 1.6, fontSize: '0.95rem' }}>
+                        {tr(item.descAr, item.descEn)}
+                      </p>
+                      <div style={{ marginTop: 'auto', paddingTop: '12px' }}>
+                        <a className="store-button compact full-width" href={appearanceLink("/sign-in")}>
+                          {tr("تفعيل الموظف في لوحة تحكمك", "Activate in Workspace")}
+                          <ArrowLeft size={14} />
+                        </a>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            </section>
+
+            <section className="store-section" id="section-media">
+              <div className="store-section-heading">
+                <div>
+                  <span className="store-kicker">
+                    <Camera size={16} />
+                    {tr(
+                      "استوديو ونشوت للإنتاج المرئي",
+                      "ONESHOT CREATIVE PRODUCTION STUDIO",
+                    )}
+                  </span>
+                  <h2>
+                    {tr(
+                      "خدمات الميديا، الفيديو، والتصاميم الإبداعية",
+                      "Media, Video & Creative Design",
+                    )}
+                  </h2>
+                  <p>
+                    {tr(
+                      "جلسات تصوير سينمائي، محتوى بصري وتصاميم إبداعية تبرز هوية علامتك التجارية.",
+                      "Cinematic photography, visual content and creative design that bring your brand into focus.",
+                    )}
+                  </p>
+                </div>
+                <a className="store-button secondary" href="#section-contact">
+                  {tr("حجز باقة تصوير", "Book a Shoot")}
+                  <ArrowLeft size={16} />
+                </a>
+              </div>
+              <div className="store-media-grid">
+                {mediaPackages.map((item) => (
+                  <article className="store-media-card" key={item.sku}>
+                    <div className="store-media-image">
+                      <img
+                        src={`/images/${item.image}.jpg`}
+                        alt={tr(item.nameAr, item.nameEn)}
+                        loading="lazy"
+                        width="800"
+                        height="540"
+                      />
+                      <span className="store-image-badge">
+                        {tr(item.badgeAr, item.badgeEn)}
+                      </span>
+                    </div>
+                    <div className="store-media-content">
+                      <small className="store-sku" dir="ltr">
+                        SKU: {item.sku}
+                      </small>
+                      <h3>{tr(item.nameAr, item.nameEn)}</h3>
+                      <p>{tr(item.descriptionAr, item.descriptionEn)}</p>
+                      <span className="store-delivery">
+                        <Clock3 size={14} />
+                        {item.days
+                          ? tr(
+                              `التسليم خلال ${item.days} أيام عمل`,
+                              `Delivery in ${item.days} business days`,
+                            )
+                          : tr("اشتراك شهري متجدد", "Monthly retainer")}
+                      </span>
+                      <div className="store-card-bottom">
+                        <div>
+                          <small>
+                            {tr(
+                              item.days ? "السعر" : "شهرياً",
+                              item.days ? "Price" : "Monthly",
+                            )}
+                          </small>
+                          <strong>
+                            {number(item.price)} <span>{tr("ر.س", "SAR")}</span>
+                          </strong>
+                        </div>
+                        <button
+                          className="store-button compact"
+                          onClick={() =>
+                            setInquiry({
+                              sku: item.sku,
+                              title: tr(item.nameAr, item.nameEn),
+                              amount: item.price,
+                              monthly: !item.days,
+                            })
+                          }
+                        >
+                          {tr("طلب الخدمة", "Request Service")}
+                          <ArrowLeft size={14} />
+                        </button>
+                      </div>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </section>
+
+            <section
+              className="store-marketing store-section"
+              id="section-google-ads"
+            >
+              <div>
+                <span className="store-kicker">
+                  <Target size={17} />
+                  {tr(
+                    "رصيد إعلانات جوجل • Digital Marketing",
+                    "GOOGLE ADS CREDIT • DIGITAL MARKETING",
+                  )}
+                </span>
+                <h2>
+                  {tr(
+                    "ضاعف مبيعات متجرك مع رصيد إعلانات جوجل الموثوق",
+                    "Grow Your Store with Google Ads",
+                  )}
+                </h2>
+                <p>
+                  {tr(
+                    "تسويق وإدارة حملات مع ضبط أكواد التتبع والتحويل (Conversion API & Google Tag Manager) لقياس العائد الاستثماري في السوق السعودي والخليجي.",
+                    "Campaign management and conversion tracking with Conversion API and Google Tag Manager for the Saudi and Gulf markets.",
+                  )}
+                </p>
+                <div className="store-marketing-features">
+                  {[
+                    [
+                      ShieldCheck,
+                      "إعداد الحسابات الإعلانية",
+                      "Advertising Account Setup",
+                      "تهيئة حسابك الإعلاني وفق متطلبات نشاطك.",
+                      "Set up your advertising account for your business.",
+                    ],
+                    [
+                      Target,
+                      "حملات Performance Max و Search",
+                      "Performance Max & Search",
+                      "وصول إلى عملائك عبر البحث واليوتيوب وشبكة العرض.",
+                      "Reach customers on search, YouTube and the display network.",
+                    ],
+                    [
+                      Code2,
+                      "ربط التحويلات المتقدم",
+                      "Advanced Conversion Tracking",
+                      "تتبع عمليات الشراء لقياس تكلفة الاكتساب.",
+                      "Track purchases and measure acquisition costs.",
+                    ],
+                    [
+                      CreditCard,
+                      "باقات بالريال السعودي",
+                      "Packages in Saudi Riyals",
+                      "اختر باقتك وراجع نطاق الخدمة مع فريقنا.",
+                      "Choose a package and confirm the scope with our team.",
+                    ],
+                  ].map(([Icon, nameAr, nameEn, textAr, textEn]) => {
+                    const FeatureIcon = Icon as typeof Target;
+                    return (
+                      <div key={String(nameEn)}>
+                        <span className="store-feature-icon">
+                          <FeatureIcon size={20} />
+                        </span>
+                        <div>
+                          <h3>{tr(String(nameAr), String(nameEn))}</h3>
+                          <p>{tr(String(textAr), String(textEn))}</p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+              <article className="store-ads-card">
+                <span className="store-pill">
+                  {tr(
+                    "باقة شحن الرصيد الأكثر طلباً",
+                    "FEATURED ADVERTISING PACKAGE",
+                  )}
+                </span>
+                <div className="store-google-mark" aria-hidden="true">
+                  G<span>Ads</span>
+                </div>
+                <h3>
+                  {tr(
+                    "باقة نمو إعلانات جوجل الماسية",
+                    "Google Ads Diamond Growth Package",
+                  )}
+                </h3>
+                <dl>
+                  <div>
+                    <dt>
+                      {tr("الرصيد الإعلاني الفعلي", "Advertising credit")}
+                    </dt>
+                    <dd>5,000 SAR</dd>
+                  </div>
+                  <div>
+                    <dt>
+                      {tr(
+                        "تهيئة التتبع و Google Tag",
+                        "Tracking & Google Tag setup",
+                      )}
+                    </dt>
+                    <dd>{tr("مشمولة", "Included")}</dd>
+                  </div>
+                  <div>
+                    <dt>
+                      {tr("جلسة استشارة استراتيجية", "Strategy consultation")}
+                    </dt>
+                    <dd>
+                      {tr("ساعة كاملة مع خبير", "One hour with an expert")}
+                    </dd>
+                  </div>
+                </dl>
+                <div className="store-ads-price">
+                  <small>
+                    {tr("سعر الباقة المنشور", "Published package price")}
+                  </small>
+                  <strong>
+                    {number(googleAdsPackage.amount)} <span>SAR</span>
+                  </strong>
+                </div>
+                <button
+                  className="store-button"
+                  onClick={() =>
+                    setInquiry({
+                      sku: googleAdsPackage.sku,
+                      title: tr(
+                        "باقة نمو إعلانات جوجل الماسية",
+                        "Google Ads Diamond Growth Package",
+                      ),
+                      amount: googleAdsPackage.amount,
+                    })
+                  }
+                >
+                  {tr("طلب باقة جوجل آدز", "Request Google Ads Package")}
+                  <ArrowLeft size={16} />
+                </button>
+                <p>
+                  {tr(
+                    "يتوفر أيضاً شحن مخصص بمبالغ تبدأ من 1,000 ر.س حتى 100,000 ر.س عبر التواصل المباشر.",
+                    "Custom advertising budgets from SAR 1,000 to SAR 100,000 are available through our team.",
+                  )}
+                </p>
+              </article>
+            </section>
+
+            <IntegrationSection />
+            <Catalog onOrder={setInquiry} />
+
+            <section
+              className="store-contact store-section"
+              id="section-contact"
+            >
+              <div>
+                <span className="store-kicker">
+                  {tr("بيانات التواصل الرسمي", "OFFICIAL CONTACT CHANNELS")}
+                </span>
+                <h2>
+                  {tr(
+                    "تواصل معنا مباشرة، فريقنا في خدمتك",
+                    "Let’s Talk. Our Team Is Here for You.",
+                  )}
+                </h2>
+                <p>
+                  {tr(
+                    "سواء كنت ترغب في حجز جلسة تصوير ميديا، شحن رصيد جوجل آدز، أو ربط متجرك ببوابات الدفع — تواصل مع فريقنا لمناقشة طلبك.",
+                    "Book a shoot, discuss your advertising campaign or connect your store to a payment gateway. Talk to our team about your project.",
+                  )}
+                </p>
+                <div className="store-contact-details">
+                  <div>
+                    <MessageCircle size={20} />
+                    <div>
+                      <small>{tr("واتساب الدعم", "WhatsApp Support")}</small>
+                      <a
+                        href="https://wa.me/966501234567"
+                        target="_blank"
+                        rel="noreferrer"
+                        dir="ltr"
+                      >
+                        +966 50 123 4567
+                      </a>
+                    </div>
+                  </div>
+                  <div>
+                    <Mail size={20} />
+                    <div>
+                      <small>{tr("البريد الإلكتروني", "Email")}</small>
+                      <a href="mailto:support@1shotcam.com">
+                        support@1shotcam.com
+                      </a>
+                    </div>
+                  </div>
+                  <div>
+                    <Globe2 size={20} />
+                    <div>
+                      <small>
+                        {tr(
+                          "المملكة العربية السعودية",
+                          "Kingdom of Saudi Arabia",
+                        )}
+                      </small>
+                      <span>
+                        {tr(
+                          "مؤسسة يحيى أحمد يحيى الهوساوي للتصوير الفوتوغرافي",
+                          "Yahya Ahmed Yahya Alhawsawi Photography Establishment",
+                        )}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="store-contact-card">
+                <MessageCircle size={35} />
+                <h3>
+                  {tr(
+                    "بدء فوري أو طلب عرض سعر مخصص",
+                    "Start a Project or Request a Quote",
+                  )}
+                </h3>
+                <p>
+                  {tr(
+                    "تواصل عبر الواتساب مع فريقنا، أو سجّل دخولك لإدارة حسابك.",
+                    "Contact our team on WhatsApp, or sign in to manage your account.",
+                  )}
+                </p>
+                <a
+                  className="store-button whatsapp"
+                  href="https://wa.me/966501234567"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  <MessageCircle size={17} />
+                  {tr("مراسلة عبر واتساب", "Message on WhatsApp")}
+                </a>
+                <a
+                  className="store-button secondary"
+                  href={appearanceLink("/sign-in")}
+                >
+                  <KeyRound size={17} />
+                  {tr(
+                    "دخول بوابة التجار والعملاء",
+                    "Merchant & Client Sign In",
+                  )}
+                </a>
+              </div>
+            </section>
+          </>
+        )}
+      </main>
+
+      <footer className="store-footer">
+        <div className="store-footer-inner">
+          <div className="store-footer-columns">
+            <div>
+              <Logo />
+              <p>
+                {tr(
+                  "خدمات التصوير الفوتوغرافي والإنتاج المرئي والتسويق الرقمي والتصميم، مع حلول رقمية مساندة للأفراد والمنشآت.",
+                  "Photography, visual production, digital marketing and design, supported by modern digital business solutions.",
+                )}
+              </p>
+              <small className="store-kicker" dir="ltr">
+                1shotcam.com → OneShot Hub
+              </small>
+            </div>
+            <div>
+              <h3>{tr("خدماتنا", "Our Services")}</h3>
+              {[
+                ["التصوير الفوتوغرافي", "Photography"],
+                ["الإنتاج المرئي والمحتوى", "Visual Production & Content"],
+                ["التسويق الرقمي والإعلانات", "Digital Marketing"],
+                ["التصميم والهوية البصرية", "Design & Brand Identity"],
+              ].map(([arabic, english], index) => (
+                <a
+                  key={english}
+                  href={appearanceLink(
+                    index === 2 ? "/#section-google-ads" : "/#section-media",
+                  )}
+                >
+                  {tr(arabic, english)}
+                </a>
+              ))}
+              <a href={appearanceLink("/products")}>
+                {tr("حلول الأعمال الرقمية", "Digital Business Solutions")}
+              </a>
+            </div>
+            <div>
+              <h3>{tr("المنشأة", "Business Information")}</h3>
+              <p>OneShot Photography</p>
+              <p>
+                {tr(
+                  "مؤسسة يحيى أحمد يحيى الهوساوي للتصوير الفوتوغرافي",
+                  "Yahya Ahmed Yahya Alhawsawi Photography Establishment",
+                )}
+              </p>
+              <p>1shotcam.com</p>
+              <p>{tr("المملكة العربية السعودية", "Kingdom of Saudi Arabia")}</p>
+            </div>
+            <div>
+              <h3>{tr("التواصل والاعتماد", "Contact & Brand")}</h3>
+              <a className="store-accent" href="mailto:finance@1shotcam.com">
+                finance@1shotcam.com
+              </a>
+              <a href="mailto:support@1shotcam.com">support@1shotcam.com</a>
+              <a href={appearanceLink("/dashboard")}>
+                {tr("مساحة التاجر", "Merchant Workspace")}
+              </a>
+              <a href={appearanceLink("/products")}>
+                {tr("كتالوج المنتجات والخدمات", "Products & Services")}
+              </a>
+            </div>
+          </div>
+          <nav
+            className="store-footer-policies"
+            aria-label={tr(
+              "معلومات الشركة والسياسات",
+              "Company information and policies",
+            )}
+          >
+            {Object.entries(documents).map(([key, value]) => (
+              <a key={key} href={appearanceLink(`/${key}`)}>
+                {tr(value.titleAr, value.titleEn)}
+              </a>
+            ))}
+          </nav>
+          <div className="store-footer-apk-section">
+            <div className="store-footer-apk-card">
+              <div className="store-footer-apk-text">
+                <span className="apk-badge">{tr("تطبيق الجوال الذكي", "Official Mobile App")}</span>
+                <h4>{tr("لتجربة استخدام أفضل وأسرع، قم بتحميل تطبيق OneShot", "For a better and faster experience, download the OneShot App")}</h4>
+                <p>
+                  {tr(
+                    "حمّل التطبيق مباشرة بصيغة APK لهواتف الأندرويد، أو ثبّته كأيقونة تطبيق عبر المتصفح.",
+                    "Download the APK package directly for Android, or install it as an app via your browser."
+                  )}
+                </p>
+              </div>
+              <div className="store-footer-apk-buttons">
+                <a
+                  className="apk-download-btn primary"
+                  href="/oneshot-app.apk"
+                  download="oneshot-payment-studio.apk"
+                  title={tr("تحميل حزمة APK المباشرة", "Download APK Package")}
+                >
+                  <Download size={18} />
+                  <span>{tr("تحميل التطبيق (APK)", "Download APK")}</span>
+                </a>
+                <button
+                  className="apk-download-btn outline"
+                  onClick={() => setShowInstallBanner(true)}
+                >
+                  <Sparkles size={16} />
+                  <span>{tr("طريقة التثبيت للآيفون والأندرويد", "Install Guide iOS / Android")}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div className="store-footer-bottom">
+            <span>
+              <ShieldCheck size={15} />© 2026 OneShot Brand System.{" "}
+              {tr(
+                "جميع الحقوق محفوظة لـ 1shotcam.com",
+                "All rights reserved to 1shotcam.com",
+              )}
+            </span>
+            <span>Photography · Marketing · Design</span>
+          </div>
+        </div>
+      </footer>
+      {showInstallBanner && (
+        <AppInstallBanner
+          installPrompt={installPrompt}
+          onDismiss={handleBannerDismiss}
+          autoCloseSeconds={3}
+        />
+      )}
+      {inquiry && (
+        <InquiryDialog inquiry={inquiry} onClose={() => setInquiry(null)} />
+      )}
+      <CustomerAssistant />
+    </div>
+  );
+}
+
+
+function Highlight({
+  image,
+  badge,
+  title,
+  description,
+  href,
+  link,
+}: {
+  image?: string;
+  badge: string;
+  title: string;
+  description: string;
+  href: string;
+  link: string;
+}) {
+  return (
+    <article className="store-highlight">
+      <div className="store-highlight-image">
+        {image ? (
+          <img
+            src={`/images/${image}.jpg`}
+            alt={title}
+            width="800"
+            height="400"
+          />
+        ) : (
+          <div className="store-payment-art" aria-hidden="true">
+            <span>
+              one<b>Shot</b>
+            </span>
+            <CreditCard size={60} strokeWidth={1} />
+            <div>
+              <span>PayTabs</span>
+              <span>Telr</span>
+              <ShieldCheck size={18} />
+            </div>
+          </div>
+        )}
+        <span className="store-image-badge">{badge}</span>
+      </div>
+      <div className="store-highlight-copy">
+        <h3>{title}</h3>
+        <p>{description}</p>
+        <a href={href}>
+          {link}
+          <ArrowLeft size={13} />
+        </a>
+      </div>
+    </article>
+  );
+}
+
+function Catalog({ onOrder }: { onOrder: (item: Inquiry) => void }) {
+  const { tr, number, language } = useAppearance();
+  const initialCategory = new URLSearchParams(window.location.search).get(
+    "category",
+  );
+  const [category, setCategory] = useState(
+    categories.some((item) => item.id === initialCategory)
+      ? initialCategory!
+      : "ALL",
+  );
+  const [search, setSearch] = useState("");
+  const [limit, setLimit] = useState(12);
+  const filtered = useMemo(
+    () =>
+      products.filter(
+        (item) =>
+          (category === "ALL" || item.categoryId === category) &&
+          `${item.nameAr} ${item.nameEn} ${tr(item.nameAr, item.nameEn)} ${item.sku} ${item.publicContent.shortDescription}`
+            .toLocaleLowerCase()
+            .includes(search.trim().toLocaleLowerCase()),
+      ),
+    [category, search, language],
+  );
+  function reset() {
+    setCategory("ALL");
+    setSearch("");
+    setLimit(12);
+  }
+  return (
+    <section className="store-catalog store-section" id="section-catalog">
+      <div className="store-section-heading">
+        <div>
+          <span className="store-kicker">
+            <ShoppingBag size={16} />
+            {tr("كتالوج ونشوت الشامل 2026", "THE ONESHOT CATALOG 2026")}
+          </span>
+          <h2>
+            {tr("كتالوج المنتجات والخدمات الرقمية", "Products & Digital Services")}
+          </h2>
+          <p>
+            {tr("تصفح كافة الخدمات والحلول المتاحة مع أسعارها الرسمية بالريال السعودي ومواصفات التنفيذ والتسليم.", "Explore our services, published prices in Saudi Riyals, deliverables and timelines.")}
+          </p>
+        </div>
+        <label className="store-search">
+          <Search size={18} />
+          <span className="store-sr-only">
+            {tr("ابحث عن منتج أو خدمة", "Search products or services")}
+          </span>
+          <input
+            type="search"
+            value={search}
+            onChange={(event) => {
+              setSearch(event.target.value);
+              setLimit(12);
+            }}
+            placeholder={
+              tr("ابحث بالاسم أو رمز المنتج...", "Search by name or SKU...")
+            }
+          />
+        </label>
+      </div>
+      <div className="store-catalog-layout">
+        <aside
+          className="store-categories"
+          aria-label={tr("تصنيفات المنتجات", "Product categories")}
+        >
+          {categories.map((item) => {
+            const Icon =
+              categoryIcons[item.id as keyof typeof categoryIcons] || Layers3;
+            const count =
+              item.id === "ALL"
+                ? products.length
+                : products.filter((product) => product.categoryId === item.id)
+                    .length;
+            return (
+              <button
+                key={item.id}
+                aria-pressed={category === item.id}
+                className={category === item.id ? "active" : ""}
+                onClick={() => {
+                  setCategory(item.id);
+                  setLimit(12);
+                }}
+              >
+                <Icon size={17} />
+                <span>{tr(item.nameAr, item.nameEn)}</span>
+                <small>{count}</small>
+              </button>
+            );
+          })}
+        </aside>
+        <div>
+          <div className="store-product-grid">
+            {filtered.slice(0, limit).map((item) => (
+              <article className="store-product-card" key={item.sku}>
+                <div className="store-product-meta">
+                  <span className="store-sku">{item.sku}</span>
+                  <span>
+                    <Clock3 size={12} />
+                    {item.deliveryDays} {tr("أيام عمل", "business days")}
+                  </span>
+                </div>
+                <h3>
+                  <a href={appearanceLink(`/products/${item.sku}`)}>
+                    {tr(item.nameAr, item.nameEn)}
+                  </a>
+                </h3>
+                <p dir="rtl" lang="ar">
+                  {item.publicContent.shortDescription}
+                </p>
+                <ul dir="rtl" lang="ar">
+                  {item.publicContent.deliverables.slice(0, 2).map((text) => (
+                    <li key={text}>
+                      <CheckCircle2 size={13} />
+                      {text}
+                    </li>
+                  ))}
+                </ul>
+                <div className="store-product-price">
+                  <small>
+                    {item.pricing.billingCycle === "monthly"
+                      ? tr("شهرياً", "Monthly")
+                      : item.pricing.type === "starts_at"
+                        ? tr("يبدأ من", "Starting at")
+                        : tr("سعر ثابت", "Fixed price")}
+                  </small>
+                  <strong>
+                    {number(item.pricing.amount)} <span>SAR</span>
+                  </strong>
+                </div>
+                <div className="store-product-actions">
+                  <a
+                    className="store-button secondary compact"
+                    href={appearanceLink(`/products/${item.sku}`)}
+                  >
+                    {tr("التفاصيل", "Details")}
+                  </a>
+                  <button
+                    className="store-button compact"
+                    onClick={() =>
+                      onOrder({
+                        sku: item.sku,
+                        title: tr(item.nameAr, item.nameEn),
+                        amount: item.pricing.amount,
+                        monthly: item.pricing.billingCycle === "monthly",
+                      })
+                    }
+                  >
+                    {tr("طلب الخدمة", "Request")}
+                    <ArrowLeft size={13} />
+                  </button>
+                </div>
+              </article>
+            ))}
+          </div>
+          {!filtered.length && (
+            <div className="store-empty">
+              <Search size={35} />
+              <h3>{tr("لا توجد منتجات مطابقة", "No matching products")}</h3>
+              <p>
+                {tr("جرّب البحث باسم آخر أو اختر تصنيفاً مختلفاً.", "Try another search or choose a different category.")}
+              </p>
+              <button className="store-button secondary" onClick={reset}>
+                {tr("عرض جميع المنتجات", "Show all products")}
+              </button>
+            </div>
+          )}
+          <div className="store-catalog-status">
+            <p role="status">
+              {tr("يتم عرض {shown} منتج من {total} نتيجة — إجمالي {catalog} منتج بالكتالوج.", "Showing {shown} of {total} results · {catalog} products in the catalog.").replace("{shown}", String(Math.min(limit, filtered.length))).replace("{total}", String(filtered.length)).replace("{catalog}", String(products.length))}
+            </p>
+            {limit < filtered.length && (
+              <button
+                className="store-button secondary"
+                onClick={() => setLimit((value) => value + 12)}
+              >
+                {tr("عرض المزيد من المنتجات", "Load more products")}
+                <ChevronDown size={16} />
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function ProductDetails({
+  product,
+  onOrder,
+}: {
+  product: Product;
+  onOrder: (item: Inquiry) => void;
+}) {
+  const { tr, number } = useAppearance();
+  const title = tr(product.nameAr, product.nameEn);
+  const [downloadError, setDownloadError] = useState(false);
+  function download() {
+    try {
+      const description = [
+        title,
+        product.sku,
+        `${number(product.pricing.amount)} SAR (${product.pricing.type}; ${product.pricing.billingCycle})`,
+        `${product.deliveryDays} ${tr("أيام عمل", "business days")}`,
+        "",
+        product.publicContent.detailedDescription,
+        "",
+        tr("المخرجات", "Deliverables"),
+        ...product.publicContent.deliverables.map((text) => `- ${text}`),
+        "",
+        tr("الاستثناءات", "Exclusions"),
+        ...product.publicContent.exclusions.map((text) => `- ${text}`),
+        "",
+        `${tr("جولات التعديل", "Revisions")}: ${product.revisions.count}`,
+        product.revisions.scope,
+        "",
+        "OneShot Photography · support@1shotcam.com",
+      ].join("\n");
+      const url = URL.createObjectURL(
+        new Blob(["\ufeff" + description], {
+          type: "text/plain;charset=utf-8",
+        }),
+      );
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `${product.sku}-service-brief.txt`;
+      anchor.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch {
+      setDownloadError(true);
+    }
+  }
+  return (
+    <article className="store-product-detail">
+      <a className="store-back" href={appearanceLink("/products")}>
+        <ArrowRight size={17} />
+        {tr("العودة إلى الكتالوج", "Back to catalog")}
+      </a>
+      <div className="store-detail-layout">
+        <div className="store-document-body">
+          <span className="store-kicker">{product.sku} · ONESHOT 2026</span>
+          <h1>{title}</h1>
+          <p className="store-detail-subcategory" dir="rtl" lang="ar">
+            {product.subCategory}
+          </p>
+          <h2>{tr("الوصف والنطاق", "Overview & Scope")}</h2>
+          <p dir="rtl" lang="ar">
+            {product.publicContent.detailedDescription}
+          </p>
+          <h2>
+            {tr("المخرجات الدقيقة المشمولة في السعر", "Included Deliverables")}
+          </h2>
+          <ul className="store-deliverable-list" dir="rtl" lang="ar">
+            {product.publicContent.deliverables.map((text) => (
+              <li key={text}>
+                <CheckCircle2 size={17} />
+                {text}
+              </li>
+            ))}
+          </ul>
+          <h2>{tr("ما لا يشمله السعر", "Scope Exclusions")}</h2>
+          <ul className="store-exclusions" dir="rtl" lang="ar">
+            {product.publicContent.exclusions.map((text) => (
+              <li key={text}>{text}</li>
+            ))}
+          </ul>
+          <h2>
+            {tr("جولات التعديل", "Revisions")}: {product.revisions.count}
+          </h2>
+          <p dir="rtl" lang="ar">
+            {product.revisions.scope}
+          </p>
+          <button className="store-button secondary" onClick={download}>
+            <Download size={16} />
+            {tr("تحميل وصف الخدمة", "Download Service Brief")}
+          </button>
+          {downloadError && (
+            <p role="alert">
+              {tr("تعذر التحميل. يمكنك نسخ وصف الخدمة من هذه الصفحة.", "Download failed. You can copy the service description from this page.")}
+            </p>
+          )}
+        </div>
+        <aside className="store-detail-order">
+          <span className="store-kicker">
+            {tr("السعر المنشور", "PUBLISHED PRICE")}
+          </span>
+          <strong>
+            {number(product.pricing.amount)} <span>SAR</span>
+          </strong>
+          <p>
+            {product.pricing.type === "starts_at"
+              ? tr("السعر يبدأ من المبلغ الموضح", "Prices start at the amount shown")
+              : tr("سعر ثابت", "Fixed price")}
+            {product.pricing.billingCycle === "monthly"
+              ? tr(" · شهرياً", " · monthly")
+              : ""}
+          </p>
+          <div className="store-delivery">
+            <Clock3 size={17} />
+            {product.deliveryDays} {tr("أيام عمل", "business days")}
+          </div>
+          <button
+            className="store-button"
+            onClick={() =>
+              onOrder({
+                sku: product.sku,
+                title,
+                amount: product.pricing.amount,
+                monthly: product.pricing.billingCycle === "monthly",
+              })
+            }
+          >
+            {tr("اطلب هذه الخدمة", "Request This Service")}
+            <ArrowLeft size={16} />
+          </button>
+          <p>
+            {tr("تواصل مع الفريق لتأكيد النطاق والتسليم واستلام رابط الدفع الخاص بطلبك.", "Contact our team to confirm the scope, delivery and receive a payment link for your order.")}
+          </p>
+          <a href={appearanceLink("/refund")}>
+            {tr("سياسة الاسترجاع والاسترداد", "Refund & Return Policy")}
+          </a>
+        </aside>
+      </div>
+    </article>
+  );
+}
+
+function IntegrationSection() {
+  const { tr } = useAppearance();
+  const [tab, setTab] = useState<"HTML" | "REACT" | "JAVASCRIPT">("HTML");
+  const [copied, setCopied] = useState(false);
+  const [error, setError] = useState("");
+  const examples = {
+    HTML: `<!-- Use the payment URL from your merchant workspace. -->\n<a href="YOUR_PAYMENT_LINK">\n  Pay securely with oneShot\n</a>`,
+    REACT: `function PayButton({ paymentUrl }) {\n  return (\n    <a href={paymentUrl}>\n      Pay securely with oneShot\n    </a>\n  );\n}`,
+    JAVASCRIPT: `// Copy the payment URL from your merchant workspace.\nfunction openCheckout(paymentUrl) {\n  window.location.assign(paymentUrl);\n}`,
+  };
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(examples[tab]);
+      setCopied(true);
+      setError("");
+    } catch {
+      setError(
+        tr("تعذر النسخ. حدد الكود وانسخه يدوياً.", "Copy failed. Select the code to copy it manually."),
+      );
+    }
+  }
+  return (
+    <section className="store-integration store-section" id="section-api">
+      <div>
+        <span className="store-kicker">
+          <Code2 size={17} />
+          {tr("منظومة ونشوت للدفع الموحد • Unified API Platform", "ONESHOT UNIFIED PAYMENT API")}
+        </span>
+        <h2>
+          {tr("ربط الـ API الموحد: لماذا هو أفضل 100 مرة من الفواتير المباشرة؟", "Unified API: Why It Completely Outperforms Manual Invoices")}
+        </h2>
+        <p>
+          {tr("كتاجر، إرسال فواتير يدوية متفرقة يوقعك في فوضى عارمة وسجلات ملخبطة. ربط الـ API الموحد يمنحك نظاماً مرتباً 100% يمنع العشوائية، ويجمع PayTabs و Telr في داشبورد احترافي متكامل.", "Manual invoicing leads to scattered records and payment confusion. Our unified API gives you a rock-solid system preventing random submissions while uniting all gateways in one dashboard.")}
+        </p>
+        <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', margin: '20px 0' }}>
+          <a className="store-button" href={appearanceLink("/api-integration")}>
+            <FileText size={16} />
+            {tr("صفحة تفاصيل ومزايا ربط الـ API", "Full API Integration Details")}
+          </a>
+          <a className="store-button secondary" href={appearanceLink("/dashboard")}>
+            <KeyRound size={16} />
+            {tr("دخول مساحة التاجر والداشبورد", "Open Merchant Dashboard")}
+          </a>
+        </div>
+        <div className="store-integration-features">
+          {[
+            [
+              Layers3,
+              "1. داشبورد احترافي موحد",
+              "1. Executive Unified Dashboard",
+              "بدلاً من التشتت بين بوابات متعددة؛ شاشة واحدة تتابع فيها كل المبيعات والعملاء والرصيد لحظياً.",
+              "Instead of hopping between scattered gateway portals, manage everything in one synchronized command center.",
+            ],
+            [
+              ShieldCheck,
+              "2. منع الفواتير الملخبطة والعشوائية",
+              "2. Zero Chaotic or Duplicate Invoices",
+              "كل فاتورة مسجلة برقم مرجعي فريد. لا يمكن للعملاء إدخال مبالغ غير متطابقة أو تكرار السداد بالخطأ.",
+              "Enforces pricing integrity. Customers cannot submit arbitrary figures or duplicate accidental charges.",
+            ],
+            [
+              Blocks,
+              "3. ربط جميع البوابات بمرونة",
+              "3. Telr, PayTabs, Mada & Apple Pay",
+              "روابط مباشرة، روابط مفتوحة لبوابة واحدة، أو روابط موحدة لجميع البوابات تدعم التوجيه الذكي.",
+              "Single gateway open links, multi-gateway universal links, and direct checkout integrations.",
+            ],
+            [
+              Zap,
+              "4. تطبيق OneShot Pay للدفع السريع",
+              "4. Direct API & OneShot Pay Checkout",
+              "العميل يفتح الفاتورة ويدفع فوراً داخل صفحتنا (Direct API) أو عبر تطبيق ون شوت باي السريع.",
+              "Frictionless payments via in-page Direct API or OneShot Pay PWA / Android APK app.",
+            ],
+          ].map(([Icon, titleAr, titleEn, textAr, textEn]) => {
+            const FeatureIcon = Icon as typeof Layers3;
+            return (
+              <div key={String(titleEn)}>
+                <FeatureIcon size={21} />
+                <div>
+                  <h3>{tr(String(titleAr), String(titleEn))}</h3>
+                  <p>{tr(String(textAr), String(textEn))}</p>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+      <div className="store-code-panel">
+        <div className="store-code-heading">
+          <span />
+          <span />
+          <span />
+          <strong>OneShot · {tr("ربط روابط الدفع", "Payment Link Integration")}</strong>
+        </div>
+        <div className="store-code-tabs">
+          {(Object.keys(examples) as (keyof typeof examples)[]).map((key) => (
+            <button
+              key={key}
+              aria-pressed={tab === key}
+              className={tab === key ? "active" : ""}
+              onClick={() => {
+                setTab(key);
+                setCopied(false);
+                setError("");
+              }}
+            >
+              {key}
+            </button>
+          ))}
+          <button className="store-copy-code" onClick={() => void copy()}>
+            {copied ? <Check size={14} /> : <Copy size={14} />}
+            {copied ? tr("تم النسخ", "Copied") : tr("نسخ الكود", "Copy")}
+          </button>
+        </div>
+        <pre dir="ltr">
+          <code>{examples[tab]}</code>
+        </pre>
+        {error && <p role="alert">{error}</p>}
+        <p>
+          {tr("أنشئ رابط دفع من مساحة التاجر، ثم أضفه إلى موقعك أو شاركه مع عميلك.", "Create a payment link in your workspace, then add it to your website or share it with your customer.")}
+        </p>
+        <a href={appearanceLink("/sign-in")}>
+          {tr("الدخول إلى منصة المدفوعات", "Sign in to the Payment Platform")}
+          <ArrowLeft size={16} />
+        </a>
+      </div>
+    </section>
+  );
+}
+
+function InquiryDialog({
+  inquiry,
+  onClose,
+}: {
+  inquiry: Inquiry;
+  onClose: () => void;
+}) {
+  const { tr, number } = useAppearance();
+  const ref = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    const dialog = ref.current;
+    const previousOverflow = document.body.style.overflow;
+    dialog?.showModal();
+    document.body.style.overflow = "hidden";
+    return () => {
+      dialog?.close();
+      document.body.style.overflow = previousOverflow;
+    };
+  }, []);
+  const message = tr("مرحباً ونشوت، أرغب في طلب الخدمة: {title}\nرمز الخدمة: {sku}\nالسعر المنشور: {price} SAR\nيرجى تأكيد نطاق الخدمة والتسليم.", "Hello oneShot, I would like to request: {title}\nSKU: {sku}\nPublished price: {price} SAR\nPlease confirm the scope and delivery.").replace("{title}", inquiry.title).replace("{sku}", inquiry.sku).replace("{price}", number(inquiry.amount)) + (inquiry.monthly ? tr(" / شهرياً", " / month") : "");
+  return (
+    <dialog
+      className="store-inquiry"
+      ref={ref}
+      aria-labelledby="store-inquiry-title"
+      onCancel={(event) => {
+        event.preventDefault();
+        onClose();
+      }}
+      onClick={(event) => {
+        if (event.target === ref.current) onClose();
+      }}
+    >
+      <div className="store-inquiry-inner">
+        <div className="store-inquiry-heading">
+          <span className="store-kicker">ONESHOT · {inquiry.sku}</span>
+          <button
+            className="store-icon"
+            aria-label={tr("إغلاق", "Close")}
+            onClick={onClose}
+          >
+            <X size={21} />
+          </button>
+        </div>
+        <span className="store-feature-icon">
+          <ShoppingBag size={25} />
+        </span>
+        <h2 id="store-inquiry-title">{inquiry.title}</h2>
+        <strong className="store-inquiry-price">
+          {number(inquiry.amount)}{" "}
+          <span>
+            SAR{inquiry.monthly ? (tr(" / شهرياً", " / month")) : ""}
+          </span>
+        </strong>
+        <p>
+          {tr("تواصل مع فريقنا لتأكيد نطاق الخدمة وموعد التسليم واستلام رابط دفع خاص بطلبك. يتضمن طلب التواصل اسم الخدمة ورمزها وسعرها المنشور.", "Contact our team to confirm the scope and delivery, and receive a payment link for your order. Your message includes the service, SKU and published price.")}
+        </p>
+        <a
+          className="store-button whatsapp"
+          href={`https://wa.me/966501234567?text=${encodeURIComponent(message)}`}
+          target="_blank"
+          rel="noreferrer"
+        >
+          <MessageCircle size={17} />
+          {tr("طلب عبر واتساب", "Request on WhatsApp")}
+        </a>
+        <a className="store-button secondary" href={appearanceLink(`/wallet?sku=${encodeURIComponent(inquiry.sku)}`)}><CreditCard size={17} />{tr('الدفع من محفظة ونشوت', 'Pay with oneShot wallet')}</a>
+        <a
+          className="store-button secondary"
+          href={`mailto:support@1shotcam.com?subject=${encodeURIComponent(`OneShot · ${inquiry.sku} · ${inquiry.title}`)}&body=${encodeURIComponent(message)}`}
+        >
+          <Mail size={17} />
+          {tr("طلب عبر البريد الإلكتروني", "Request by Email")}
+        </a>
+        <small>
+          {tr("لم يتم إنشاء طلب أو خصم أي مبلغ بعد.", "No order has been placed and no payment has been taken.")}
+        </small>
+      </div>
+    </dialog>
+  );
+}

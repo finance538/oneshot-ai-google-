@@ -1,0 +1,188 @@
+import { pgTable, text, uuid, integer, timestamp, boolean, uniqueIndex, jsonb, index, primaryKey, bigint, check } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
+import type { OperationKind } from '../shared/operations.js';
+import type { PaymentPolicy } from '../shared/policy.js';
+import type { AssistantAction } from '../shared/admin-assistant.js';
+
+export const merchants = pgTable('merchants', {
+  id: uuid().defaultRandom().primaryKey(),
+  ownerId: text('owner_id').notNull().unique(),
+  name: text().notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const wallets = pgTable('customer_wallets', {
+  id: uuid().defaultRandom().primaryKey(),
+  ownerId: text('owner_id').notNull().unique(),
+  balance: bigint({ mode: 'number' }).notNull().default(0),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+}, table => [check('wallet_balance_nonnegative', sql`${table.balance} >= 0 AND ${table.balance} <= 9007199254740991`)]);
+
+export const siteGateways = pgTable('site_payment_gateways', {
+  gateway: text().primaryKey(),
+  merchantId: uuid('merchant_id').notNull().references(() => merchants.id),
+  adminId: text('admin_id').notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const documents = pgTable('payment_documents', {
+  id: uuid().defaultRandom().primaryKey(),
+  merchantId: uuid('merchant_id').notNull().references(() => merchants.id),
+  title: text().notNull(),
+  customerName: text('customer_name').notNull(),
+  customerEmail: text('customer_email').notNull(),
+  amount: integer().notNull(),
+  method: text().notNull(),
+  gateway: text().notNull().default('paytabs'),
+  openLinkId: uuid('open_link_id').references(() => openLinks.id),
+  publicRequestId: uuid('public_request_id').unique(),
+  interval: text().notNull().default('monthly'),
+  status: text().notNull().default('pending'),
+  gatewayUrl: text('gateway_url'),
+  gatewayId: text('gateway_id'),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+}, table => [uniqueIndex('documents_merchant_created').on(table.merchantId, table.id)]);
+
+export const attempts = pgTable('payment_attempts', {
+  id: uuid().defaultRandom().primaryKey(),
+  documentId: uuid('document_id').notNull().references(() => documents.id),
+  merchantId: uuid('merchant_id').notNull().references(() => merchants.id),
+  period: text().notNull().unique(),
+  amount: integer().notNull(),
+  status: text().notNull().default('processing'),
+  reference: text().unique(),
+  gatewayUrl: text('gateway_url'),
+  consent: boolean().notNull().default(false),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const walletTopups = pgTable('wallet_topups', {
+  documentId: uuid('document_id').primaryKey().references(() => documents.id),
+  walletId: uuid('wallet_id').notNull().references(() => wallets.id),
+  requestId: uuid('request_id').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+}, table => [uniqueIndex('wallet_topup_request').on(table.walletId, table.requestId)]);
+
+export const serviceOrders = pgTable('wallet_service_orders', {
+  id: uuid().defaultRandom().primaryKey(),
+  walletId: uuid('wallet_id').notNull().references(() => wallets.id),
+  requestId: uuid('request_id').notNull(),
+  sku: text().notNull(),
+  title: text().notNull(),
+  customerName: text('customer_name').notNull().default(''),
+  customerEmail: text('customer_email').notNull().default(''),
+  amount: integer().notNull(),
+  billingCycle: text('billing_cycle').notNull(),
+  status: text().notNull().default('paid'),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+}, table => [uniqueIndex('wallet_order_request').on(table.walletId, table.requestId)]);
+
+export const walletEntries = pgTable('wallet_entries', {
+  id: uuid().defaultRandom().primaryKey(),
+  walletId: uuid('wallet_id').notNull().references(() => wallets.id),
+  amount: integer().notNull(),
+  description: text().notNull(),
+  documentId: uuid('document_id').unique().references(() => documents.id),
+  orderId: uuid('order_id').unique().references(() => serviceOrders.id),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+}, table => [index('wallet_entries_owner_created').on(table.walletId, table.createdAt), check('wallet_entry_direction', sql`(${table.amount} > 0 AND ${table.documentId} IS NOT NULL AND ${table.orderId} IS NULL) OR (${table.amount} < 0 AND ${table.orderId} IS NOT NULL AND ${table.documentId} IS NULL)`)]);
+
+export const subscriptions = pgTable('subscriptions', {
+  id: uuid().defaultRandom().primaryKey(),
+  documentId: uuid('document_id').notNull().unique().references(() => documents.id),
+  merchantId: uuid('merchant_id').notNull().references(() => merchants.id),
+  encryptedToken: text('encrypted_token').notNull(),
+  initialReference: text('initial_reference').notNull(),
+  status: text().notNull().default('active'),
+  nextChargeAt: timestamp('next_charge_at', { withTimezone: true }).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const rateLimits = pgTable('payment_rate_limits', {
+  key: text().primaryKey(),
+  count: integer().notNull().default(1),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+});
+
+export const openLinks = pgTable('open_payment_links', {
+  id: uuid().defaultRandom().primaryKey(),
+  merchantId: uuid('merchant_id').notNull().references(() => merchants.id),
+  title: text().notNull(),
+  minimum: integer().notNull(),
+  maximum: integer().notNull(),
+  allowedMethods: jsonb('allowed_methods').$type<string[]>().notNull(),
+  enabled: boolean().notNull().default(true),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const platformSettings = pgTable('platform_settings', {
+  id: text().primaryKey(),
+  policy: jsonb().$type<PaymentPolicy>().notNull(),
+  version: integer().notNull().default(1),
+  updatedBy: text('updated_by').notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const settingsAudit = pgTable('platform_settings_audit', {
+  id: uuid().defaultRandom().primaryKey(),
+  actorId: text('actor_id').notNull(),
+  policy: jsonb().$type<PaymentPolicy>().notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const gatewayRequests = pgTable('gateway_connection_requests', {
+  id: uuid().defaultRandom().primaryKey(),
+  merchantId: uuid('merchant_id').notNull().references(() => merchants.id),
+  gateway: text().notNull(), // 'paytabs' | 'telr' | etc.
+  status: text().notNull().default('pending'), // 'pending' | 'configured' | 'rejected'
+  variables: jsonb().$type<Record<string, string>>().notNull(),
+  notes: text(),
+  submittedBy: text('submitted_by').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const assistantActions = pgTable('admin_assistant_actions', {
+  id: uuid().defaultRandom().primaryKey(),
+  actorId: text('actor_id').notNull(),
+  action: jsonb().$type<AssistantAction>().notNull(),
+  previous: jsonb().$type<Record<string, unknown>>().notNull(),
+  status: text().notNull().default('pending'),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  resolvedAt: timestamp('resolved_at', { withTimezone: true }),
+});
+
+export const operationsEvents = pgTable('operations_events', {
+  id: uuid().defaultRandom().primaryKey(),
+  sourceKey: text('source_key').notNull().unique(),
+  kind: text().$type<OperationKind>().notNull(),
+  merchantId: uuid('merchant_id').references(() => merchants.id),
+  subjectId: text('subject_id').notNull(),
+  provider: text(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+}, table => [index('operations_events_created').on(table.createdAt, table.id), index('operations_events_tenant_kind').on(table.merchantId, table.kind)]);
+
+export const operationsReceipts = pgTable('operations_receipts', {
+  eventId: uuid('event_id').notNull().references(() => operationsEvents.id),
+  actorId: text('actor_id').notNull(),
+  readAt: timestamp('read_at', { withTimezone: true }).defaultNow().notNull(),
+}, table => [primaryKey({ columns: [table.eventId, table.actorId] })]);
+
+export const operationsRequests = pgTable('operations_connection_requests', {
+  id: uuid().defaultRandom().primaryKey(),
+  merchantId: uuid('merchant_id').notNull().references(() => merchants.id),
+  actorId: text('actor_id').notNull(),
+  status: text().notNull().default('pending_setup'),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const operationsAudit = pgTable('operations_audit', {
+  id: uuid().defaultRandom().primaryKey(),
+  actorId: text('actor_id').notNull(),
+  eventId: uuid('event_id').references(() => operationsEvents.id),
+  merchantId: uuid('merchant_id').references(() => merchants.id),
+  action: text().notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+}, table => [index('operations_audit_actor_created').on(table.actorId, table.createdAt)]);

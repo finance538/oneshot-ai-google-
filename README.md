@@ -39,19 +39,12 @@ OneShot Brand Studio & Payment Platform rewritten natively for Android using Kot
    - Telr: Store ID, Service API Key, and Test Mode toggle.
    - Architecture note explaining PCI-DSS SAQ A-EP / SAQ D-Merchant compliance and server-side secret isolation.
 
-6. **Merchant Executive Suite & AI Staff (مكتب الرئيس التنفيذي وكوادر الذكاء الاصطناعي)**:
-   - AI Executive Suite with dedicated roles: CEO (الرئيس التنفيذي), CFO (المدير المالي), CMO (مدير التسويق), and COO (مدير العمليات).
-   - Real-time executive KPIs (Growth rate, Net Margin, ROAS, SLA Fulfillment).
-   - Task delegation to specialized AI staff with progress tracking and deliverable outputs.
-   - Interactive multi-modal executive chat supporting attachments, file analysis, and voice prompt interactions.
-
-7. **AI Operations Center & Platform Governance (مركز العمليات وحوكمة المنصة)**:
+6. **AI Operations Center & Assistant (مركز العمليات الذكي)**:
    - Real-time security telemetry and anomaly monitoring (rate limits, webhook verification confirmations, gateway health checks).
-   - Read/unread status toggles for administrative alerts and one-click system diagnostics.
-   - 100% full-power administrative policy toggles (Adaptive rate limiting, IP spoofing shields, strict gateway origin constraints).
+   - Read/unread status toggles for administrative alerts.
    - Integrated AI Assistant chat for conversational querying of gateway statuses, wallet mechanisms, and zero-trust verification policies.
 
-8. **Checkout Simulator & Demonstration (شاشة الدفع)**:
+7. **Checkout Simulator & Demonstration (شاشة الدفع)**:
    - Interactive checkout experience demonstrating hosted PayTabs flow, Telr Framed embedded checkout, and Apple Pay / Mada.
    - Detailed billing and transaction breakdown with verified confirmation screen.
 
