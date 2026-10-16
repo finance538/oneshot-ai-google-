@@ -3,6 +3,7 @@ import { createHash, createCipheriv, createDecipheriv, randomBytes } from 'node:
 import { eq, sql } from 'drizzle-orm';
 import { database } from '../../db/index.js';
 import { merchants, rateLimits } from '../../db/schema.js';
+import { isPlatformOwnerEmail, normalizeEmail } from '../../shared/platform-owner.js';
 
 export class HttpError extends Error {
   status: number;
@@ -59,12 +60,14 @@ export async function owner() {
 }
 
 export function isAdmin(user: User) {
+  // مالك المنصة (brand@1shotcam.com) مسؤول دائماً ولا يحتاج إلى إعداد يدوي.
+  if (isPlatformOwnerEmail(user.email)) return true;
   if (Array.isArray(user.appMetadata?.roles) && user.appMetadata.roles.includes('admin')) return true;
   const allowed = (process.env.ADMIN_EMAILS || '')
     .split(',')
     .map((value: string) => value.trim().toLowerCase())
     .filter(Boolean);
-  return allowed.includes(String(user.email || '').trim().toLowerCase());
+  return allowed.includes(normalizeEmail(user.email));
 }
 
 export function email(value: unknown) {
