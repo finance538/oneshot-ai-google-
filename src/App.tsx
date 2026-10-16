@@ -10,6 +10,7 @@ import { defaultPolicy, gatewayName, gateways, type Gateway, type PaymentPolicy 
 import Checkout from './Checkout';
 import OpenCheckout from './OpenCheckout';
 import Storefront from './Storefront';
+import CustomerAccount from './CustomerAccount';
 import SitePay from './SitePay';
 import LoadingPanel from './LoadingPanel';
 import CameraShutterSplash from './CameraShutterSplash';
@@ -96,7 +97,9 @@ export default function App() {
 
   return (
     <>
-      {payment ? (
+      {window.location.pathname.replace(/\/+$/, '') === '/customer' ? (
+        <CustomerAccount />
+      ) : payment ? (
         <Checkout id={payment[1]} />
       ) : open ? (
         <OpenCheckout id={open[1]} />
@@ -154,6 +157,7 @@ function MerchantPlatform() {
         if (localStorage.getItem('oneshot_google_user')) localStorage.removeItem('oneshot_google_user');
       }
       setUser(current ?? null);
+      if (current?.userMetadata?.account_type === 'customer') return;
       let result = initialPlatform;
       let platformError = '';
       try {
@@ -191,6 +195,11 @@ function MerchantPlatform() {
       try {
         const callback = await handleAuthCallback().catch(() => null);
         if (!mounted) return;
+        const current = await getUser();
+        if (current?.userMetadata?.account_type === 'customer') {
+          window.location.replace(appearanceLink(callback?.type === 'recovery' ? '/customer?mode=password' : '/customer'));
+          return;
+        }
         if (callback?.type === 'recovery') setAuth('password');
         else if (callback?.type === 'invite' && callback.token) { setInvite(callback.token); setAuth('invite'); }
         else {
@@ -338,7 +347,11 @@ function MerchantPlatform() {
       else if (auth === 'invite' && invite) { await acceptInvite(invite, password); closeAuth(true); }
       else {
         try {
-          await login(email, password);
+          const signedIn = await login(email, password);
+          if (signedIn.userMetadata?.account_type === 'customer') {
+            window.location.href = appearanceLink('/customer');
+            return;
+          }
           closeAuth(true);
           setNotice('تم تسجيل الدخول بنجاح.');
         } catch (caught) {

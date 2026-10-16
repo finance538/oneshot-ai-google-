@@ -1,6 +1,6 @@
 import { admin } from '@netlify/identity';
 import type { Context } from '@netlify/functions';
-import { email, failure, HttpError, jsonBody, reply, sameOrigin, throttle } from '../lib/platform.js';
+import { email, failure, HttpError, isAdmin, jsonBody, owner, reply, sameOrigin, throttle } from '../lib/platform.js';
 
 // الحساب الجديد يُعتمد مباشرة بعد التسجيل فلا يبقى الدخول معلقاً على رابط البريد،
 // وتُستخدم نفس النافذة لإنقاذ الحسابات القديمة التي أُنشئت قبل تفعيل هذا المسار.
@@ -10,6 +10,7 @@ export default async (req: Request, context: Context) => {
   try {
     if (req.method !== 'POST') return reply({ error: 'طريقة الطلب غير مسموحة.' }, 405);
     sameOrigin(req);
+    if (!isAdmin(await owner())) throw new HttpError(403, 'هذه العملية مخصصة للمسؤول.');
     await throttle(`identity-confirm:${context.ip || 'unknown'}`, 15);
     const body = await jsonBody(req);
     const address = email(body.email).toLowerCase();
