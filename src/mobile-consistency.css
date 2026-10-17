@@ -1,0 +1,76 @@
+/* OneShot — mobile consistency & usability pass (loaded last) */
+/* Goals: one readable type floor, 44px minimum tap targets, safe-area aware header. */
+
+@media (max-width: 760px) {
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
+  /* 1) Nothing under the notch / status bar, nothing clipped at the edges */
+  .store-header {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+  .store-header-inner,
+  .store-main,
+  .app-shell,
+  .topbar,
+  .store-footer-inner,
+  .checkout-header {
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+  .store-main {
+    padding-top: 16px;
+  }
+
+  /* 2) One type floor for labels/annotations (was 6px–11px, unreadable) */
+  .stat-card p,
+  .stat-top,
+  .store-image-badge,
+  .store-sku,
+  .store-pill,
+  .store-hero .store-pill,
+  .store-badge,
+  .store-section-heading .store-kicker,
+  .welcome-trust,
+  .welcome-actions .light-button,
+  .app-shell small,
+  .storefront small {
+    font-size: 12px;
+    line-height: 1.6;
+  }
+  .storefront .store-logo small {
+    font-size: 11px;
+    letter-spacing: 0.14em;
+  }
+
+  /* 3) 44px minimum tap targets in nav / header / footer rows */
+  .store-header a,
+  .store-header button,
+  .store-header select,
+  .store-nav a,
+  .store-header-actions .store-icon,
+  .store-language,
+  .store-footer a {
+    min-height: 44px;
+  }
+  .store-header-actions .store-icon,
+  .store-header .store-icon {
+    min-width: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .store-footer a {
+    display: inline-flex;
+    align-items: center;
+  }
+
+  /* 4) Keep long labels inside their tile instead of overflowing the phone */
+  .stat-card p,
+  .store-image-badge,
+  .store-sku {
+    overflow-wrap: anywhere;
+  }
+}

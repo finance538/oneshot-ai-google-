@@ -1,3 +1,4 @@
+import { gatewayNames } from '../shared/policy';
 // historicalPredictionModel.ts
 // AI-driven Predictive Model for Card Acceptance Success Rates based on Historical Operation Logs,
 // Issuing Bank (البنك المصدر), Issuing Country (دولة الإصدار), Card Archetype/Scheme, and Gateways.
@@ -449,7 +450,7 @@ export function predictCardSuccessRateByBankAndCountry(
 
   // Build Gateway Rankings
   const GATEWAY_NAMES: Record<string, { name: string; logo: string; badge: string }> = {
-    paytabs: { name: 'بيتابس (PayTabs)', logo: '💳', badge: 'الأعلى استقراراً في السعودية ومدى' },
+    paytabs: { name: gatewayNames.paytabs, logo: '💳', badge: 'الأعلى استقراراً في السعودية ومدى' },
     telr: { name: 'تيلر (Telr)', logo: '⚡', badge: 'بوابة التجارة الإلكترونية والإمارات والدولية' },
     noon: { name: 'نون باي (Noon Payments)', logo: '🟡', badge: 'معالج السيولة العالية والـ Omnichannel' },
     myfatoorah: { name: 'ماي فاتورة (MyFatoorah)', logo: '🧾', badge: 'الرائدة لـ KNET و Benefit والدفع السريع' },
@@ -510,7 +511,7 @@ export function predictCardSuccessRateByBankAndCountry(
     } else if (cause.reason.includes('3DS') || cause.reason.includes('توثيق')) {
       mitigation = 'التأكد من تشغيل البوابة لبروتوكول 3DS 2.3 المدعوم بنكياً لمنع انقطاع الـ OTP';
     } else if (cause.reason.includes('BIN') || cause.reason.includes('حظر')) {
-      mitigation = `حظر توجيه هذا النوع إلى تيلر/بايزاتي وتمريره فوراً لـ ${gatewayRankings[0]?.gatewayName || 'بيتابس'}`;
+      mitigation = `حظر توجيه هذا النوع إلى تيلر/بايزاتي وتمريره فوراً لـ ${gatewayRankings[0]?.gatewayName || 'PayTabs'}`;
     } else if (cause.reason.includes('FX') || cause.reason.includes('الصرف') || cause.reason.includes('Cross-border')) {
       mitigation = 'إلزام معالجة المعاملة بالعملة المحلية للبطاقة عبر بوابة ذات ترخيص محلي';
     }

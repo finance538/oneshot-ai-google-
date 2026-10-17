@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import {
+  AlertTriangle,
   ArrowLeft,
   ArrowRight,
   Blocks,
@@ -35,19 +36,24 @@ import { appearanceLink, useAppearance } from "./i18n";
 import { AppearanceControls } from "./Brand";
 import { useStudioReveal } from "./useStudioReveal";
 import { categories, products, type Product } from "./storefront/catalog";
+import { getLocalizedProductContent } from "./storefront/catalog-en";
 import { documents, type DocumentPage } from "./storefront/documents";
 import { googleAdsPackage, mediaPackages } from "./storefront/media";
-import AppInstallBanner from "./AppInstallBanner";
-import CustomerAssistant from "./CustomerAssistant";
+import { persistReturnDestination } from "./storefront/routes";
+import { getServiceEligibility } from "../shared/services";
+import { useDialogAccessibility } from "./useDialogAccessibility";
 import type { InstallPrompt } from "./platform";
 import "./storefront.css";
 
+const AppInstallBanner = lazy(() => import("./AppInstallBanner"));
+const CustomerAssistant = lazy(() => import("./CustomerAssistant"));
 
 type Inquiry = {
   sku: string;
   title: string;
   amount: number;
   monthly?: boolean;
+  startsAt?: boolean;
 };
 const categoryIcons = {
   ALL: Layers3,
@@ -66,12 +72,12 @@ function Logo() {
     <a
       className="store-logo"
       href={appearanceLink("/")}
-      aria-label={`oneShot · ${tr('الرئيسية', 'Home')}`}
+      aria-label={`oneShot Brand Studio · ${tr('الرئيسية', 'Home')}`}
     >
       <img className="store-logo-emblem" src="/oneshot.svg" alt="" width="44" height="44" />
       <span dir="ltr">
         one<b>Shot</b>
-        <small>PAYMENT HUB</small>
+        <small>Brand Studio</small>
       </span>
     </a>
   );
@@ -83,10 +89,7 @@ export default function Storefront() {
   const [menu, setMenu] = useState(false);
   const [inquiry, setInquiry] = useState<Inquiry | null>(null);
   const [installPrompt, setInstallPrompt] = useState<InstallPrompt | null>(null);
-  const [showInstallBanner, setShowInstallBanner] = useState(() => {
-    // Show banner on visit unless dismissed during the session
-    return !sessionStorage.getItem('oneshot_install_banner_dismissed');
-  });
+  const [showInstallBanner, setShowInstallBanner] = useState(false);
 
   const path = window.location.pathname.replace(/\/+$/, "") || "/";
   useStudioReveal(path);
@@ -99,6 +102,30 @@ export default function Storefront() {
     window.addEventListener('beforeinstallprompt', onPrompt);
     return () => window.removeEventListener('beforeinstallprompt', onPrompt);
   }, []);
+
+  // Defer automatic install prompt until meaningful engagement (scroll > 75% after 30s) and only when browser install prompt is available
+  useEffect(() => {
+    if (!installPrompt) return;
+    if (sessionStorage.getItem('oneshot_install_banner_dismissed')) return;
+    let readyByTime = false;
+    const timer = window.setTimeout(() => {
+      readyByTime = true;
+    }, 30000);
+    const onScroll = () => {
+      if (!readyByTime) return;
+      const doc = document.documentElement;
+      const scrollable = doc.scrollHeight - window.innerHeight;
+      if (scrollable > 400 && window.scrollY / scrollable >= 0.75) {
+        setShowInstallBanner(true);
+        window.removeEventListener('scroll', onScroll);
+      }
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener('scroll', onScroll);
+    };
+  }, [installPrompt]);
 
   const handleBannerDismiss = () => {
     sessionStorage.setItem('oneshot_install_banner_dismissed', 'true');
@@ -117,14 +144,18 @@ export default function Storefront() {
     : null;
   const title = documentPage
     ? tr(documentPage.titleAr, documentPage.titleEn)
-    : product
-      ? tr(product.nameAr, product.nameEn)
-      : tr(
-          "التصوير والتسويق والتصميم والتكاملات الرقمية",
-          "Photography, Marketing, Design & Business Integrations",
-        );
+    : path.startsWith("/products/")
+      ? product
+        ? `${tr(product.nameAr, product.nameEn)} (${product.sku})`
+        : tr("المنتج غير موجود", "Product Not Found")
+      : path === "/products"
+        ? tr("كتالوج المنتجات والخدمات الرقمية", "Products & Digital Services Catalog")
+        : tr(
+            "التصوير والتسويق والتصميم والتكاملات الرقمية",
+            "Photography, Marketing, Design & Business Integrations",
+          );
   useEffect(() => {
-    document.title = `OneShot | ${title}`;
+    document.title = `${title} | oneShot Brand Studio`;
   }, [title]);
   useEffect(() => {
     const close = (event: KeyboardEvent) => {
@@ -135,7 +166,19 @@ export default function Storefront() {
   }, []);
 
   const nav = [
-    { href: '/wallet', ar: 'محفظتي', en: 'My wallet', Icon: CreditCard },
+    {
+      href: "/products",
+      ar: "كتالوج الخدمات",
+      en: "Services Catalog",
+      Icon: ShoppingBag,
+    },
+    { href: '/wallet', ar: 'محفظتي', en: 'My Wallet', Icon: CreditCard },
+    {
+      href: "/customer",
+      ar: "حساب العميل / دخول",
+      en: "Customer Account / Sign In",
+      Icon: KeyRound,
+    },
     {
       href: "/api-integration",
       ar: "ربط الـ API والداشبورد",
@@ -153,12 +196,6 @@ export default function Storefront() {
       ar: "التصوير والإنتاج",
       en: "Media & Production",
       Icon: Video,
-    },
-    {
-      href: "/#section-google-ads",
-      ar: "التسويق الرقمي",
-      en: "Digital Marketing",
-      Icon: Target,
     },
     {
       href: "/#section-contact",
@@ -180,17 +217,22 @@ export default function Storefront() {
             id="store-navigation"
             aria-label={tr("القائمة الرئيسية", "Main navigation")}
           >
-            {nav.map(({ href, ar: labelAr, en, Icon }, index) => (
-              <a
-                key={href}
-                className={index === 0 && path === "/" ? "active" : ""}
-                href={appearanceLink(href)}
-                onClick={() => setMenu(false)}
-              >
-                <Icon size={13} />
-                {tr(labelAr, en)}
-              </a>
-            ))}
+            {nav.map(({ href, ar: labelAr, en, Icon }) => {
+              const isActive =
+                (href === "/products" && path.startsWith("/products")) ||
+                (href !== "/products" && path === href);
+              return (
+                <a
+                  key={href}
+                  className={isActive ? "active" : ""}
+                  href={appearanceLink(href)}
+                  onClick={() => setMenu(false)}
+                >
+                  <Icon size={13} />
+                  {tr(labelAr, en)}
+                </a>
+              );
+            })}
           </nav>
           <div className="store-header-actions">
             <a
@@ -203,11 +245,12 @@ export default function Storefront() {
             </a>
             <AppearanceControls />
             <a
-              className="store-button compact"
-              href={appearanceLink("/sign-in")}
+              className="store-button compact store-customer-entry"
+              href={appearanceLink("/customer")}
+              aria-label={tr("دخول حساب العميل", "Customer sign in")}
             >
               <KeyRound size={14} />
-              {tr("دخول", "Sign in")}
+              <span>{tr("دخول", "Sign in")}</span>
             </a>
             <button
               className="store-icon store-menu"
@@ -308,6 +351,13 @@ export default function Storefront() {
                     "Say goodbye to manual chaos and messy customer invoices. Employ an autonomous AI workforce managing your operations, marketing, and support, backed by a unified API dashboard uniting PayTabs and Telr.",
                   )}
                 </p>
+                <div className="store-plain">
+                  <strong>{tr("بكلمات بسيطة:", "In plain words:")}</strong>{" "}
+                  {tr(
+                    "نجمع كل مدفوعاتك وفواتيرك في مكان واحد، وموظفون أذكياء يشتغلون عنك 24 ساعة — بدون أي تعقيد تقني.",
+                    "All your payments and invoices in one place, with AI staff working for you around the clock — no technical complexity.",
+                  )}
+                </div>
                 <div className="store-actions">
                   <a className="store-button" href={appearanceLink("/api-integration")}>
                     <Code2 size={17} />
@@ -339,7 +389,7 @@ export default function Storefront() {
                     ["ربط API موحد وداشبورد تنفيذي", "Unified API & Dashboard"],
                     ["موظفو ذكاء اصطناعي 24/7", "Autonomous 24/7 AI Staff"],
                     ["منع الفواتير الملخبطة والعشوائية", "Zero Chaotic Invoices"],
-                    ["تطبيق ون شوت باي للدفع السريع", "OneShot Pay Fast App"],
+                    ["تطبيق ون شوت هوب", "OneShot Hub App"],
                   ].map(([arabic, english]) => (
                     <span key={english}>
                       <CheckCircle2 size={15} />
@@ -347,6 +397,23 @@ export default function Storefront() {
                     </span>
                   ))}
                 </div>
+              </div>
+              <div className="store-steps">
+                <span className="store-steps-title">{tr("تبدأ في 3 خطوات", "START IN 3 STEPS")}</span>
+                <ol>
+                  <li>
+                    <b>1</b>
+                    {tr("أنشئ حسابك ببريدك الإلكتروني", "Create your account with your email")}
+                  </li>
+                  <li>
+                    <b>2</b>
+                    {tr("اربط بوابة الدفع (PayTabs أو Telr)", "Connect your payment gateway (PayTabs / Telr)")}
+                  </li>
+                  <li>
+                    <b>3</b>
+                    {tr("أرسل أول فاتورة أو فعّل موظف AI", "Send your first invoice or hire an AI staffer")}
+                  </li>
+                </ol>
               </div>
               <div className="store-highlights">
                 <Highlight
@@ -377,17 +444,17 @@ export default function Storefront() {
                   link={tr("استكشف كوادر وموظفي الـ AI", "View AI Staff Profiles")}
                 />
                 <Highlight
-                  badge={tr("بوابة الدفع السريع", "ONESHOT PAY CHECKOUT")}
+                  badge={tr("بوابة الدفع السريع", "ONESHOT HUB CHECKOUT")}
                   title={tr(
-                    "تطبيق OneShot Pay: دفع فوري بالدايركت API",
-                    "OneShot Pay: Direct In-Page & Mobile Checkout",
+                    "تطبيق OneShot Hub: دفع فوري بضغطة زر",
+                    "OneShot Hub: Direct In-Page & Mobile Checkout",
                   )}
                   description={tr(
-                    "العميل يفتح الفاتورة ويدفع فوراً بضغطة زر واحدة داخل صفحتنا (Direct API) أو عبر تطبيق ون شوت باي، مع توجيه ذكي حسب نوع بطاقة العميل (مدى، فيزا، ماستركارد، Apple Pay).",
-                    "Seamless payment links directing clients into OneShot Pay app or direct in-page checkout without external redirects, maximizing conversions.",
+                    "العميل يفتح الفاتورة ويدفع فوراً بضغطة زر واحدة داخل صفحتنا (Direct API) أو عبر تطبيق ون شوت هوب، مع توجيه ذكي حسب نوع بطاقة العميل (مدى، فيزا، ماستركارد، Apple Pay).",
+                    "Seamless payment links directing clients into OneShot Hub app or direct in-page checkout without external redirects, maximizing conversions.",
                   )}
                   href="#section-apk"
-                  link={tr("تحميل وتثبيت تطبيق ون شوت باي", "Download OneShot Pay App")}
+                  link={tr("تحميل وتثبيت تطبيق ون شوت هوب", "Download OneShot Hub App")}
                 />
               </div>
             </section>
@@ -916,8 +983,8 @@ export default function Storefront() {
               <div className="store-footer-apk-buttons">
                 <a
                   className="apk-download-btn primary"
-                  href="/oneshot-app.apk"
-                  download="oneshot-payment-studio.apk"
+                  href="/oneshot-hub.apk"
+                  download="oneshot-hub.apk"
                   title={tr("تحميل حزمة APK المباشرة", "Download APK Package")}
                 >
                   <Download size={18} />
@@ -1109,6 +1176,21 @@ function Catalog({ onOrder }: { onOrder: (item: Inquiry) => void }) {
           <div className="store-product-grid">
             {filtered.slice(0, limit).map((item) => (
               <article className="store-product-card" key={item.sku}>
+                <a
+                  className="store-product-media"
+                  href={appearanceLink(`/products/${item.sku}`)}
+                  aria-hidden="true"
+                  tabIndex={-1}
+                >
+                  <img
+                    src={`/images/products/${item.sku}.jpg`}
+                    alt=""
+                    width={1280}
+                    height={800}
+                    loading="lazy"
+                    decoding="async"
+                  />
+                </a>
                 <div className="store-product-meta">
                   <span className="store-sku">{item.sku}</span>
                   <span>
@@ -1254,6 +1336,15 @@ function ProductDetails({
       </a>
       <div className="store-detail-layout">
         <div className="store-document-body">
+          <figure className="store-detail-media">
+            <img
+              src={`/images/products/${product.sku}.jpg`}
+              alt={title}
+              width={1280}
+              height={800}
+              decoding="async"
+            />
+          </figure>
           <span className="store-kicker">{product.sku} · ONESHOT 2026</span>
           <h1>{title}</h1>
           <p className="store-detail-subcategory" dir="rtl" lang="ar">
@@ -1410,10 +1501,10 @@ function IntegrationSection() {
             ],
             [
               Zap,
-              "4. تطبيق OneShot Pay للدفع السريع",
-              "4. Direct API & OneShot Pay Checkout",
-              "العميل يفتح الفاتورة ويدفع فوراً داخل صفحتنا (Direct API) أو عبر تطبيق ون شوت باي السريع.",
-              "Frictionless payments via in-page Direct API or OneShot Pay PWA / Android APK app.",
+              "4. تطبيق OneShot Hub للدفع السريع",
+              "4. Direct API & OneShot Hub Checkout",
+              "العميل يفتح الفاتورة ويدفع فوراً داخل صفحتنا (Direct API) أو عبر تطبيق ون شوت هوب السريع.",
+              "Frictionless payments via in-page Direct API or OneShot Hub PWA / Android APK app.",
             ],
           ].map(([Icon, titleAr, titleEn, textAr, textEn]) => {
             const FeatureIcon = Icon as typeof Layers3;
@@ -1538,7 +1629,14 @@ function InquiryDialog({
           <MessageCircle size={17} />
           {tr("طلب عبر واتساب", "Request on WhatsApp")}
         </a>
-        <a className="store-button secondary" href={appearanceLink(`/wallet?sku=${encodeURIComponent(inquiry.sku)}`)}><CreditCard size={17} />{tr('الدفع من محفظة ونشوت', 'Pay with oneShot wallet')}</a>
+        <a
+          className="store-button secondary"
+          href={appearanceLink(`/wallet?sku=${encodeURIComponent(inquiry.sku)}`)}
+          onClick={() => persistReturnDestination(`/wallet?sku=${encodeURIComponent(inquiry.sku)}`, inquiry.sku)}
+        >
+          <CreditCard size={17} />
+          {tr('الدفع من محفظة ونشوت', 'Pay with oneShot wallet')}
+        </a>
         <a
           className="store-button secondary"
           href={`mailto:support@1shotcam.com?subject=${encodeURIComponent(`OneShot · ${inquiry.sku} · ${inquiry.title}`)}&body=${encodeURIComponent(message)}`}

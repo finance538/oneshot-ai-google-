@@ -126,7 +126,7 @@ export default function CardCountryCompatibilityChecker({ onApplyCardToSimulator
         statusText = 'قبول جزئي (معالجة كبطاقة فيزا/ماستركارد دولية)';
         approvalRate = '78%';
         technicalNotes = 'لا تدعم مسار مدى المحلي، قد تخضع لرسوم تحويل عملة أو رفض من بعض البنوك السعودية';
-        recommendation = 'توجيه المعاملة لبيتابس أو نون لتحقيق أعلى نسبة قبول';
+        recommendation = 'توجيه المعاملة إلى PayTabs أو نون لتحقيق أعلى نسبة قبول';
       } else if (gw.gatewayId === 'tabby') {
         supported = true;
         level = 'full';
@@ -165,7 +165,7 @@ export default function CardCountryCompatibilityChecker({ onApplyCardToSimulator
         statusText = 'غير مدعومة (تقتصر على بوابات الربط البحريني)';
         approvalRate = '0%';
         technicalNotes = 'تتطلب الربط مع شبكة Benefit';
-        recommendation = 'استخدم بيتابس أو ماي فاتورة';
+        recommendation = 'استخدم PayTabs أو ماي فاتورة';
       }
     } else if (analyzedBin.scheme === 'Meeza') {
       if (gw.gatewayId === 'paytabs' || gw.gatewayId === 'myfatoorah') {
@@ -225,7 +225,7 @@ export default function CardCountryCompatibilityChecker({ onApplyCardToSimulator
           <h3>فاحص توافقية أرقام البطاقات مع الدول والبوابات المدعومة</h3>
           <p>
             أدخل أي رقم بطاقة بنكية (تجريبي أو حقيقي) للحصول فوراً على كشف الـ BIN، دولة الإصدار، البنك المصدر،
-            وفحص توافقية البطاقة مع جميع بوابات الدفع (بيتابس، تيلر، ماي فاتورة، نون، تابي، بي زاتي) مع نسبة القبول المتوقعة.
+            وفحص توافقية البطاقة مع جميع بوابات الدفع (PayTabs، تيلر، ماي فاتورة، نون، تابي، بي زاتي) مع نسبة القبول المتوقعة.
           </p>
         </div>
       </div>
@@ -436,7 +436,7 @@ export default function CardCountryCompatibilityChecker({ onApplyCardToSimulator
               <strong>قواعد التوجيه الذكي (Smart Routing Advice):</strong>
               <p>
                 بطاقات الشبكات المحلية مثل (مدى) تحقق نسبة قبول تفوق 96% عندما يتم توجيهها للبوابات ذات الربط المباشر مع البنك المركزي
-                (مثل بيتابس أو نون)، بينما يقل معدل القبول إلى 78% وتُفرض رسوم تبادل دولية عند توجيهها لبوابات تعتمد على فيزا/ماستركارد الدولية خارج المملكة.
+                (مثل PayTabs أو نون)، بينما يقل معدل القبول إلى 78% وتُفرض رسوم تبادل دولية عند توجيهها لبوابات تعتمد على فيزا/ماستركارد الدولية خارج المملكة.
               </p>
             </div>
           </div>

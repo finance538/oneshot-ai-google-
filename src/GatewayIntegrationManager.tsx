@@ -1,3 +1,4 @@
+import { gatewayName, gatewayNames } from '../shared/policy';
 import { useState, type FormEvent } from 'react';
 import {
   ExternalLink,
@@ -67,6 +68,56 @@ export default function GatewayIntegrationManager({
   const myRequests = platform.gatewayRequests || [];
   const adminRequests = platform.adminGatewayRequests || [];
   const isAdmin = platform.isAdmin;
+
+  // Payment gateways are provisioned from the platform administrator account only:
+  // every connected gateway runs under that account, so other dashboard users get a read-only view.
+  if (!isAdmin) {
+    // البوابات المنصّبية الأربع مرتبطة بحساب المسؤول؛ القائمة تعرض حالة كل واحدة من سياسة المنصة.
+    const platformGateways: { id: 'paytabs' | 'telr' | 'ngenius' | 'tap'; label: string; english: string }[] = [
+      { id: 'paytabs', label: gatewayNames.paytabs, english: gatewayNames.paytabs },
+      { id: 'telr', label: 'تيلر (Telr)', english: 'Telr Gateway' },
+      { id: 'ngenius', label: 'نيجنيس السعودية (N-Genius KSA)', english: 'N-Genius KSA Gateway' },
+      { id: 'tap', label: 'تاب للمدفوعات (Tap Payments)', english: 'Tap Payments Gateway' },
+    ];
+    return (
+      <div className="gateway-integration-hub">
+        <section className="panel gateway-hub-intro">
+          <div className="hub-intro-header">
+            <div className="hub-tag">
+              <ShieldCheck size={16} />
+              <span>{tr('بوابات الدفع', 'PAYMENT GATEWAYS')}</span>
+            </div>
+            <h2>بوابات الدفع مرتبطة بحساب مسؤول المنصة</h2>
+            <p>
+              ربط البوابات وإدخال بياناتها يتم من <strong>حساب مسؤول المنصة</strong> فقط، وكل البوابات المربوطة تعمل تحت ذلك
+              الحساب. لا تُطلب منك أي بيانات ربط — ما يُفعّل هناك يتاح تلقائيًا في محفظتك وصفحات الدفع، وتُحصَّل المبالغ في
+              حساب المنصة ثم تظهر في محفظتك ورصيدك.
+            </p>
+          </div>
+          <div className="gw-catalog-grid">
+            {platformGateways.map((gateway) => {
+              const allowed = Boolean(platform.policy?.gateways?.[gateway.id]);
+              return (
+                <article key={gateway.id} className="gw-catalog-card">
+                  <div className="gw-card-top">
+                    <h3>{gateway.label}</h3>
+                  </div>
+                  <p className="gw-short-desc">{gateway.english}</p>
+                  <div className="gw-card-footer">
+                    <span className="gw-it-badge">{allowed ? 'مفعّلة على المنصة' : 'متوقفة على المنصة'}</span>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+          <div className="gw-alert-banner success">
+            <Info size={18} />
+            <span>الظهور الفعلي للبوابة في صفحة الدفع يعتمد على توصيل بياناتها في حساب المسؤول.</span>
+          </div>
+        </section>
+      </div>
+    );
+  }
 
   const currentGateway = KNOWN_GATEWAYS.find((g) => g.id === selectedGatewayId) || KNOWN_GATEWAYS[0];
   const currentIntegration =
@@ -202,7 +253,7 @@ export default function GatewayIntegrationManager({
           <p>
             سواء كنت تربط عبر <strong>تطبيقات الجوال (Mobile SDK)</strong>، أو عبر{' '}
             <strong>صفحة الدفع المستضافة (Hosted)</strong>، أو <strong>الإطار المدمج (iFrame)</strong>، أو{' '}
-            <strong>الربط المباشر للخوادم (Direct API)</strong>. اختر البوابة المطلوبة (تيلر، بيتابس، ماي فاتورة، بي زاتي، تابي، نون، بي وان)،
+            <strong>الربط المباشر للخوادم (Direct API)</strong>. اختر البوابة المطلوبة (تيلر، PayTabs، ماي فاتورة، بي زاتي، تابي، نون، بي وان، أو <strong>نيجنيس السعودية N-Genius KSA</strong> بطريقة ربطها الرسمية من الخمس)،
             أو أضف أي بوابة مخصصة جديدة لتسجيل تفاصيلها مباشرة لحسابك.
           </p>
 
@@ -259,7 +310,7 @@ export default function GatewayIntegrationManager({
                 <div className="gw-integration-badges-strip">
                   {gw.integrationTypes.map((it) => (
                     <span key={it.id} className="gw-it-badge">
-                      {it.id === 'mobile' ? '📱 جوال' : it.id === 'hosted' ? '🌐 هوست' : it.id === 'framed' ? '🖼️ مدمج' : '⚡ مباشر'}
+                      {it.id === 'mobile' ? '📱 جوال' : it.id === 'mobile_sdk' ? '📲 SDK' : it.id === 'hosted' ? '🌐 هوست' : it.id === 'hosted_session' ? '🔐 جلسة مستضافة' : it.id === 'plugins' ? '🧩 إضافات متاجر' : it.id === 'framed' ? '🖼️ مدمج' : '⚡ مباشر'}
                     </span>
                   ))}
                 </div>
@@ -560,7 +611,7 @@ export default function GatewayIntegrationManager({
                   <tr key={req.id}>
                     <td>
                       <strong className="gw-name-badge">
-                        {req.gateway.replace('custom_', '').toUpperCase()}
+                        {gatewayName(req.gateway.replace('custom_', ''))}
                       </strong>
                     </td>
                     <td>
@@ -607,7 +658,7 @@ export default function GatewayIntegrationManager({
             </div>
             <h2>طلبات ربط البوابات الواردة من التجار والعملاء</h2>
             <p>
-              يستقبل الأدمن هنا جميع طلبات التجار بمختلف بوابات الدفع (تيلر، بيتابس، ماي فاتورة، بي زاتي،
+              يستقبل الأدمن هنا جميع طلبات التجار بمختلف بوابات الدفع (تيلر، PayTabs، ماي فاتورة، بي زاتي،
               تابي، نون، بي وان، وغيرها)، بجميع أنواع الربط (جوال، هوست، إطار، API)، مع إمكانية نسخ كل
               متغير بضغطة زر وتغيير حالة الطلب فور تفعيله.
             </p>
@@ -666,7 +717,7 @@ export default function GatewayIntegrationManager({
                       <div className="vars-box-header">
                         <span>المتغيرات الصالحة للنسخ واللصق:</span>
                         <div className="req-tags-bundle">
-                          <span className="req-gateway-badge">{gwUpper}</span>
+                          <span className="req-gateway-badge">{gatewayName(req.gateway.replace('custom_', ''))}</span>
                           {req.variables?.INTEGRATION_NAME && (
                             <span className="req-it-name-badge">
                               {req.variables.INTEGRATION_NAME}

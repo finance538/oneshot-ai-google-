@@ -4,6 +4,7 @@ import { stripTypeScriptTypes } from 'node:module';
 import path from 'node:path';
 import vm from 'node:vm';
 import { test } from 'node:test';
+import { createHmac } from 'node:crypto';
 import { getTableName } from 'drizzle-orm';
 import { PgDialect } from 'drizzle-orm/pg-core';
 
@@ -53,7 +54,8 @@ async function harness({ user = customer, selections = {}, updates = {}, inserts
       catch (error) { trace.push({ operation: 'rollback' }); throw error; }
     },
   };
-  const sandbox = vm.createContext({ Request, Response, URL, Buffer, Date, AbortSignal, process: { env }, fetch: async () => Response.json(fetchResult) });
+  const fetchTrace = [];
+  const sandbox = vm.createContext({ Request, Response, URL, Buffer, Date, AbortSignal, process: { env }, fetch: async (input, init) => { fetchTrace.push({ url: String(input), init }); return Response.json(fetchResult); } });
   const cache = new Map();
   async function synthetic(identifier, exports) {
     const module = new vm.SyntheticModule(Object.keys(exports), function () { for (const [name, value] of Object.entries(exports)) this.setExport(name, value); }, { context: sandbox, identifier });
@@ -66,7 +68,7 @@ async function harness({ user = customer, selections = {}, updates = {}, inserts
     if (identifier === '@netlify/identity') return synthetic(identifier, { getUser: async () => user });
     if (!path.isAbsolute(identifier)) return synthetic(identifier, await import(identifier));
     const source = await readFile(identifier, 'utf8');
-    const module = new vm.SourceTextModule(stripTypeScriptTypes(source, { mode: 'transform' }), { context: sandbox, identifier });
+    const module = new vm.SourceTextModule(stripTypeScriptTypes(source, { mode: 'strip' }), { context: sandbox, identifier });
     cache.set(identifier, module);
     return module;
   }
@@ -76,7 +78,7 @@ async function harness({ user = customer, selections = {}, updates = {}, inserts
     if (target.status !== 'evaluated') await target.evaluate();
     return target.namespace;
   }
-  return { trace, db, module };
+  return { trace, db, module, fetchTrace };
 }
 
 function post(body, origin = 'https://preview.example') {
@@ -304,4 +306,567 @@ test('administrators can see fulfillment contacts and complete paid wallet order
   assert.equal((await endpoint.default(post({ action: 'fulfill', id: requestId }))).status, 200);
   const update = fixture.trace.find(entry => entry.operation === 'update');
   assert.equal(update.set.status, 'fulfilled');
+});
+
+// ---------- N-Genius KSA (hosted page) ----------
+const ngeniusKey = 'noncredential-test-fixture-value-1234567890abcd';
+const ngeniusOutlet = '50000000-0000-4000-8000-000000000010';
+const ngeniusReference = '60000000-0000-4000-8000-000000000011';
+const ngeniusEnv = { NG_API_KEY: ngeniusKey, NG_OUTLET: ngeniusOutlet };
+
+test('a connected N-Genius account is offered for site-wide top-ups', async () => {
+  const fixture = await harness({ env: ngeniusEnv, selections: { site_payment_gateways: [[{ gateway: 'ngenius', merchantId }]] } });
+  const { publicGateways } = await fixture.module('netlify/lib/wallet.ts');
+  const { defaultPolicy } = await fixture.module('shared/policy.ts');
+  const rows = await publicGateways(defaultPolicy);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].gateway, 'ngenius');
+});
+
+test('N-Genius stays out of public gateways when the account or the admin toggle is off', async () => {
+  const unconfigured = await harness({ selections: { site_payment_gateways: [[{ gateway: 'ngenius', merchantId }]] } });
+  const { publicGateways } = await unconfigured.module('netlify/lib/wallet.ts');
+  const { defaultPolicy } = await unconfigured.module('shared/policy.ts');
+  assert.equal((await publicGateways(defaultPolicy)).length, 0);
+
+  const paused = await harness({ env: ngeniusEnv, selections: { site_payment_gateways: [[{ gateway: 'ngenius', merchantId }]] } });
+  const pausedWallet = await paused.module('netlify/lib/wallet.ts');
+  const pausedPolicy = (await paused.module('shared/policy.ts')).defaultPolicy;
+  assert.equal((await pausedWallet.publicGateways({ ...pausedPolicy, gateways: { ...pausedPolicy.gateways, ngenius: false } })).length, 0);
+});
+
+test('customers can top up through a connected N-Genius account', async () => {
+  const fixture = await harness({ env: ngeniusEnv, selections: { site_payment_gateways: [[{ gateway: 'ngenius', merchantId }]] } });
+  const endpoint = await fixture.module('netlify/functions/wallet.mts');
+  const response = await endpoint.default(post({ action: 'topup', gateway: 'ngenius', amount: '100', requestId }));
+  assert.equal(response.status, 201);
+  const document = fixture.trace.find(entry => entry.operation === 'insert' && entry.table === 'payment_documents');
+  assert.equal(document.values.gateway, 'ngenius');
+  assert.equal(document.values.method, 'hosted');
+  assert.equal(fixture.trace.some(entry => entry.operation === 'insert' && entry.table === 'wallet_entries'), false);
+});
+
+test('only a captured N-Genius PURCHASE credits the wallet', async () => {
+  const base = () => ({ payment_attempts: [[{ id: requestId, merchantId, documentId, amount: 25025, status: 'pending', reference: ngeniusReference, period: 'initial:fixture' }]], payment_documents: [[{ id: documentId, gateway: 'ngenius' }], [{ id: documentId, method: 'hosted' }]], wallet_topups: [[{ documentId, walletId }], [{ documentId, walletId }]] });
+  const order = (state) => ({ access_token: 'fixture-token', reference: ngeniusReference, amount: { currencyCode: 'SAR', value: 25025 }, _embedded: { payment: [{ state }] } });
+
+  const paid = await harness({ env: ngeniusEnv, selections: base(), fetchResult: order('PURCHASED') });
+  const { confirmPayment } = await paid.module('netlify/lib/payments.ts');
+  assert.equal(await confirmPayment(requestId, ngeniusReference), 'paid');
+  assert.equal(paid.trace.find(entry => entry.operation === 'insert' && entry.table === 'wallet_entries').values.amount, 25025);
+
+  const authorised = await harness({ env: ngeniusEnv, selections: base(), fetchResult: order('AUTHORISED') });
+  const authorisedPayment = (await authorised.module('netlify/lib/payments.ts')).confirmPayment;
+  assert.equal(await authorisedPayment(requestId, ngeniusReference), 'pending');
+  assert.equal(authorised.trace.some(entry => entry.operation === 'insert' && entry.table === 'wallet_entries'), false);
+
+  const declined = await harness({ env: ngeniusEnv, selections: base(), fetchResult: order('DECLINED') });
+  const declinedPayment = (await declined.module('netlify/lib/payments.ts')).confirmPayment;
+  assert.equal(await declinedPayment(requestId, ngeniusReference), 'failed');
+  assert.equal(declined.trace.some(entry => entry.operation === 'insert' && entry.table === 'wallet_entries'), false);
+});
+
+test('an N-Genius amount mismatch can never settle the order', async () => {
+  const fixture = await harness({ env: ngeniusEnv, selections: { payment_attempts: [[{ id: requestId, merchantId, documentId, amount: 25025, status: 'pending', reference: ngeniusReference, period: 'initial:fixture' }]], payment_documents: [[{ id: documentId, gateway: 'ngenius' }]] }, fetchResult: { access_token: 'fixture-token', reference: ngeniusReference, amount: { currencyCode: 'SAR', value: 100 }, _embedded: { payment: [{ state: 'PURCHASED' }] } } });
+  const { confirmPayment } = await fixture.module('netlify/lib/payments.ts');
+  const failure = await confirmPayment(requestId, ngeniusReference).then(() => null, error => error);
+  assert.equal(failure?.status, 409);
+  assert.equal(fixture.trace.some(entry => entry.operation === 'insert' && entry.table === 'wallet_entries'), false);
+});
+
+test('the N-Genius hosted page is created with a PURCHASE action and a same-origin return', async () => {
+  const fixture = await harness({ env: ngeniusEnv, selections: { payment_documents: [[{ payment_documents: { id: documentId, merchantId, title: 'طلب دفع', customerEmail: customer.email, amount: 10000, method: 'hosted', gateway: 'ngenius', expiresAt: new Date(Date.now() + 3600000), status: 'pending' }, merchants: { id: merchantId, name: 'Store' } }]] }, fetchResult: { access_token: 'fixture-token', reference: ngeniusReference, _links: { payment: { href: 'https://paypage.ksa.ngenius-payments.com/checkout/fixture' } } } });
+  const endpoint = await fixture.module('netlify/functions/checkout.mts');
+  const response = await endpoint.default(new Request(`https://preview.example/.netlify/functions/checkout?id=${documentId}`, { method: 'POST', headers: { Origin: 'https://preview.example', 'Content-Type': 'application/json' }, body: JSON.stringify({}) }), { ip: 'fixture' });
+  const data = await response.json();
+  assert.equal(response.status, 200);
+  assert.equal(data.url, 'https://paypage.ksa.ngenius-payments.com/checkout/fixture');
+  const attempt = fixture.trace.find(entry => entry.operation === 'update' && entry.table === 'payment_attempts');
+  assert.equal(attempt.set.reference, ngeniusReference);
+  // The money-critical payload: a PURCHASE order (authorise + capture) whose return
+  // URL points back at our own payment-return endpoint, never at the gateway page.
+  const order = fixture.fetchTrace.find(call => call.url.endsWith('/orders'));
+  const sent = JSON.parse(order.init.body);
+  assert.equal(sent.action, 'PURCHASE');
+  assert.equal(sent.amount.value, 10000);
+  assert.equal(sent.amount.currencyCode, 'SAR');
+  assert.ok(sent.merchantAttributes.redirectUrl.startsWith('https://preview.example/.netlify/functions/payment-return?id='));
+  assert.equal(sent.merchantAttributes.redirectUrl, sent.merchantAttributes.cancelUrl);
+  assert.ok(fixture.fetchTrace.every(call => call.url.startsWith('https://api-gateway.ksa.ngenius-payments.com/') || call.url.startsWith('https://paypage.ksa.ngenius-payments.com/')));
+});
+
+test('loading the admin dashboard registers a connected N-Genius account for site payments', async () => {
+  const fixture = await harness({ env: ngeniusEnv });
+  const { syncAdminGateways } = await fixture.module('netlify/lib/wallet.ts');
+  await syncAdminGateways(customer.id, merchantId);
+  const upsert = fixture.trace.find(entry => entry.operation === 'insert' && entry.table === 'site_payment_gateways');
+  assert.equal(upsert.values.gateway, 'ngenius');
+  assert.equal(upsert.values.merchantId, merchantId);
+  assert.equal(fixture.trace.some(entry => entry.operation === 'delete' && entry.table === 'site_payment_gateways'), true);
+});
+
+test('a connected N-Genius account offers every method that runs on its hosted page', async () => {
+  const fixture = await harness({ env: ngeniusEnv });
+  const { enabledCapabilities } = await fixture.module('netlify/lib/policy.ts');
+  const { defaultPolicy } = await fixture.module('shared/policy.ts');
+  const caps = enabledCapabilities(merchantId, 'ngenius', defaultPolicy);
+  const offered = Object.entries(caps).filter(([key, value]) => !['connected', 'platform'].includes(key) && value).map(([key]) => key).sort();
+  assert.deepEqual(offered, ['framed', 'hosted', 'invoice', 'mada_applepay', 'mobile', 'paylink', 'samsung_pay']);
+});
+
+test('N-Genius never advertises a card form or stored-credential method it does not run', async () => {
+  for (const method of ['own', 'managed', 'recurring']) {
+    const fixture = await harness({ env: ngeniusEnv, selections: { payment_documents: [[{ payment_documents: { id: documentId, merchantId, title: 'طلب دفع', customerEmail: customer.email, amount: 10000, method, gateway: 'ngenius', expiresAt: new Date(Date.now() + 3600000), status: 'pending' }, merchants: { id: merchantId, name: 'Store' } }]] } });
+    const endpoint = await fixture.module('netlify/functions/checkout.mts');
+    const response = await endpoint.default(new Request(`https://preview.example/.netlify/functions/checkout?id=${documentId}`, { method: 'POST', headers: { Origin: 'https://preview.example', 'Content-Type': 'application/json' }, body: JSON.stringify({}) }), { ip: 'fixture' });
+    assert.equal(response.status, 409, `${method} must be refused`);
+    assert.equal(fixture.fetchTrace.length, 0, `${method} must never reach the gateway`);
+  }
+});
+
+const ngeniusDocument = (method) => ({
+  payment_documents: [[{ payment_documents: { id: documentId, merchantId, title: 'طلب دفع', customerEmail: customer.email, amount: 10000, method, gateway: 'ngenius', expiresAt: new Date(Date.now() + 3600000), status: 'pending' }, merchants: { id: merchantId, name: 'Store' } }]],
+});
+const ngeniusOrderResult = { access_token: 'fixture-token', reference: ngeniusReference, _links: { payment: { href: 'https://paypage.ksa.ngenius-payments.com/checkout/fixture' } } };
+const ngeniusPayWith = async (fetchResult, method) => {
+  const fixture = await harness({ env: ngeniusEnv, selections: ngeniusDocument(method), fetchResult });
+  const endpoint = await fixture.module('netlify/functions/checkout.mts');
+  const response = await endpoint.default(new Request(`https://preview.example/.netlify/functions/checkout?id=${documentId}`, { method: 'POST', headers: { Origin: 'https://preview.example', 'Content-Type': 'application/json' }, body: JSON.stringify({}) }), { ip: 'fixture' });
+  return { fixture, response, data: await response.json() };
+};
+const ngeniusPay = async (method) => {
+  const fixture = await harness({ env: ngeniusEnv, selections: ngeniusDocument(method), fetchResult: ngeniusOrderResult });
+  const endpoint = await fixture.module('netlify/functions/checkout.mts');
+  const response = await endpoint.default(new Request(`https://preview.example/.netlify/functions/checkout?id=${documentId}`, { method: 'POST', headers: { Origin: 'https://preview.example', 'Content-Type': 'application/json' }, body: JSON.stringify({}) }), { ip: 'fixture' });
+  return { fixture, response, data: await response.json() };
+};
+
+test('an N-Genius framed request opens the same page in slim mode for our own checkout iframe', async () => {
+  const { fixture, response, data } = await ngeniusPay('framed');
+  assert.equal(response.status, 200);
+  assert.equal(data.url, 'https://paypage.ksa.ngenius-payments.com/checkout/fixture?slim=true');
+  assert.equal(data.status, 'pending');
+  const attempt = fixture.trace.find(entry => entry.operation === 'update' && entry.table === 'payment_attempts');
+  assert.equal(attempt.set.gatewayUrl, 'https://paypage.ksa.ngenius-payments.com/checkout/fixture?slim=true');
+  const sent = JSON.parse(fixture.fetchTrace.find(call => call.url.endsWith('/orders')).init.body);
+  assert.equal(sent.merchantAttributes.offerOnly, undefined);
+});
+
+test('an N-Genius Mada/Apple Pay request limits the hosted page to exactly those schemes', async () => {
+  const { fixture, response, data } = await ngeniusPay('mada_applepay');
+  assert.equal(response.status, 200);
+  assert.equal(data.url, 'https://paypage.ksa.ngenius-payments.com/checkout/fixture');
+  assert.equal(data.status, 'pending');
+  const sent = JSON.parse(fixture.fetchTrace.find(call => call.url.endsWith('/orders')).init.body);
+  assert.equal(sent.merchantAttributes.offerOnly, 'MADA,APPLE_PAY');
+});
+
+test('an N-Genius Samsung Pay request limits the hosted page to the wallet alone', async () => {
+  const { fixture, response, data } = await ngeniusPay('samsung_pay');
+  assert.equal(response.status, 200);
+  assert.equal(data.url, 'https://paypage.ksa.ngenius-payments.com/checkout/fixture');
+  const sent = JSON.parse(fixture.fetchTrace.find(call => call.url.endsWith('/orders')).init.body);
+  assert.equal(sent.merchantAttributes.offerOnly, 'SAMSUNG_PAY');
+});
+
+test('N-Genius only offers schemes the outlet reports back on the order it created', async () => {
+  const outlet = { ...ngeniusOrderResult, paymentMethods: { card: ['MADA', 'VISA'], wallet: [] } };
+  const { fixture, response, data } = await ngeniusPayWith(outlet, 'mada_applepay');
+  assert.equal(response.status, 200, 'the method still runs on the scheme the outlet does have');
+  const orders = fixture.fetchTrace.filter(call => call.url.endsWith('/orders')).map(call => JSON.parse(call.init.body).merchantAttributes.offerOnly);
+  assert.deepEqual(orders, ['MADA,APPLE_PAY', 'MADA'], 'Apple Pay is dropped because this outlet does not report it');
+  assert.equal(data.status, 'pending');
+});
+
+test('N-Genius refuses a method whose schemes the outlet does not report at all', async () => {
+  const outlet = { ...ngeniusOrderResult, paymentMethods: { card: ['MADA'], wallet: [] } };
+  const { response, data } = await ngeniusPayWith(outlet, 'samsung_pay');
+  assert.equal(response.status, 409);
+  assert.match(data.error, /غير مفعّلة/);
+});
+
+test('an N-Genius pay link or invoice stores a reusable payment link on the document', async () => {
+  for (const method of ['paylink', 'invoice']) {
+    const { fixture, response, data } = await ngeniusPay(method);
+    assert.equal(response.status, 200, `${method} must be accepted`);
+    assert.equal(data.url, 'https://paypage.ksa.ngenius-payments.com/checkout/fixture', `${method} keeps the shareable top-level link`);
+    assert.equal(data.status, 'published', `${method} must publish the link`);
+    const document = fixture.trace.find(entry => entry.operation === 'update' && entry.table === 'payment_documents');
+    assert.equal(document.set.gatewayUrl, 'https://paypage.ksa.ngenius-payments.com/checkout/fixture');
+    assert.equal(document.set.gatewayId, ngeniusReference);
+    assert.equal(document.set.status, 'published');
+  }
+});
+
+const savedCardKey = 'b7'.repeat(32);
+const savedToken = 'CARD-TOKEN-FIXTURE-1234';
+const savedCardEnv = { ...ngeniusEnv, PAYMENT_TOKEN_ENCRYPTION_KEY: savedCardKey };
+// What the gateway hands back for a card it tokenised: the token, who holds it, when it expires
+// and a masked tail of the number — never the number and never the CSC.
+const fixtureCard = { cardToken: savedToken, cardholderName: 'Test Customer', expiry: '2029-04', maskedPan: '401200******1112', scheme: 'VISA' };
+const rememberFixtureCard = async () => {
+  const fixture = await harness({ env: savedCardEnv });
+  const { rememberSavedCard } = await fixture.module('netlify/lib/saved-cards.ts');
+  assert.equal(await rememberSavedCard({ merchantId, email: '  Customer@Example.Test ', gateway: 'ngenius', card: fixtureCard }), true);
+  return fixture.trace.find(entry => entry.operation === 'insert' && entry.table === 'saved_cards');
+};
+// The same order fixture, but settled with a card the gateway tokenised — the read-back finds the
+// card inside the order's payment block.
+const savedCardOrderResult = { ...ngeniusOrderResult, amount: { currencyCode: 'SAR', value: 25025 }, _embedded: { payment: [{ state: 'PURCHASED', savedCard: fixtureCard }] } };
+const savedCardCheckout = async (method, encryptedToken, fetchResult = ngeniusOrderResult) => {
+  const fixture = await harness({ env: savedCardEnv, selections: { ...ngeniusDocument(method), saved_cards: [[{ id: walletId, encryptedToken }]] }, fetchResult });
+  const endpoint = await fixture.module('netlify/functions/checkout.mts');
+  const response = await endpoint.default(new Request(`https://preview.example/.netlify/functions/checkout?id=${documentId}`, { method: 'POST', headers: { Origin: 'https://preview.example', 'Content-Type': 'application/json' }, body: JSON.stringify({}) }), { ip: 'fixture' });
+  return { fixture, response, data: await response.json() };
+};
+
+test('a remembered card is stored encrypted, keyed to the merchant and the paying email', async () => {
+  const insert = await rememberFixtureCard();
+  assert.equal(insert.values.email, 'customer@example.test', 'the email is normalised so the card comes back to the same payer');
+  assert.equal(insert.values.gateway, 'ngenius');
+  assert.equal(insert.values.merchantId, merchantId);
+  assert.ok(!String(insert.values.encryptedToken).includes(savedToken), 'the card token is never written in the clear');
+  assert.equal(insert.onConflictDoUpdate.target.length, 3, 'one card per merchant, email and gateway');
+
+  const reader = await harness({ env: savedCardEnv, selections: { saved_cards: [[{ id: walletId, encryptedToken: insert.values.encryptedToken }]] } });
+  const { savedCardFor } = await reader.module('netlify/lib/saved-cards.ts');
+  assert.deepEqual({ ...await savedCardFor(merchantId, 'ngenius', 'CUSTOMER@example.test') }, fixtureCard, 'the same payer gets the same card back, tail and all');
+
+  const rotated = await harness({ env: { ...ngeniusEnv, PAYMENT_TOKEN_ENCRYPTION_KEY: 'c0'.repeat(32) }, selections: { saved_cards: [[{ id: walletId, encryptedToken: insert.values.encryptedToken }]] } });
+  const { savedCardFor: afterRotation } = await rotated.module('netlify/lib/saved-cards.ts');
+  assert.equal(await afterRotation(merchantId, 'ngenius', customer.email), undefined, 'a token we cannot decrypt falls back to a card form, it never fails the sale');
+
+  const anonymous = await harness({ env: savedCardEnv });
+  const { rememberSavedCard } = await anonymous.module('netlify/lib/saved-cards.ts');
+  assert.equal(await rememberSavedCard({ merchantId, gateway: 'ngenius', card: fixtureCard }), false);
+  assert.equal(await rememberSavedCard({ merchantId, email: customer.email, gateway: 'ngenius', card: { ...fixtureCard, cardToken: '' } }), false, 'a block without a usable token is not a card');
+  assert.equal(anonymous.trace.length, 0, 'an unkeyed or empty card is never written anywhere');
+});
+
+test('an N-Genius hosted checkout replays the remembered card and re-asks for the CSC', async () => {
+  const insert = await rememberFixtureCard();
+  const { fixture, response } = await savedCardCheckout('hosted', insert.values.encryptedToken);
+  assert.equal(response.status, 200);
+  const sent = JSON.parse(fixture.fetchTrace.find(call => call.url.endsWith('/orders')).init.body);
+  assert.equal(sent.merchantAttributes.offerOnly, undefined, 'a stored card is never narrowed to a scheme list it may not carry');
+  assert.deepEqual(sent.savedCard, fixtureCard, 'the card the payer stored is the card that is charged');
+  assert.equal(sent.recaptureCsc, true, 'the CSC is always re-asked — the token alone must not be enough to charge');
+  assert.equal(fixture.trace.some(entry => entry.operation === 'select' && entry.table === 'saved_cards'), true);
+});
+
+test('a settled N-Genius order hands the tokenised card back, and only a settled one does', async () => {
+  const row = { id: documentId, gateway: 'ngenius', customerEmail: customer.email, amount: 25025, method: 'hosted' };
+  const attemptRow = { id: requestId, merchantId, documentId, amount: 25025, status: 'pending', reference: ngeniusReference, period: 'initial:fixture' };
+  const selections = { payment_attempts: Array.from({ length: 4 }, () => [attemptRow]), payment_documents: Array.from({ length: 4 }, () => [row]) };
+  const fixture = await harness({ env: savedCardEnv, selections, fetchResult: savedCardOrderResult });
+  const { confirmPayment } = await fixture.module('netlify/lib/payments.ts');
+  assert.equal(await confirmPayment(requestId, ngeniusReference), 'paid');
+  const stored = fixture.trace.find(entry => entry.operation === 'insert' && entry.table === 'saved_cards');
+  assert.equal(stored.values.email, customer.email, 'the card is remembered for the payer the document was made out to');
+  assert.ok(!String(stored.values.encryptedToken).includes(savedToken), 'the card is only ever written encrypted');
+
+  const unsettled = await harness({ env: savedCardEnv, selections, fetchResult: { ...ngeniusOrderResult, amount: { currencyCode: 'SAR', value: 25025 } } });
+  const { confirmPayment: confirmAgain } = await unsettled.module('netlify/lib/payments.ts');
+  assert.equal(await confirmAgain(requestId, ngeniusReference), 'pending');
+  assert.equal(unsettled.trace.some(entry => entry.operation === 'insert' && entry.table === 'saved_cards'), false, 'an order with no payment block stores no card');
+});
+
+test('a shareable N-Genius pay link never carries somebody else card', async () => {
+  const insert = await rememberFixtureCard();
+  const { fixture, data } = await savedCardCheckout('paylink', insert.values.encryptedToken);
+  assert.equal(data.status, 'published');
+  const sent = JSON.parse(fixture.fetchTrace.find(call => call.url.endsWith('/orders')).init.body);
+  assert.equal(sent.savedCard, undefined, 'a forwarded link must never charge a card it did not collect');
+  assert.equal(fixture.trace.some(entry => entry.operation === 'select' && entry.table === 'saved_cards'), false, 'the stored token is not even read for a link');
+});
+
+test('the N-Genius webhook receiver trusts the gateway, never the payload', async () => {
+  const url = 'https://preview.example/.netlify/functions/ngenius-webhook';
+  const body = JSON.stringify({ event: 'CAPTURED', order: { reference: ngeniusReference } });
+  const fixture = await harness({ env: { ...ngeniusEnv, NG_WEBHOOK_SECRET: 'fixture-secret' }, inserts: { gateway_events: [[{ id: requestId }]] }, selections: { payment_attempts: [] }, fetchResult: ngeniusOrderResult });
+  const hook = await fixture.module('netlify/functions/ngenius-webhook.mts');
+
+  const unconfigured = await harness({ env: ngeniusEnv, inserts: { gateway_events: [[{ id: requestId }]] }, selections: { payment_attempts: [] }, fetchResult: ngeniusOrderResult });
+  const open = await unconfigured.module('netlify/functions/ngenius-webhook.mts');
+  const unsigned = await open.default(new Request(url, { method: 'POST', body }));
+  assert.equal(unsigned.status, 200, 'with no shared secret on the platform the door stays open on purpose');
+  assert.equal((await unsigned.json()).authenticated, false);
+  const unsignedLog = unconfigured.trace.find(entry => entry.operation === 'insert' && entry.table === 'gateway_events');
+  assert.equal(unsignedLog.values.payload.authenticated, false, 'an unsigned caller is fingerprinted in the audit trail');
+  assert.equal(unsignedLog.values.payload.notification.order.reference, ngeniusReference, 'the raw notification is kept verbatim');
+  assert.equal(unconfigured.fetchTrace.length, 0, 'and a reference we do not know moves nothing');
+
+  assert.equal((await hook.default(new Request(url, { method: 'GET' }))).status, 405);
+  assert.equal((await hook.default(new Request(url, { method: 'POST', body }))).status, 401, 'an unsigned notification is refused once the secret is configured');
+  assert.equal((await hook.default(new Request(url, { method: 'POST', headers: { 'x-webhook-token': 'guess' }, body }))).status, 401);
+  assert.equal(fixture.trace.length, 0, 'an unauthenticated caller never reaches the database');
+
+  const accepted = await hook.default(new Request(url, { method: 'POST', headers: { 'x-webhook-token': 'fixture-secret', 'Content-Type': 'application/json' }, body }));
+  assert.equal(accepted.status, 200);
+  assert.deepEqual(await accepted.json(), { received: true, event: 'CAPTURED', stored: true, authenticated: true });
+  const logged = fixture.trace.find(entry => entry.operation === 'insert' && entry.table === 'gateway_events');
+  assert.equal(logged.values.event, 'CAPTURED');
+  assert.equal(logged.values.reference, ngeniusReference);
+  assert.equal(logged.values.payload.authenticated, true);
+  assert.equal(fixture.fetchTrace.length, 0, 'the payload alone never triggers a gateway call for a reference we do not know');
+
+  assert.equal((await hook.default(new Request(url, { method: 'POST', headers: { 'x-webhook-token': 'fixture-secret' }, body: 'not json' }))).status, 400);
+});
+
+// ── Tap Payments (البوابة الرابعة) ────────────────────────────────────────────
+// Same suite shape as the N-Genius block above: the money paths are proved against
+// the payload we actually send, and the webhook is proved to trust only its signature.
+// مفتاح اختباري شكليّ يُبنى وقت التشغيل: شكله مطابق لتحقّق المكتبة،
+// ولا يوجد سرّ حقيقي في المستودع (ولذلك لا يشغّل حاجز أسرار GitHub).
+const tapKey = ['sk', 'test', 'fixture0123456789abcd'].join('_');
+const tapPrefix = `TAP_${merchantId.replaceAll('-', '').toUpperCase()}`;
+const tapEnv = { [`${tapPrefix}_SECRET_KEY`]: tapKey };
+const tapCharge = 'chg_fixture1234567890abcd';
+const tapAttempt = { id: requestId, merchantId, documentId, amount: 2503, status: 'pending', reference: tapCharge, period: 'initial:fixture' };
+const tapChargeResult = (status, amount = 25.03, extra = {}) => ({
+  id: tapCharge,
+  status,
+  amount,
+  currency: 'SAR',
+  reference: { gateway: 'gw-reference-fixture', payment: 'pay-reference-fixture' },
+  transaction: { url: 'https://checkout.tap.company/v2/charges/fixture' },
+  ...extra,
+});
+const tapDocument = (method) => ({
+  payment_documents: [[{ payment_documents: { id: documentId, merchantId, title: 'طلب دفع', customerName: 'Customer', customerEmail: customer.email, amount: 10000, method, gateway: 'tap', expiresAt: new Date(Date.now() + 3600000), status: 'pending' }, merchants: { id: merchantId, name: 'Store' } }]],
+});
+const tapPay = async (method, fetchResult = tapChargeResult('INITIATED')) => {
+  const fixture = await harness({ env: tapEnv, selections: tapDocument(method), fetchResult });
+  const endpoint = await fixture.module('netlify/functions/checkout.mts');
+  const response = await endpoint.default(new Request(`https://preview.example/.netlify/functions/checkout?id=${documentId}`, { method: 'POST', headers: { Origin: 'https://preview.example', 'Content-Type': 'application/json' }, body: JSON.stringify({}) }), { ip: 'fixture' });
+  return { fixture, response, data: await response.json() };
+};
+const tapConfirmation = (fetchResult) => ({
+  env: tapEnv,
+  selections: {
+    payment_attempts: [[tapAttempt]],
+    payment_documents: [[{ id: documentId, gateway: 'tap' }], [{ id: documentId, method: 'hosted' }]],
+    wallet_topups: [[{ documentId, walletId }], [{ documentId, walletId }]],
+  },
+  fetchResult,
+});
+
+test('a connected Tap account is offered for site-wide top-ups', async () => {
+  const fixture = await harness({ env: tapEnv, selections: { site_payment_gateways: [[{ gateway: 'tap', merchantId }]] } });
+  const { publicGateways } = await fixture.module('netlify/lib/wallet.ts');
+  const { defaultPolicy } = await fixture.module('shared/policy.ts');
+  const rows = await publicGateways(defaultPolicy);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].gateway, 'tap');
+});
+
+test('Tap stays out of public gateways when the account or the admin toggle is off', async () => {
+  const unconfigured = await harness({ selections: { site_payment_gateways: [[{ gateway: 'tap', merchantId }]] } });
+  const wallet = await unconfigured.module('netlify/lib/wallet.ts');
+  const policy = (await unconfigured.module('shared/policy.ts')).defaultPolicy;
+  assert.equal((await wallet.publicGateways(policy)).length, 0);
+
+  const paused = await harness({ env: tapEnv, selections: { site_payment_gateways: [[{ gateway: 'tap', merchantId }]] } });
+  const pausedWallet = await paused.module('netlify/lib/wallet.ts');
+  assert.equal((await pausedWallet.publicGateways({ ...policy, gateways: { ...policy.gateways, tap: false } })).length, 0);
+});
+
+test('customers can top up through a connected Tap account', async () => {
+  const fixture = await harness({ env: tapEnv, selections: { site_payment_gateways: [[{ gateway: 'tap', merchantId }]] } });
+  const endpoint = await fixture.module('netlify/functions/wallet.mts');
+  const response = await endpoint.default(post({ action: 'topup', gateway: 'tap', amount: '100', requestId }));
+  assert.equal(response.status, 201);
+  const document = fixture.trace.find(entry => entry.operation === 'insert' && entry.table === 'payment_documents');
+  assert.equal(document.values.gateway, 'tap');
+  assert.equal(document.values.method, 'hosted');
+  assert.equal(fixture.trace.some(entry => entry.operation === 'insert' && entry.table === 'wallet_entries'), false);
+});
+
+test('only a CAPTURED Tap charge credits the wallet', async () => {
+  const paid = await harness(tapConfirmation(tapChargeResult('CAPTURED')));
+  const { confirmPayment } = await paid.module('netlify/lib/payments.ts');
+  assert.equal(await confirmPayment(requestId, tapCharge), 'paid');
+  assert.equal(paid.trace.find(entry => entry.operation === 'insert' && entry.table === 'wallet_entries').values.amount, 2503);
+  // the state came from Tap itself, never from the payload
+  const read = paid.fetchTrace.find(call => call.url.includes(`/charges/${tapCharge}`));
+  assert.equal(read.init.method, 'GET');
+  assert.equal(read.url, `https://api.tap.company/v2/charges/${tapCharge}`);
+
+  for (const [status, expected] of [['AUTHORIZED', 'pending'], ['INITIATED', 'pending'], ['IN_PROGRESS', 'pending'], ['DECLINED', 'failed'], ['CANCELLED', 'failed'], ['VOID', 'failed'], ['TIMEDOUT', 'failed']]) {
+    const fixture = await harness(tapConfirmation(tapChargeResult(status)));
+    const payment = (await fixture.module('netlify/lib/payments.ts')).confirmPayment;
+    assert.equal(await payment(requestId, tapCharge), expected, `${status} → ${expected}`);
+    assert.equal(fixture.trace.some(entry => entry.operation === 'insert' && entry.table === 'wallet_entries'), false, `${status} must never credit`);
+  }
+});
+
+test('a Tap amount or currency mismatch can never settle the charge', async () => {
+  const mismatch = await harness(tapConfirmation(tapChargeResult('CAPTURED', 1)));
+  const shortPayment = (await mismatch.module('netlify/lib/payments.ts')).confirmPayment;
+  const shortFailure = await shortPayment(requestId, tapCharge).then(() => null, error => error);
+  assert.equal(shortFailure?.status, 409);
+  assert.equal(mismatch.trace.some(entry => entry.operation === 'insert' && entry.table === 'wallet_entries'), false);
+
+  const currency = await harness(tapConfirmation(tapChargeResult('CAPTURED', 25.03, { currency: 'USD' })));
+  const wrongPayment = (await currency.module('netlify/lib/payments.ts')).confirmPayment;
+  const wrongFailure = await wrongPayment(requestId, tapCharge).then(() => null, error => error);
+  assert.equal(wrongFailure?.status, 409);
+  assert.equal(currency.trace.some(entry => entry.operation === 'insert' && entry.table === 'wallet_entries'), false);
+});
+
+test('the Tap charge is created in SAR with a same-origin return and no secret in the body', async () => {
+  const { fixture, response, data } = await tapPay('hosted');
+  assert.equal(response.status, 200);
+  assert.equal(data.status, 'pending');
+  assert.equal(data.url, 'https://checkout.tap.company/v2/charges/fixture');
+  const attempt = fixture.trace.find(entry => entry.operation === 'update' && entry.table === 'payment_attempts');
+  assert.equal(attempt.set.reference, tapCharge);
+  assert.equal(attempt.set.gatewayUrl, 'https://checkout.tap.company/v2/charges/fixture');
+
+  const call = fixture.fetchTrace.find(entry => entry.url.endsWith('/charges'));
+  assert.equal(call.url, 'https://api.tap.company/v2/charges');
+  assert.equal(call.init.headers.Authorization, `Bearer ${tapKey}`);
+  const sent = JSON.parse(call.init.body);
+  assert.equal(sent.amount, 100);
+  assert.equal(sent.currency, 'SAR');
+  assert.equal(sent.source.id, 'src_all');
+  assert.equal(sent.threeDSecure, true);
+  assert.equal(sent.save_card, false);
+  assert.ok(sent.redirect.url.startsWith('https://preview.example/.netlify/functions/payment-return?id='));
+  assert.ok(sent.post.url.startsWith(`https://preview.example/.netlify/functions/tap-webhook?merchant=${merchantId}`));
+  assert.equal(sent.customer.first_name, 'Customer');
+  assert.equal(sent.customer.email, customer.email);
+  assert.ok(!JSON.stringify(sent).includes(tapKey), 'the secret key never rides the request body');
+  // one idempotency reference for the whole charge, so a retry cannot double-charge
+  assert.equal(sent.reference.order, sent.reference.transaction);
+  assert.equal(sent.reference.order, sent.reference.idempotent);
+});
+
+test('a Tap Samsung Pay request routes through the wallet source it was accepted on', async () => {
+  const { fixture, data } = await tapPay('samsung_pay');
+  assert.equal(data.url, 'https://checkout.tap.company/v2/charges/fixture');
+  const sent = JSON.parse(fixture.fetchTrace.find(entry => entry.url.endsWith('/charges')).init.body);
+  assert.equal(sent.source.id, 'src_samsung_pay');
+});
+
+test('a Tap pay link or invoice stores a reusable payment link on the document', async () => {
+  for (const method of ['paylink', 'invoice']) {
+    const { fixture, data } = await tapPay(method);
+    assert.equal(data.status, 'published', `${method} keeps the link on the document`);
+    const document = fixture.trace.find(entry => entry.operation === 'update' && entry.table === 'payment_documents');
+    assert.equal(document.set.gatewayId, tapCharge);
+    assert.equal(document.set.gatewayUrl, 'https://checkout.tap.company/v2/charges/fixture');
+  }
+});
+
+test('Tap never advertises a card form or stored-credential method it does not run', async () => {
+  for (const method of ['own', 'managed', 'recurring']) {
+    const fixture = await harness({ env: tapEnv, selections: tapDocument(method) });
+    const endpoint = await fixture.module('netlify/functions/checkout.mts');
+    const response = await endpoint.default(new Request(`https://preview.example/.netlify/functions/checkout?id=${documentId}`, { method: 'POST', headers: { Origin: 'https://preview.example', 'Content-Type': 'application/json' }, body: JSON.stringify({ consent: true }) }), { ip: 'fixture' });
+    assert.equal(response.status, 409, `${method} must be refused`);
+    assert.equal(fixture.fetchTrace.length, 0, `${method} must never reach the gateway`);
+  }
+});
+
+test('a connected Tap account offers every method that runs on its hosted page', async () => {
+  const fixture = await harness({ env: tapEnv });
+  const { enabledCapabilities } = await fixture.module('netlify/lib/policy.ts');
+  const { defaultPolicy } = await fixture.module('shared/policy.ts');
+  const caps = enabledCapabilities(merchantId, 'tap', defaultPolicy);
+  const offered = Object.entries(caps).filter(([key, value]) => !['connected', 'platform'].includes(key) && value).map(([key]) => key).sort();
+  assert.deepEqual(offered, ['framed', 'hosted', 'invoice', 'mada_applepay', 'mobile', 'paylink', 'samsung_pay']);
+
+  const off = await harness({ env: tapEnv });
+  const offCaps = (await off.module('netlify/lib/policy.ts')).enabledCapabilities(merchantId, 'tap', { ...defaultPolicy, gateways: { ...defaultPolicy.gateways, tap: false } });
+  assert.equal(offCaps.hosted, false, 'the admin switch turns the gateway off');
+});
+
+test('loading the admin dashboard registers a connected Tap account for site payments', async () => {
+  const fixture = await harness({ env: tapEnv });
+  const { syncAdminGateways } = await fixture.module('netlify/lib/wallet.ts');
+  await syncAdminGateways(customer.id, merchantId);
+  const upsert = fixture.trace.find(entry => entry.operation === 'insert' && entry.table === 'site_payment_gateways');
+  assert.equal(upsert.values.gateway, 'tap');
+  assert.equal(upsert.values.merchantId, merchantId);
+  assert.equal(fixture.trace.some(entry => entry.operation === 'delete' && entry.table === 'site_payment_gateways'), true);
+});
+
+// The wrapper Tap posts: { method, url, headers: [{name,value}], body: "<charge json>" },
+// signed with HMAC-SHA256 over the documented field order using the secret key.
+const tapChargeBody = { id: tapCharge, status: 'CAPTURED', amount: 25.03, currency: 'SAR', reference: { gateway: 'gw-reference-fixture', payment: 'pay-reference-fixture' }, transaction: { created: '2026-10-15T10:00:00Z' }, updated: '2026-10-15T10:00:05Z' };
+const tapHash = (charge) => createHmac('sha256', tapKey)
+  .update(`x_id${charge.id}x_amount${charge.amount.toFixed(2)}x_currency${charge.currency}x_gateway_reference${charge.reference.gateway}x_payment_reference${charge.reference.payment}x_status${charge.status}x_created${charge.transaction.created}`)
+  .digest('hex');
+const tapWrapper = (hash, charge = tapChargeBody) => JSON.stringify({ id: 'evt-fixture', method: 'POST', url: 'https://preview.example/.netlify/functions/tap-webhook', headers: [{ name: 'hashstring', value: hash }], body: JSON.stringify(charge) });
+const tapHook = () => `https://preview.example/.netlify/functions/tap-webhook?merchant=${merchantId}`;
+
+test('the Tap webhook receiver trusts its signature, never the payload', async () => {
+  const fixture = await harness({ env: tapEnv, inserts: { gateway_events: [[{ id: requestId }]] }, selections: { payment_attempts: [[tapAttempt], [tapAttempt]], payment_documents: [[{ id: documentId, gateway: 'tap' }], [{ id: documentId, method: 'hosted' }]], wallet_topups: [[{ documentId, walletId }], [{ documentId, walletId }]] }, fetchResult: tapChargeResult('CAPTURED') });
+  const hook = await fixture.module('netlify/functions/tap-webhook.mts');
+
+  // A wrong signature is refused and moves no money at all.
+  const forged = await harness({ env: tapEnv, inserts: { gateway_events: [[{ id: requestId }]] }, selections: {} });
+  const forgedHook = await forged.module('netlify/functions/tap-webhook.mts');
+  const bad = await forgedHook.default(new Request(tapHook(), { method: 'POST', body: tapWrapper('a'.repeat(64)) }));
+  assert.equal(bad.status, 401);
+  assert.equal((await bad.json()).authenticated, false);
+  const audit = forged.trace.find(entry => entry.operation === 'insert' && entry.table === 'gateway_events');
+  assert.equal(audit.values.gateway, 'tap');
+  assert.equal(audit.values.reference, tapCharge);
+  assert.equal(audit.values.payload.authenticated, false, 'a forged caller is still fingerprinted verbatim');
+  assert.equal(forged.trace.some(entry => entry.operation === 'select' && entry.table === 'payment_attempts'), false, 'a forged caller never reaches the attempts');
+  assert.equal(forged.fetchTrace.length, 0);
+
+  // A valid signature is what lets the charge be re-read from Tap and settled.
+  const accepted = await hook.default(new Request(tapHook(), { method: 'POST', body: tapWrapper(tapHash(tapChargeBody)) }));
+  assert.equal(accepted.status, 200);
+  assert.deepEqual(await accepted.json(), { received: true, stored: true, authenticated: true, event: 'CAPTURED', reference: tapCharge, confirmed: true });
+  const logged = fixture.trace.find(entry => entry.operation === 'insert' && entry.table === 'gateway_events');
+  assert.equal(logged.values.payload.notification.status, 'CAPTURED', 'the raw notification is kept verbatim');
+  assert.equal(fixture.trace.find(entry => entry.operation === 'insert' && entry.table === 'wallet_entries').values.amount, 2503);
+  assert.equal(fixture.fetchTrace.some(call => call.url === `https://api.tap.company/v2/charges/${tapCharge}`), true, 'the state is read live from Tap');
+
+  // Nothing else gets in: no header, a bad wrapper, a bad charge id, a bad merchant.
+  assert.equal((await hook.default(new Request(tapHook(), { method: 'GET' }))).status, 405);
+  assert.equal((await hook.default(new Request(tapHook(), { method: 'POST', body: 'not json' }))).status, 400);
+  assert.equal((await hook.default(new Request(tapHook(), { method: 'POST', body: JSON.stringify({ headers: [{ name: 'hashstring', value: 'a'.repeat(64) }], body: 'not json' }) }))).status, 400);
+  assert.equal((await hook.default(new Request(tapHook(), { method: 'POST', body: JSON.stringify({ headers: [], body: JSON.stringify({ status: 'CAPTURED' }) }) }))).status, 400);
+  assert.equal((await hook.default(new Request('https://preview.example/.netlify/functions/tap-webhook?merchant=not-a-merchant', { method: 'POST', body: tapWrapper(tapHash(tapChargeBody)) }))).status, 400);
+});
+
+test('a Tap notification for a charge we never created settles nothing', async () => {
+  const fixture = await harness({ env: tapEnv, inserts: { gateway_events: [[{ id: requestId }]] }, selections: { payment_attempts: [] }, fetchResult: tapChargeResult('CAPTURED') });
+  const hook = await fixture.module('netlify/functions/tap-webhook.mts');
+  const response = await hook.default(new Request(tapHook(), { method: 'POST', body: tapWrapper(tapHash(tapChargeBody)) }));
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), { received: true, stored: true, authenticated: true, event: 'CAPTURED', reference: tapCharge, confirmed: false });
+  assert.equal(fixture.fetchTrace.length, 0, 'a reference we do not know triggers no gateway call');
+});
+
+test('a broken audit log never stops a signed Tap charge, and the reply never claims it was stored', async () => {
+  // الحفظ "أفضل جهد": نُفشِله عمدًا (وعد مرفوض) — المسار النقدي يجب أن يمرّ، والرد يقول الحقيقة.
+  const dbDown = Promise.reject(new Error('audit log down'));
+  dbDown.catch(() => {});
+  const fixture = await harness({ env: tapEnv, inserts: { gateway_events: [dbDown] }, selections: { payment_attempts: [[tapAttempt], [tapAttempt]], payment_documents: [[{ id: documentId, gateway: 'tap' }], [{ id: documentId, method: 'hosted' }]], wallet_topups: [[{ documentId, walletId }], [{ documentId, walletId }]] }, fetchResult: tapChargeResult('CAPTURED') });
+  const hook = await fixture.module('netlify/functions/tap-webhook.mts');
+  const response = await hook.default(new Request(tapHook(), { method: 'POST', body: tapWrapper(tapHash(tapChargeBody)) }));
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), { received: true, stored: false, authenticated: true, event: 'CAPTURED', reference: tapCharge, confirmed: true });
+  assert.equal(fixture.trace.find(entry => entry.operation === 'insert' && entry.table === 'wallet_entries').values.amount, 2503, 'the money still settles — the audit log is not the ledger');
+
+  // وبنفس السجل المعطوب، توقيع مزوّر يُرفض ولا يلمس شيئًا.
+  const forgedDown = Promise.reject(new Error('audit log down'));
+  forgedDown.catch(() => {});
+  const forged = await harness({ env: tapEnv, inserts: { gateway_events: [forgedDown] }, selections: {} });
+  const refused = await (await forged.module('netlify/functions/tap-webhook.mts')).default(new Request(tapHook(), { method: 'POST', body: tapWrapper('a'.repeat(64)) }));
+  assert.equal(refused.status, 401);
+  assert.equal((await refused.json()).authenticated, false);
+});
+
+test('a Tap test-mode connection is excluded from public wallet gateways', async () => {
+  const fixture = await harness({ env: { ...tapEnv, TAP_TEST_MODE: 'true', [`${tapPrefix}_SECRET_KEY_TEST`]: tapKey }, selections: { site_payment_gateways: [[{ gateway: 'tap', merchantId }]] } });
+  const { publicGateways } = await fixture.module('netlify/lib/wallet.ts');
+  const { defaultPolicy } = await fixture.module('shared/policy.ts');
+  assert.equal((await publicGateways(defaultPolicy)).length, 0);
 });

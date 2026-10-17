@@ -1,3 +1,4 @@
+import { gatewayNames } from '../shared/policy';
 export interface CountrySupportInfo {
   code: string;
   name: string;
@@ -41,8 +42,8 @@ export interface GatewayCountryMatrix {
 export const GATEWAY_COUNTRY_MATRICES: GatewayCountryMatrix[] = [
   {
     gatewayId: 'paytabs',
-    gatewayName: 'بيتابس (PayTabs)',
-    englishName: 'PayTabs Gateway',
+    gatewayName: gatewayNames.paytabs,
+    englishName: gatewayNames.paytabs,
     badge: 'الرائدة في السعودية والخليج',
     headquarters: 'المملكة العربية السعودية / البحرين',
     coverageRegion: 'الشرق الأوسط، شمال أفريقيا، وآسيا (168+ دولة عبر البطاقات الدولية)',
@@ -712,7 +713,6 @@ export const KNOWN_BINS: BinInfo[] = [
   { bin: '457865', bankName: 'البنك الأهلي السعودي (SNB AlAhli)', scheme: 'Mada', countryCode: 'SA', countryName: 'المملكة العربية السعودية', cardType: 'Debit', tier: 'Classic', isLocalOnly: false },
   { bin: '411111', bankName: 'بنك الرياض (Riyad Bank)', scheme: 'Visa', countryCode: 'SA', countryName: 'المملكة العربية السعودية', cardType: 'Credit', tier: 'Signature', isLocalOnly: false },
   { bin: '542400', bankName: 'بنك الإمارات دبي الوطني (Emirates NBD)', scheme: 'Mastercard', countryCode: 'AE', countryName: 'الإمارات العربية المتحدة', cardType: 'Credit', tier: 'Platinum', isLocalOnly: false },
-  { bin: '400000', bankName: 'بنك أبوظبي الأول (FAB Bank)', scheme: 'Visa', countryCode: 'AE', countryName: 'الإمارات العربية المتحدة', cardType: 'Credit', tier: 'Infinite', isLocalOnly: false },
   { bin: '519638', bankName: 'بنك الكويت الوطني (NBK Kuwait)', scheme: 'KNET', countryCode: 'KW', countryName: 'الكويت', cardType: 'Debit', tier: 'Classic', isLocalOnly: true },
   { bin: '531102', bankName: 'بيت التمويل الكويتي (KFH Kuwait)', scheme: 'KNET', countryCode: 'KW', countryName: 'الكويت', cardType: 'Debit', tier: 'Classic', isLocalOnly: true },
   { bin: '507803', bankName: 'بنك البحرين الوطني (NBB Bahrain)', scheme: 'Benefit', countryCode: 'BH', countryName: 'مملكة البحرين', cardType: 'Debit', tier: 'Classic', isLocalOnly: true },

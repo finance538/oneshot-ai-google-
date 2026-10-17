@@ -1,0 +1,16 @@
+{
+  "appId": "com.oneshotcam.hub",
+  "appName": "oneShot Hub",
+  "webDir": "dist",
+  "bundledWebRuntime": false,
+  "server": {
+    "url": "https://1shotcam.com",
+    "cleartext": false
+  },
+  "android": {
+    "allowMixedContent": false,
+    "captureInput": true,
+    "webContentsDebuggingEnabled": false,
+    "backgroundColor": "#0a0b0e"
+  }
+}

@@ -3,11 +3,41 @@ import { sql } from 'drizzle-orm';
 import type { OperationKind } from '../shared/operations.js';
 import type { PaymentPolicy } from '../shared/policy.js';
 import type { AssistantAction } from '../shared/admin-assistant.js';
+import type { TestingSettings } from '../shared/testing-workspace.js';
+
+export const testingWorkspaces = pgTable('testing_workspaces', {
+  ownerId: text('owner_id').primaryKey(),
+  settings: jsonb().$type<TestingSettings>().notNull(),
+  version: integer().notNull().default(1),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const customerProfiles = pgTable('customer_profiles', {
+  ownerId: text('owner_id').primaryKey(),
+  email: text().notNull(),
+  fullName: text('full_name').notNull(),
+  phone: text().notNull().default(''),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const voiceTranscripts = pgTable('voice_transcripts', {
+  ownerId: text('owner_id').notNull(),
+  id: uuid().notNull(),
+  title: text().notNull(),
+  transcriptText: text('transcript_text').notNull(),
+  durationSeconds: integer('duration_seconds').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+}, table => [
+  primaryKey({ columns: [table.ownerId, table.id] }),
+  index('voice_transcripts_owner_created').on(table.ownerId, table.createdAt),
+]);
 
 export const merchants = pgTable('merchants', {
   id: uuid().defaultRandom().primaryKey(),
   ownerId: text('owner_id').notNull().unique(),
   name: text().notNull(),
+  accountId: text('account_id').unique(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 });
 
@@ -186,3 +216,96 @@ export const operationsAudit = pgTable('operations_audit', {
   action: text().notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 }, table => [index('operations_audit_actor_created').on(table.actorId, table.createdAt)]);
+
+/**
+ * ترخيص طبقة الذكاء الاصطناعي لكل مستخدم (بمفتاح هوية Netlify).
+ * الافتراضي: tier-1، و tier-x ممنوعة حتى تُمنح صراحةً من الإدارة.
+ * لا تُقرأ هذه القيم من المتصفح أبداً — القرار على السيرفر.
+ */
+export const aiEntitlements = pgTable('ai_tier_entitlements', {
+  ownerId: text('owner_id').primaryKey(),
+  tier: text().notNull().default('tier-1'),
+  tierX: boolean('tier_x').notNull().default(false),
+  grantedBy: text('granted_by'),
+  note: text(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+}, table => [check('ai_tier_valid', sql`${table.tier} in ('tier-1', 'tier-2', 'tier-3')`)]);
+
+/** ترخيص كادر ذكاء اصطناعي لكل مستخدم: صلاحية **لكل خدمة** لا مفتاح عام واحد. */
+export const aiStaffGrants = pgTable('ai_staff_grants', {
+  ownerId: text('owner_id').notNull(),
+  staffId: text('staff_id').notNull(),
+  grantedBy: text('granted_by').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+}, table => [primaryKey({ columns: [table.ownerId, table.staffId] })]);
+
+/** سجل استهلاك لكل سؤال: أي طبقة/موديل استُخدم لحساب أي مستخدم (أساس التسعير بالاستخدام). */
+export const aiUsage = pgTable('ai_usage_events', {
+  id: uuid().defaultRandom().primaryKey(),
+  ownerId: text('owner_id').notNull(),
+  tier: text().notNull(),
+  modelId: text('model_id').notNull(),
+  staffId: text('staff_id'),
+  outcome: text().notNull().default('ok'),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+}, table => [index('ai_usage_owner_created').on(table.ownerId, table.createdAt)]);
+
+/** بطاقة محفوظة عبر البوابة (Card on File): توكن البطاقة مشفَّرًا — لا رقم بطاقة ولا CSC عندنا. */
+export const savedCards = pgTable('saved_cards', {
+  id: uuid().defaultRandom().primaryKey(),
+  merchantId: uuid('merchant_id').notNull().references(() => merchants.id),
+  email: text().notNull(),
+  gateway: text().notNull(),
+  encryptedToken: text('encrypted_token').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+}, table => [uniqueIndex('saved_cards_merchant_email_gateway').on(table.merchantId, table.email, table.gateway)]);
+
+/** ما يرسله مستلم Webhooks كما وصل، للسجل والمطابقة فقط — الحالة الحيّة تُقرأ من البوابة لا من هنا. */
+export const gatewayEvents = pgTable('gateway_events', {
+  id: uuid().defaultRandom().primaryKey(),
+  gateway: text().notNull(),
+  event: text().notNull(),
+  reference: text(),
+  payload: jsonb().notNull(),
+  receivedAt: timestamp('received_at', { withTimezone: true }).defaultNow().notNull(),
+}, table => [index('gateway_events_received').on(table.receivedAt)]);
+
+/** سجل نوع الحساب عند التسجيل (تاجر أو مسوّق) وحالة اعتماد الإدارة لحسابات المسوّقين. */
+export const accountRegistrations = pgTable('account_registrations', {
+  id: uuid().defaultRandom().primaryKey(),
+  ownerId: text('owner_id').notNull().unique(),
+  email: text().notNull(),
+  fullName: text('full_name').notNull(),
+  role: text().notNull().default('merchant'), // 'merchant' | 'marketer'
+  status: text().notNull().default('approved'), // 'pending' | 'approved' | 'rejected'
+  referralCode: text('referral_code').unique(),
+  commissionRate: integer('commission_rate').notNull().default(10),
+  notes: text(),
+  reviewedBy: text('reviewed_by'),
+  reviewedAt: timestamp('reviewed_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+}, table => [
+  check('account_registration_role_valid', sql`${table.role} in ('merchant', 'marketer', 'loader', 'admin')`),
+  check('account_registration_status_valid', sql`${table.status} in ('pending', 'approved', 'rejected')`),
+  index('account_registrations_role_status').on(table.role, table.status),
+]);
+
+/** حملات وروابط الإحالة الخاصة بالمسوّقين المعتمدين. */
+export const marketerCampaigns = pgTable('marketer_campaigns', {
+  id: uuid().defaultRandom().primaryKey(),
+  marketerId: uuid('marketer_id').notNull().references(() => accountRegistrations.id),
+  ownerId: text('owner_id').notNull(),
+  title: text().notNull(),
+  targetProductSku: text('target_product_sku').notNull().default('ALL'),
+  utmCampaign: text('utm_campaign').notNull(),
+  channel: text().notNull().default('social'),
+  clicks: integer().notNull().default(0),
+  conversions: integer().notNull().default(0),
+  earnedCommission: integer('earned_commission').notNull().default(0),
+  enabled: boolean().notNull().default(true),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+}, table => [index('marketer_campaigns_owner').on(table.ownerId, table.createdAt)]);
+
+

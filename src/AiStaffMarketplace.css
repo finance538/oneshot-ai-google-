@@ -687,3 +687,55 @@
   font-size: 0.74rem;
   line-height: 1.4;
 }
+
+/* ---- Real model chat: model picker, honest error/proof notes ---- */
+.chat-model-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 10px 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.chat-model-row select {
+  background: #14161c;
+  color: #e8eaf0;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 0.8rem;
+  font-family: inherit;
+}
+
+.station-live-badge.station-offline {
+  border-color: rgba(255, 176, 32, 0.35);
+  color: #ffb020;
+}
+
+.station-live-badge.station-offline .live-dot {
+  background: #ffb020;
+}
+
+.chat-error-note {
+  align-self: stretch;
+  margin: 8px 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(255, 86, 86, 0.12);
+  border: 1px solid rgba(255, 86, 86, 0.35);
+  color: #ff9b9b;
+  font-size: 0.8rem;
+  line-height: 1.6;
+}
+
+.chat-routed-note {
+  align-self: flex-start;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #8b93a7;
+  font-size: 0.7rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}

@@ -1,0 +1,128 @@
+/* OneShot — generated mobile type floor (≤760px): no text under 12px */
+@media (max-width: 760px) {
+  .amount-cell small { font-size: 12px; }
+  .apk-badge { font-size: 12px; }
+  .appearance-controls select { font-size: 12px; }
+  .assist-actions .outline-button { font-size: 12px; }
+  .assist-body > label { font-size: 12px; }
+  .assist-privacy { font-size: 12px; }
+  .assist-review .primary-button { font-size: 12px; }
+  .assist-review dl { font-size: 12px; }
+  .assist-review p { font-size: 12px; }
+  .auth-separator { font-size: 12px; }
+  .auth-separator span { font-size: 12px; }
+  .billing-fields legend { font-size: 12px; }
+  .billing-fields>p { font-size: 13px; }
+  .bottom-note { font-size: 12px; }
+  .brand-name small { font-size: 12px; }
+  .brand-name>span { font-size: 12px; }
+  .breadcrumb { font-size: 12px; }
+  .card-entry-form .helper-note { font-size: 12px; }
+  .checkout-assurance p { font-size: 13px; }
+  .checkout-assurance strong { font-size: 12px; }
+  .checkout-card .helper-note { font-size: 12px; }
+  .checkout-card-heading .eyebrow { font-size: 12px; }
+  .checkout-details { font-size: 12px; }
+  .checkout-details strong { font-size: 12px; }
+  .checkout-footer { font-size: 12px; }
+  .checkout-header>span { font-size: 12px; }
+  .checkout-secondary .text-button { font-size: 12px; }
+  .checkout-security { font-size: 12px; }
+  .checkout-summary>small { font-size: 13px; }
+  .config-list code { font-size: 13px; }
+  .connect-link code { font-size: 12px; }
+  .connect-link strong { font-size: 12px; }
+  .connection-pill { font-size: 12px; }
+  .consent { font-size: 12px; }
+  .dashboard-footer { font-size: 12px; }
+  .date-cell { font-size: 12px; }
+  .empty-state p { font-size: 13px; }
+  .eyebrow { font-size: 12px; }
+  .form-error { font-size: 12px; }
+  .google-welcome-button { font-size: 12px; }
+  .helper-note { font-size: 12px; }
+  .iframe-toolbar strong { font-size: 12px; }
+  .integration-bottom .subtle-tag { font-size: 12px; }
+  .integration-card p { font-size: 13px; }
+  .integration-english { font-size: 12px; }
+  .light-button { font-size: 12px; }
+  .list-toolbar { font-size: 12px; }
+  .loading-line { font-size: 12px; }
+  .location-suggestion { font-size: 12px; }
+  .message { font-size: 12px; }
+  .modal-description { font-size: 12px; }
+  .nav-count { font-size: 12px; }
+  .nav-item { font-size: 12px; }
+  .nav-label { font-size: 13px; }
+  .onboarding p { font-size: 12px; }
+  .open-amount-range span { font-size: 12px; }
+  .outline-button { font-size: 12px; }
+  .page-heading p { font-size: 13px; }
+  .page-heading>.primary-button { font-size: 12px; }
+  .paid-confirmation p { font-size: 13px; }
+  .primary-button { font-size: 12px; }
+  .quick-footer>span { font-size: 12px; }
+  .quick-panel .eyebrow { font-size: 12px; }
+  .quick-panel button { font-size: 12px; }
+  .quick-panel p { font-size: 13px; }
+  .readiness { font-size: 12px; }
+  .reference { font-size: 12px; }
+  .search-field { font-size: 12px; }
+  .search-field input { font-size: 12px; }
+  .section-heading p { font-size: 13px; }
+  .security-banner p { font-size: 13px; }
+  .settings-panel .helper-note { font-size: 12px; }
+  .settings-panel p { font-size: 12px; }
+  .share-url { font-size: 12px; }
+  .stat-card p { font-size: 13px; }
+  .stat-top { font-size: 12px; }
+  .stat-value small { font-size: 12px; }
+  .status-badge { font-size: 12px; }
+  .store-ads-card > .store-pill { font-size: 12px; }
+  .store-ads-card > p { font-size: 12px; }
+  .store-ads-card dl { font-size: 12px; }
+  .store-card-bottom small { font-size: 12px; }
+  .store-categories button { font-size: 12px; }
+  .store-code-panel pre { font-size: 12px; }
+  .store-code-tabs button { font-size: 13px; }
+  .store-contact-details small { font-size: 12px; }
+  .store-delivery { font-size: 12px; }
+  .store-footer .store-kicker { font-size: 12px; }
+  .store-footer-bottom { font-size: 12px; }
+  .store-footer-policies { font-size: 12px; }
+  .store-header-actions .store-button { font-size: 12px; }
+  .store-hero .store-pill { font-size: 12px; }
+  .store-image-badge { font-size: 12px; }
+  .store-inquiry small { font-size: 12px; }
+  .store-kicker { font-size: 12px; }
+  .store-logo small { font-size: 12px; }
+  .store-marketing-features p { font-size: 12px; }
+  .store-nav a { font-size: 12px; }
+  .store-product-actions .store-button { font-size: 12px; }
+  .store-product-card > p { font-size: 12px; }
+  .store-product-card li { font-size: 13px; }
+  .store-product-meta { font-size: 12px; }
+  .store-product-price > small { font-size: 12px; }
+  .store-product-price strong span { font-size: 12px; }
+  .store-sku { font-size: 12px; }
+  .store-trust { font-size: 12px; }
+  .storefront .store-button.compact { font-size: 12px; }
+  .storefront .store-nav a { font-size: 12px; }
+  .subtle-tag { font-size: 12px; }
+  .text-button { font-size: 12px; }
+  .tiny-tag { font-size: 12px; }
+  .welcome-actions .light-button { font-size: 12px; }
+  .welcome-actions .outline-button { font-size: 12px; }
+  .welcome-actions .primary-button { font-size: 12px; }
+  .welcome-banner p { font-size: 13px; }
+  .welcome-trust { font-size: 12px; }
+  .workspace small { font-size: 12px; }
+  .workspace strong { font-size: 12px; }
+  .workspace-label { font-size: 13px; }
+  input[readonly] { font-size: 12px; }
+  label { font-size: 12px; }
+  td { font-size: 13px; }
+  td small { font-size: 13px; }
+  td strong { font-size: 12px; }
+  th { font-size: 12px; }
+}

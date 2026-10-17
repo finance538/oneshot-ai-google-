@@ -489,7 +489,7 @@ export default function GatewayCountryMatrixManager({
                         );
                         rate = '78%';
                         req = 'توجيه البطاقة كـ Credit بدلاً من Debit محلي';
-                        recommendation = 'يُفضل تحويلها إلى بيتابس أو نون للحصول على تسوية مدى المباشرة';
+                        recommendation = 'يُفضل تحويلها إلى PayTabs أو نون للحصول على تسوية مدى المباشرة';
                       } else if (!countryMatch && analyzedBin.countryCode !== 'GLOBAL') {
                         statusBadge = (
                           <span className="res-badge danger">

@@ -111,9 +111,9 @@ export const documents = {
     titleEn: "Unified API Integration & Professional Merchant Dashboard",
     bodyAr: [
       "لماذا يعتبر ربط الـ API الموحد أفضل بمراحل من إرسال الفواتير اليدوية المباشرة؟ كتاجر ذكي، إدارة التدفقات النقدية عبر روابط فواتير يدوية متفرقة يؤدي حتماً إلى فوضى عارمة: عملاء يسددون فواتير مكررة، إشعارات بنكية تضيع بين الرسائل، ومبالغ غير مؤكدة يصعب مطابقتها.",
-      "مع ربط الـ API الاحترافي من ون شوت (OneShot Payment API)، تنتهي العشوائية تماماً! كل عملية دفع تُنشأ برقم مرجعي فريد، وتُسجل لحظياً على خوادم البوابة مع تحقق فوري من صحة المبلغ والتاجر قبل تأكيدها.",
+      "مع ربط الـ API الاحترافي من ون شوت (OneShot Hub API)، تنتهي العشوائية تماماً! كل عملية دفع تُنشأ برقم مرجعي فريد، وتُسجل لحظياً على خوادم البوابة مع تحقق فوري من صحة المبلغ والتاجر قبل تأكيدها.",
       "داشبورد احترافي موحد يجمع بواباتك في مكان واحد: بدلاً من التنقل المرهق بين لوحة تحكم PayTabs ولوحة تحكم Telr ومراجعة مدى وApple Pay في حسابات مصرفية متعددة، يمنحك ون شوت شاشة تنفيذية شاملة تراقب كل قرش وكل معاملة لحظة بلحظة.",
-      "منع الفواتير الملخبطة والعشوائية: النظام الذكي يمنع العملاء من التلاعب بالمبالغ أو إنشاء طلبات غير مكتملة. العميل يفتح رابط الفاتورة ليجد المبلغ والبنود وتاريخ الاستحقاق محددة بدقة، ويسدد بضغطة زر واحدة عبر صفحة الدفع الآمنة أو تطبيق OneShot Pay.",
+      "منع الفواتير الملخبطة والعشوائية: النظام الذكي يمنع العملاء من التلاعب بالمبالغ أو إنشاء طلبات غير مكتملة. العميل يفتح رابط الفاتورة ليجد المبلغ والبنود وتاريخ الاستحقاق محددة بدقة، ويسدد بضغطة زر واحدة عبر صفحة الدفع الآمنة أو تطبيق OneShot Hub.",
       "خيارات مرنة تناسب كل نماذج الأعمال: إرسال فواتير فورية مخصصة، روابط دفع مفتوحة محددة لبوابة معينة، أو روابط دفع عامة لجميع البوابات تدعم التحويل والتوجيه الذكي، بالإضافة للاشتراكات الشهرية المتكررة.",
       "سرعة فائقة وتجربة عميل استثنائية: تجربة دفع سريعة بدون تعليق مع دعم الدفع المباشر من داخل المتجر (Direct Embedded / API) أو عبر التطبيق المخصص، مما يرفع نسبة التحويل ويمنح علامتك التجارية مصداقية واحترافية كبرى.",
     ],
@@ -123,7 +123,7 @@ export const documents = {
       "A single executive dashboard for all your gateways: Instead of hopping between PayTabs, Telr, Mada, and Apple Pay dashboards, OneShot consolidates all your revenue streams into one pristine, real-time command center.",
       "Zero messy or unauthorized customer submissions: The platform enforces strict pricing integrity. Customers cannot alter invoice amounts or submit random invoices. They open the invoice, see exact items, and pay instantly.",
       "Flexible models: Direct customer invoices, open payment links for specific gateways, multi-gateway open links with smart routing, and automated recurring billing.",
-      "Lightning-fast OneShot Pay checkout: Embedded direct API payments, seamless gateway integration, or instant mobile checkout via OneShot Pay PWA / APK.",
+      "Lightning-fast OneShot Hub checkout: Embedded direct API payments, seamless gateway integration, or instant mobile checkout via OneShot Hub PWA / APK.",
     ],
   },
 };

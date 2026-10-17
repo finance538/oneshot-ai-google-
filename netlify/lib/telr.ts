@@ -1,20 +1,21 @@
-import { HttpError } from './platform.js';
+import { HttpError, platformCredentialFallback } from './platform.js';
 
 export function telrPrefix(merchantId: string) {
   return `TELR_${merchantId.replaceAll('-', '').toUpperCase()}`;
 }
 
 export function telrConfig(merchantId: string) {
-  const prefix = telrPrefix(merchantId);
+  const own = telrPrefix(merchantId);
+  const prefix = process.env[`${own}_SERVICE_API_KEY`] ? own : platformCredentialFallback('TELR', own);
   const store = process.env[`${prefix}_STORE_ID`];
   const key = process.env[`${prefix}_SERVICE_API_KEY`];
   if (!key || !store || !/^\d+$/.test(store) || !Number.isSafeInteger(Number(store)) || Number(store) <= 0) throw new HttpError(409, 'حساب Telr الخاص بهذا التاجر غير مهيأ.');
-  return { store: Number(store), key, test: process.env[`${prefix}_TEST_MODE`] === 'true' ? 1 : 0 };
+  return { store: Number(store), key, test: process.env[`${prefix}_TEST_MODE`] === 'true' ? 1 : 0, platform: prefix !== own };
 }
 
 export function telrCapabilities(merchantId: string) {
-  try { telrConfig(merchantId); return { connected: true, hosted: true, framed: true, mobile: true }; }
-  catch { return { connected: false, hosted: false, framed: false, mobile: false }; }
+  try { return { connected: true, hosted: true, framed: true, mobile: true, platform: telrConfig(merchantId).platform }; }
+  catch { return { connected: false, hosted: false, framed: false, mobile: false, platform: false }; }
 }
 
 export async function telrRequest(merchantId: string, payload: Record<string, unknown>) {

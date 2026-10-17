@@ -1,4 +1,4 @@
-export const assistantPolicyTargets = ['paymentsEnabled', 'requestsEnabled', 'openLinksEnabled', 'aiEnabled', 'gateways.paytabs', 'gateways.telr', 'methods.hosted', 'methods.framed', 'methods.mobile', 'methods.mada_applepay', 'methods.managed', 'methods.own', 'methods.paylink', 'methods.invoice', 'methods.recurring'] as const;
+export const assistantPolicyTargets = ['paymentsEnabled', 'requestsEnabled', 'openLinksEnabled', 'aiEnabled', 'gateways.paytabs', 'gateways.telr', 'methods.hosted', 'methods.framed', 'methods.mobile', 'methods.mada_applepay', 'methods.samsung_pay', 'methods.managed', 'methods.own', 'methods.paylink', 'methods.invoice', 'methods.recurring'] as const;
 export type AssistantPolicyTarget = typeof assistantPolicyTargets[number];
 
 export const assistantModels = [
@@ -40,7 +40,7 @@ export const assistantActionNames: Record<AssistantAction['type'], string> = {
 
 export const assistantTargetNames: Record<AssistantPolicyTarget, string> = {
   paymentsEnabled: 'بدء عمليات الدفع', requestsEnabled: 'إنشاء طلبات الدفع', openLinksEnabled: 'الروابط المفتوحة', aiEnabled: 'مساعد تعبئة بيانات الدفع',
-  'gateways.paytabs': 'بوابة PayTabs', 'gateways.telr': 'بوابة Telr', 'methods.hosted': 'الدفع المستضاف', 'methods.framed': 'الدفع داخل إطار', 'methods.mobile': 'الدفع عبر الجوال', 'methods.mada_applepay': 'مدى وApple Pay', 'methods.managed': 'Managed Form', 'methods.own': 'Own Form', 'methods.paylink': 'PayLinks', 'methods.invoice': 'الفواتير', 'methods.recurring': 'الدفع المتكرر',
+  'gateways.paytabs': 'بوابة PayTabs', 'gateways.telr': 'بوابة Telr', 'methods.hosted': 'الدفع المستضاف', 'methods.framed': 'الدفع داخل إطار', 'methods.mobile': 'الدفع عبر الجوال', 'methods.mada_applepay': 'مدى وApple Pay', 'methods.samsung_pay': 'سامسونج باي', 'methods.managed': 'Managed Form', 'methods.own': 'Own Form', 'methods.paylink': 'PayLinks', 'methods.invoice': 'الفواتير', 'methods.recurring': 'الدفع المتكرر',
 };
 
 export function assistantActionDescription(action: AssistantAction) {

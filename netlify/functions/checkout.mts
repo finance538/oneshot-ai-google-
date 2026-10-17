@@ -5,8 +5,12 @@ import { attempts, documents, merchants, openLinks, walletTopups } from '../../d
 import { failure, HttpError, identifier, jsonBody, paytabs, reply, safeGatewayUrl, sameOrigin, text, throttle } from '../lib/platform.js';
 import { enabledCapabilities, settings } from '../lib/policy.js';
 import { confirmPayment } from '../lib/payments.js';
+import { ngeniusCreateOrder, ngeniusSavedCardMethods, ngeniusSlim } from '../lib/ngenius.js';
+import { savedCardFor } from '../lib/saved-cards.js';
 import { telrConfig, telrRequest, telrUrl } from '../lib/telr.js';
+import { tapChargeId, tapChargeUrl, tapConfig, tapCreateCharge, tapSource, type TapChargeInput } from '../lib/tap.js';
 import { publicGateways } from '../lib/wallet.js';
+import { gateways, type Gateway } from '../../shared/policy.js';
 
 export default async (req: Request, context: Context) => {
   try {
@@ -19,7 +23,7 @@ export default async (req: Request, context: Context) => {
     const document = row.payment_documents;
     const merchant = row.merchants;
     const { policy } = await settings();
-    const active = enabledCapabilities(merchant.id, document.gateway === 'telr' ? 'telr' : 'paytabs', policy);
+    const active = enabledCapabilities(merchant.id, gateways.includes(document.gateway as Gateway) ? document.gateway as Gateway : 'paytabs', policy);
     let sourceEnabled = true;
     const [topup] = await db.select().from(walletTopups).where(eq(walletTopups.documentId, document.id));
     if (topup) sourceEnabled = (await publicGateways(policy)).some(row => row.gateway === document.gateway && row.merchantId === document.merchantId);
@@ -73,6 +77,23 @@ export default async (req: Request, context: Context) => {
     const [attempt] = await db.insert(attempts).values({ documentId: document.id, merchantId: merchant.id, amount: document.amount, period: `initial:${document.id}:${previous?.id || 'first'}`, consent: recurring && body.consent === true }).onConflictDoNothing().returning();
     if (!attempt) throw new HttpError(409, 'توجد محاولة دفع أخرى قيد المعالجة.');
     const origin = url.origin;
+    if (document.gateway === 'ngenius') {
+      // Card on File: a card this customer already paid with here is offered back on the pay page —
+      // the gateway asks for the CSC again (recaptureCsc), so the number is not re-typed and the
+      // token alone is useless to anyone who steals it.
+      const savedCard = ngeniusSavedCardMethods.includes(document.method) ? await savedCardFor(merchant.id, 'ngenius', document.customerEmail) : undefined;
+      const order = await ngeniusCreateOrder(merchant.id, { amount: document.amount, description: document.title, email: document.customerEmail, origin, documentId: document.id, method: document.method, savedCard });
+      // framed: our own checkout embeds this page, so ask for the vendor's bare slim layout.
+      const paymentUrl = document.method === 'framed' ? ngeniusSlim(order.url) : order.url;
+      await db.update(attempts).set({ reference: order.reference, gatewayUrl: paymentUrl, status: 'pending' }).where(eq(attempts.id, attempt.id));
+      // paylink/invoice: the customer pays from the stored link later, so keep it on the
+      // document exactly like the PayTabs branches do.
+      if (document.method === 'paylink' || document.method === 'invoice') {
+        await db.update(documents).set({ gatewayUrl: paymentUrl, gatewayId: order.reference, status: 'published' }).where(eq(documents.id, document.id));
+        return reply({ url: paymentUrl, status: 'published' });
+      }
+      return reply({ url: paymentUrl, status: 'pending' });
+    }
     if (document.gateway === 'telr') {
       const returnUrl = `${origin}/.netlify/functions/payment-return?id=${document.id}`;
       const result = await telrRequest(merchant.id, {
@@ -84,6 +105,39 @@ export default async (req: Request, context: Context) => {
       if (!order || typeof order.ref !== 'string') throw new HttpError(502, 'لم تصل بيانات جلسة Telr.');
       const redirectUrl = telrUrl(order.url, merchant.id);
       await db.update(attempts).set({ reference: order.ref, gatewayUrl: redirectUrl, status: 'pending' }).where(eq(attempts.id, attempt.id));
+      return reply({ url: redirectUrl, status: 'pending' });
+    }
+    if (document.gateway === 'tap') {
+      // Tap: صفحة دفع مستضافة واحدة (Card/Apple Pay/Samsung Pay) يُعاد منها العميل إلى payment-return،
+      // ويُبلَّغ الحالة إلى tap-webhook. المرجع الوحيد هو معرّف الشحنة chg_… المخزَّن في المحاولة،
+      // ولا يُصدَّق محتوى الإشعار أبدًا — الحالة تُقرأ حيّة من Tap.
+      const returnUrl = `${origin}/.netlify/functions/payment-return?id=${document.id}`;
+      const postUrl = `${origin}/.netlify/functions/tap-webhook?merchant=${merchant.id}`;
+      const parts = String(document.customerName || '').trim().split(/\s+/).filter(Boolean);
+      const digits = (typeof customer.phone === 'string' ? customer.phone : '').replace(/\D/g, '').replace(/^(966|0)/, '');
+      const billTo: TapChargeInput['customer'] = { email: document.customerEmail };
+      if (parts[0]) billTo.first_name = parts[0].slice(0, 50);
+      if (parts.length > 1) billTo.last_name = parts.slice(1).join(' ').slice(0, 50);
+      if (digits) billTo.phone = { country_code: '+966', number: digits.slice(0, 20) };
+      const charge = await tapCreateCharge(tapConfig(merchant.id), {
+        amount: document.amount / 100,
+        currency: 'SAR',
+        reference: attempt.id,
+        redirectUrl: returnUrl,
+        postUrl,
+        source: tapSource(document.method),
+        description: document.title,
+        customer: billTo,
+      });
+      const chargeId = tapChargeId(charge);
+      if (!chargeId) throw new HttpError(502, 'لم تصل بيانات عملية Tap.');
+      const redirectUrl = tapChargeUrl(charge);
+      await db.update(attempts).set({ reference: chargeId, gatewayUrl: redirectUrl, status: 'pending' }).where(eq(attempts.id, attempt.id));
+      // paylink/invoice: العميل يدفع من الرابط لاحقًا، فيبقى الرابط على المستند كما تفعل بقية البوابات.
+      if (document.method === 'paylink' || document.method === 'invoice') {
+        await db.update(documents).set({ gatewayUrl: redirectUrl, gatewayId: chargeId, status: 'published' }).where(eq(documents.id, document.id));
+        return reply({ url: redirectUrl, status: 'published' });
+      }
       return reply({ url: redirectUrl, status: 'pending' });
     }
     const payload: Record<string, unknown> = {

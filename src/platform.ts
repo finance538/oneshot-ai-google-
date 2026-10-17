@@ -1,4 +1,4 @@
-export type Method = 'hosted' | 'framed' | 'mobile' | 'mada_applepay' | 'managed' | 'own' | 'paylink' | 'invoice' | 'recurring';
+export type Method = 'hosted' | 'framed' | 'mobile' | 'mada_applepay' | 'samsung_pay' | 'managed' | 'own' | 'paylink' | 'invoice' | 'recurring';
 
 export const methods: { id: Method; name: string; english: string; description: string; tag: string }[] = [
   { id: 'hosted', name: 'صفحة الدفع المستضافة', english: 'Hosted Checkout', description: 'تجربة دفع آمنة على صفحة PayTabs مع إعادة العميل إلى منصتك.', tag: 'الأبسط للبدء' },
@@ -9,6 +9,7 @@ export const methods: { id: Method; name: string; english: string; description: 
   { id: 'invoice', name: 'الفواتير', english: 'Invoice API', description: 'فاتورة إلكترونية ببنود الخدمة، وصفحة دفع خاصة بها على PayTabs.', tag: 'للخدمات والأعمال' },
   { id: 'recurring', name: 'الاشتراكات', english: 'Tokenization · Recurring', description: 'تحصيل شهري أو سنوي بعد موافقة العميل، باستخدام مراجع مشفرة لا بيانات البطاقة.', tag: 'تجديد تلقائي' },
   { id: 'mada_applepay', name: 'مدى وApple Pay', english: 'Mada · Apple Pay', description: 'صفحة دفع مخصصة للوسائل المتاحة على حساب التاجر والجهاز المستخدم.', tag: 'وسائل دفع' },
+  { id: 'samsung_pay', name: 'سامسونج باي', english: 'Samsung Pay', description: 'صفحة دفع مخصصة لمحفظة سامسونج باي على الأجهزة التي تدعمها، بحسب ما يعلنه حساب التاجر.', tag: 'وسائل دفع' },
   { id: 'mobile', name: 'الدفع من الجوال', english: 'Mobile · PWA', description: 'صفحة دفع مناسبة للجوال والتطبيق المثبّت. ليست تكاملاً مع Native SDK.', tag: 'قابل للتثبيت' },
 ];
 
@@ -19,7 +20,7 @@ export interface PaymentDocument {
   customerEmail: string;
   amount: number;
   method: Method;
-  gateway: 'paytabs' | 'telr';
+  gateway: 'paytabs' | 'telr' | 'ngenius' | 'tap';
   interval: string;
   status: string;
   createdAt: string;
@@ -56,8 +57,78 @@ export interface GatewayRequest {
   updatedAt: string;
 }
 
+export interface AiLicenseView {
+  tier: 'tier-1' | 'tier-2' | 'tier-3';
+  tierX: boolean;
+  staff: string[];
+  admin: boolean;
+  tiers: string[];
+  source: 'default' | 'grant' | 'admin';
+}
+
+export interface AiEntitlementView {
+  ownerId: string;
+  tier: string;
+  tierX: boolean;
+  grantedBy: string | null;
+  note: string | null;
+  updatedAt: string;
+}
+
+export interface AiStaffGrantView {
+  ownerId: string;
+  staffId: string;
+  grantedBy: string;
+  createdAt: string;
+}
+
+export interface AiAdminView {
+  tiers: { id: string; label: { ar: string; en: string }; pricePerQuestionSar: number | null; selectable: boolean }[];
+  entitlements: AiEntitlementView[];
+  staffGrants: AiStaffGrantView[];
+}
+
+export type AccountRole = 'admin' | 'merchant' | 'marketer' | 'loader';
+export type AccountStatus = 'pending' | 'approved' | 'rejected';
+
+export interface MarketerAccount {
+  id: string;
+  ownerId: string;
+  email: string;
+  fullName: string;
+  role: 'merchant' | 'marketer';
+  status: AccountStatus;
+  referralCode: string | null;
+  commissionRate: number;
+  notes: string | null;
+  reviewedBy: string | null;
+  reviewedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MarketerCampaign {
+  id: string;
+  marketerId: string;
+  ownerId: string;
+  title: string;
+  targetProductSku: string;
+  utmCampaign: string;
+  channel: string;
+  clicks: number;
+  conversions: number;
+  earnedCommission: number;
+  enabled: boolean;
+  createdAt: string;
+}
+
 export interface Platform {
-  merchant: { id: string; name: string } | null;
+  merchant: { id: string; name: string; accountId?: string | null } | null;
+  accountRole?: AccountRole;
+  registrationStatus?: AccountStatus;
+  marketerAccount?: MarketerAccount | null;
+  marketerCampaigns?: MarketerCampaign[];
+  adminMarketers?: MarketerAccount[];
   documents: PaymentDocument[];
   subscriptions: Subscription[];
   attempts: PaymentAttempt[];
@@ -65,11 +136,19 @@ export interface Platform {
   credentialPrefix?: string;
   telrPrefix?: string;
   telrCapabilities?: Record<string, boolean>;
+  ngeniusPrefix?: string;
+  ngeniusCapabilities?: Record<string, boolean>;
+  tapPrefix?: string;
+  tapCapabilities?: Record<string, boolean>;
   metrics?: { paidCount: number; totalPaid: number; pendingCount: number; customers: number };
   daily?: { day: string; amount: number }[];
   openLinks?: OpenLink[];
   policy?: PaymentPolicy;
   isAdmin?: boolean;
+  /** ترخيص الذكاء الاصطناعي لهذا الحساب (منحة إدارية / افتراضي). */
+  aiLicense?: AiLicenseView;
+  /** للمسؤول فقط: كل منح الطبقات وتراخيص الكوادر. */
+  aiAdmin?: AiAdminView | null;
   gatewayRequests?: GatewayRequest[];
   adminGatewayRequests?: GatewayRequest[];
 }

@@ -1,11 +1,15 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
-import { isStorefrontPath } from './storefront/routes';
+import { isCustomerPath, isStorefrontPath } from './storefront/routes';
 import { french, storefrontTranslations } from './locales';
 
 export type Language = 'ar' | 'en' | 'zh' | 'ru' | 'fr';
 type Theme = 'dark' | 'light';
 export const languages: { id: Language; name: string }[] = [{ id: 'ar', name: 'العربية' }, { id: 'en', name: 'English' }, { id: 'zh', name: '中文' }, { id: 'ru', name: 'Русский' }, { id: 'fr', name: 'Français' }];
 const phrases: [string, string, string, string][] = [
+  ['أدوات اللودر واختبار البوابات', 'Loader / tester tools', '网关测试工具', 'Инструменты тестирования'],
+  ['أنظمة حماية البوابات (التاجر)', 'Test security rules', '测试安全规则', 'Правила безопасности тестов'],
+  ['إدارة المنصة واستقبال الطلبات', 'Platform administration', '平台管理', 'Управление платформой'],
+  ['مركز عمليات AI (Full Admin)', 'AI operations center', 'AI 运营中心', 'Центр операций ИИ'],
   ['نظرة عامة', 'Overview', '概览', 'Обзор'],
   ['روابط الدفع', 'Payment links', '支付链接', 'Платёжные ссылки'],
   ['الفواتير', 'Invoices', '发票', 'Счета'],
@@ -145,6 +149,23 @@ const phrases: [string, string, string, string][] = [
   ['العودة من البوابة ليست تأكيداً للدفع.', 'Returning from the gateway is not proof of payment.', '从网关返回并不表示支付成功。', 'Возврат со шлюза не подтверждает оплату.'],
   ['هذا الرابط مكتمل أو ملغى أو منتهي الصلاحية.', 'This link is completed, cancelled or expired.', '此链接已完成、已取消或已过期。', 'Ссылка оплачена, отменена или просрочена.'],
   ['طريقة الدفع غير مهيأة لهذا التاجر.', 'This payment method is unavailable for this merchant.', '此商户尚未启用该支付方式。', 'Этот способ оплаты недоступен продавцу.'],
+  ['صفحة الدفع العامة', 'Public checkout page', '公共收银台页面', 'Публичная платёжная страница'],
+  ['صفحة الدفع على pay.1shotcam.com', 'Checkout page at pay.1shotcam.com', 'pay.1shotcam.com 收银台', 'Платёжная страница pay.1shotcam.com'],
+  ['صفحة واحدة يدفع منها عملاؤك مباشرة عبر بواباتك المفعّلة، بلا إنشاء رابط لكل عملية.', 'One page your customers pay on directly through your enabled gateways — no per-sale links.', '一个页面，客户可直接通过已启用的网关付款，无需逐笔创建链接。', 'Одна страница: клиенты платят напрямую через подключённые шлюзы, без ссылки на каждую продажу.'],
+  ['البوابات المفعّلة', 'Enabled gateways', '已启用的网关', 'Подключённые шлюзы'],
+  ['لا توجد بوابة مفعّلة بعد', 'No gateway connected yet', '尚未连接网关', 'Шлюз ещё не подключён'],
+  ['فتح الصفحة', 'Open page', '打开页面', 'Открыть страницу'],
+  ['الصفحة فعّالة: تظهر فقط بوابات حساب المشرف المفعّلة.', 'Page is live: it shows only the admin account’s enabled gateways.', '页面已上线：仅显示管理员账户已启用的网关。', 'Страница активна: отображаются только включённые шлюзы аккаунта администратора.'],
+  ['متغيرات Netlify المطلوبة قبل تفعيل الصفحة', 'Netlify variables required before the page goes live', '页面启用前所需的 Netlify 变量', 'Переменные Netlify для включения страницы'],
+  ['ادفع مباشرة عبر بوابات الدفع المعتمدة، بلا وسيط.', 'Pay directly through the approved payment gateways, no middleman.', '通过经批准的支付网关直接付款，无需中间环节。', 'Платите напрямую через одобренные платёжные шлюзы, без посредников.'],
+  ['الدفع عبر oneShot', 'Pay with oneShot', '使用 oneShot 付款', 'Оплата через oneShot'],
+  ['الصفحة غير مهيأة', 'Page not configured', '页面未配置', 'Страница не настроена'],
+  ['لا توجد بوابة دفع مفعّلة بعد', 'No payment gateway is enabled yet', '尚未启用支付网关', 'Платёжный шлюз ещё не включён'],
+  ['بوابات الدفع بلا طريقة متاحة', 'Gateway has no available method', '网关没有可用的支付方式', 'У шлюза нет доступного способа оплаты'],
+  ['البوابات مربوطة، لكن لا توجد طريقة دفع مسموحة حالياً من إعدادات المنصة.', 'Gateways are connected, but no payment method is currently allowed in the platform settings.', '网关已连接，但平台设置当前未允许任何支付方式。', 'Шлюзы подключены, но в настройках платформы сейчас не разрешён ни один способ оплаты.'],
+  ['لا يصدر رابط دفع حقيقي قبل ربط بوابة واحدة على الأقل (PayTabs أو Telr) من لوحة تحكم المشرف.', 'No real payment link is issued before at least one gateway (PayTabs or Telr) is connected from the admin dashboard.', '在管理员后台连接至少一个网关（PayTabs 或 Telr）之前，不会生成真实支付链接。', 'Реальная платёжная ссылка не создаётся, пока в панели администратора не подключён хотя бы один шлюз (PayTabs или Telr).'],
+  ['تُنشأ صفحة الفاتورة على oneShot، والدفع يتم على بوابة الدفع الرسمية.', 'The invoice page is created on oneShot; the payment itself happens on the official gateway.', '账单页面在 oneShot 创建，付款在官方网关完成。', 'Счёт создаётся на oneShot, оплата проходит на официальном шлюзе.'],
+  ['تعذر تحميل الصفحة.', 'Could not load the page.', '无法加载页面。', 'Не удалось загрузить страницу.'],
   ['راجع بياناتك قبل الدفع.', 'Review your details before paying.', '付款前请核对信息。', 'Проверьте данные перед оплатой.'],
   ['أوافق على التجديد التلقائي بالمبلغ المعروض وبالدورية المحددة. الإلغاء يوقف الدفعات المستقبلية ولا يسترد دفعة بدأت بالفعل.', 'I consent to automatic renewal for the displayed amount and interval. Cancellation stops future charges, not a payment already started.', '我同意按所示金额和周期自动续费。取消仅停止后续扣款，不退还已发起的付款。', 'Я согласен на автопродление по указанной сумме и периодичности. Отмена останавливает будущие списания, но не возвращает уже начатый платёж.'],
   ['رقم البطاقة', 'Card number', '卡号', 'Номер карты'],
@@ -200,6 +221,8 @@ const phrases: [string, string, string, string][] = [
   ['تغيرت الإعدادات. حدّث الصفحة قبل الحفظ.', 'Settings changed. Refresh before saving.', '设置已更改，请刷新后再保存。', 'Настройки изменились. Обновите страницу перед сохранением.'],
   ['التجديد التلقائي', 'Automatic renewal', '自动续费', 'Автопродление'],
   ['فتح الدفع في صفحة مستقلة', 'Open checkout in a new page', '在独立页面打开支付', 'Открыть оплату на отдельной странице'],
+  ['فريق كامل يشتغل معك 24/7 — بدون رواتب، بدون عقود، وبدون تكلفة ثابتة.', 'A full team on duty 24/7 — no salaries, no contracts, no fixed cost.', '全天候 24/7 的完整团队 — 无需薪资，无需合同，无固定成本。', 'Команда на связи 24/7 — без зарплат, без договоров, без постоянных расходов.'],
+  ['ونشوت تجمع لك بوابات دفع مصرفية مرخّصة، فوترة فورية، وحماية متقدمة — مع سوق موظفي AI جاهزين: دعم عملاء، مسوّق، مبرمج، ومحاسب قانوني. شغّل اللي تحتاجه وقت ما تحتاجه، وادفع عن كل نموذج تستخدمه فقط.', 'OneShot brings licensed payment gateways, instant invoicing and advanced protection onto one platform — plus a ready AI workforce: support, marketing, engineering and accounting. Activate whatever you need, whenever you need it, and pay only for the models you actually use.', 'OneShot 将持牌支付网关、即时开票与高级防护整合到一个平台 — 并配备现成的 AI 员工团队：客服、营销、工程与会计。按需启用，只为实际使用的模型付费。', 'OneShot объединяет лицензированные платёжные шлюзы, мгновенное выставление счетов и продвинутую защиту — плюс готовый штат ИИ-сотрудников: поддержка, маркетинг, разработка и бухгалтерия. Подключайте нужное и платите только за используемые модели.'],
 ];
 
 const errorGroups: [string[], string, string, string][] = [
@@ -246,17 +269,22 @@ const Appearance = createContext<{ language: Language; theme: Theme; setLanguage
 export function AppearanceProvider({ children }: { children: ReactNode }) {
   const params = new URLSearchParams(window.location.search);
   const [language, setLanguage] = useState<Language>(languages.some(item => item.id === params.get('lang')) ? params.get('lang') as Language : 'ar');
-  const [theme, setTheme] = useState<Theme>(params.get('theme') === 'light' ? 'light' : 'dark');
+  const [theme, setTheme] = useState<Theme>(() => {
+    const requested = params.get('theme');
+    if (requested === 'light' || requested === 'dark') return requested;
+    try { return localStorage.getItem('oneshot:theme') === 'light' ? 'light' : 'dark'; } catch { return 'dark'; }
+  });
   useEffect(() => {
     document.documentElement.lang = language;
     document.documentElement.dir = language === 'ar' ? 'rtl' : 'ltr';
     document.documentElement.dataset.theme = theme;
+    try { localStorage.setItem('oneshot:theme', theme); } catch { /* Storage may be disabled. */ }
     if (!isStorefrontPath(window.location.pathname)) document.title = `oneShot Payments | ${translate('مساحة التاجر', language)}`;
     const url = new URL(window.location.href);
     url.searchParams.set('lang', language);
     url.searchParams.set('theme', theme);
     window.history.replaceState(null, '', url);
-    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'dark' ? '#0a0b0e' : '#f5f4f1');
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'dark' ? '#0b0d0f' : '#f7f7f5');
   }, [language, theme]);
   return <Appearance.Provider value={{ language, theme, setLanguage, setTheme }}>{children}</Appearance.Provider>;
 }

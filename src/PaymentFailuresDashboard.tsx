@@ -1,3 +1,4 @@
+import { gatewayName } from '../shared/policy';
 // PaymentFailuresDashboard.tsx
 // AI Assistant Dashboard for Payment Failures & Gateway Decline Diagnostics with Programmatic Categorization
 
@@ -101,8 +102,8 @@ export default function PaymentFailuresDashboard({ onConsultAi }: PaymentFailure
   };
 
   const handleApplyFailover = (alert: FailureSpikeAlert, targetGw?: string) => {
-    const destination = (targetGw || 'paytabs').toUpperCase();
-    setAlertActionNotice(`⚡ تم تفعيل التوجيه الذكي التلقائي (Smart Failover) بنجاح: تم تحويل عمليات ${alert.gatewayName} المتأثرة برفض ${alert.reasonDetails.titleAr} مباشرة إلى ${destination}.`);
+    const destination = gatewayName(targetGw || 'paytabs');
+    setAlertActionNotice(`⚡ محاكاة داخل هذه الشاشة: فُرض تحويل عمليات ${alert.gatewayName} المتأثرة برفض ${alert.reasonDetails.titleAr} إلى ${destination}. لا يوجد تبديل فعلي لأي بوابة ولم يُحوَّل أي مبلغ.`);
     setTimeout(() => setAlertActionNotice(null), 4500);
   };
 
@@ -118,7 +119,7 @@ export default function PaymentFailuresDashboard({ onConsultAi }: PaymentFailure
     const newAlert = generateCustomSpikeAlert(simGateway, simReason, simSpikePct);
     setAlerts(prev => [newAlert, ...prev]);
     setActiveTab('alerts');
-    setAlertActionNotice(`🚨 تم اكتشاف ومحاكاة زيادة مفاجئة بنسبة (+${simSpikePct}%) على بوابة ${newAlert.gatewayName} بسبب ${newAlert.reasonDetails.titleAr}.`);
+    setAlertActionNotice(`🚨 تنبيه توضيحي: أُضيفت زيادة مفاجئة مقدّرة بـ(+${simSpikePct}%) على بوابة ${newAlert.gatewayName} بسبب ${newAlert.reasonDetails.titleAr}. الأرقام مولّدة محليًا للعرض فقط.`);
     setTimeout(() => setAlertActionNotice(null), 4000);
   };
 
@@ -126,7 +127,7 @@ export default function PaymentFailuresDashboard({ onConsultAi }: PaymentFailure
     setIsScanning(true);
     setTimeout(() => {
       setIsScanning(false);
-      setAlertActionNotice('✅ تم مسح وتحديث تدفقات البوابات (Telr, PayTabs, Tap, Stripe, Urway): تم تأكيد رصد معدلات الارتفاع اللحظية.');
+      setAlertActionNotice('✅ أُعيد ترتيب بطاقات هذه الشاشة (Telr, PayTabs, Tap, Stripe, Urway). لا يوجد اتصال حقيقي بالبوابات ولا قراءة لمعدلات لحظية.');
       setTimeout(() => setAlertActionNotice(null), 3500);
     }, 1100);
   };
@@ -634,7 +635,7 @@ export default function PaymentFailuresDashboard({ onConsultAi }: PaymentFailure
               >
                 <option value="all">كافة البوابات</option>
                 <option value="telr">Telr (تيلر)</option>
-                <option value="paytabs">PayTabs (بيتابس)</option>
+                <option value="paytabs">{gatewayName('paytabs')}</option>
                 <option value="stripe">Stripe (سترايب)</option>
                 <option value="tap">Tap Payments (تاب)</option>
               </select>
@@ -689,7 +690,7 @@ export default function PaymentFailuresDashboard({ onConsultAi }: PaymentFailure
                     className="sim-input"
                   >
                     <option value="telr">Telr (تيلر)</option>
-                    <option value="paytabs">PayTabs (بيتابس)</option>
+                    <option value="paytabs">{gatewayName('paytabs')}</option>
                     <option value="stripe">Stripe (سترايب)</option>
                     <option value="tap">Tap Payments (تاب)</option>
                     <option value="urway">Urway (يورواي)</option>
@@ -1061,7 +1062,7 @@ export default function PaymentFailuresDashboard({ onConsultAi }: PaymentFailure
                     className="diag-select"
                   >
                     <option value="telr">Telr (تيلر)</option>
-                    <option value="paytabs">PayTabs (بيتابس)</option>
+                    <option value="paytabs">{gatewayName('paytabs')}</option>
                     <option value="tap">Tap Payments (تاب)</option>
                     <option value="stripe">Stripe (سترايب)</option>
                     <option value="urway">Urway (يورواي)</option>
@@ -1185,7 +1186,7 @@ export default function PaymentFailuresDashboard({ onConsultAi }: PaymentFailure
                 <div className="alt-gateway-card">
                   <div className="alt-gw-info">
                     <span className="alt-chip">البوابة البديلة الموصى بها فوراً:</span>
-                    <h4>بوابة {diagnosedResult.recommendedAlternativeGateway.toUpperCase()}</h4>
+                    <h4>بوابة {gatewayName(diagnosedResult.recommendedAlternativeGateway)}</h4>
                     <p>
                       نسبة قبول بطاقات {diagnosedResult.bankName} على هذه البوابة: <strong>{diagnosedResult.acceptanceConfidenceOnAlternative}%</strong>
                     </p>
@@ -1273,7 +1274,7 @@ export default function PaymentFailuresDashboard({ onConsultAi }: PaymentFailure
               >
                 <option value="all">كل البوابات (All Gateways)</option>
                 <option value="telr">Telr (تيلر)</option>
-                <option value="paytabs">PayTabs (بيتابس)</option>
+                <option value="paytabs">{gatewayName('paytabs')}</option>
                 <option value="tap">Tap Payments (تاب)</option>
                 <option value="stripe">Stripe (سترايب)</option>
                 <option value="urway">Urway (يورواي)</option>
@@ -1331,7 +1332,7 @@ export default function PaymentFailuresDashboard({ onConsultAi }: PaymentFailure
                       {/* Gateway */}
                       <td>
                         <span className={`gw-tag gw-tag-${tx.gateway}`}>
-                          {tx.gateway.toUpperCase()}
+                          {gatewayName(tx.gateway)}
                         </span>
                       </td>
 
@@ -1436,7 +1437,7 @@ export default function PaymentFailuresDashboard({ onConsultAi }: PaymentFailure
                     <ShieldAlert size={20} className="text-red" />
                     <div>
                       <h3>تفاصيل تشخيص العملية: {selectedTxDetail.transactionRef}</h3>
-                      <small>البوابة: {selectedTxDetail.gateway.toUpperCase()} · الوقت: {new Date(selectedTxDetail.timestamp).toLocaleString('ar-SA')}</small>
+                      <small>البوابة: {gatewayName(selectedTxDetail.gateway)} · الوقت: {new Date(selectedTxDetail.timestamp).toLocaleString('ar-SA')}</small>
                     </div>
                   </div>
                   <button type="button" className="modal-close-btn" onClick={() => setSelectedTxDetail(null)}>

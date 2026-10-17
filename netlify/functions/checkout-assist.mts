@@ -7,6 +7,7 @@ import { database } from '../../db/index.js';
 import { documents, openLinks } from '../../db/schema.js';
 import { failure, HttpError, identifier, jsonBody, reply, sameOrigin, text, throttle } from '../lib/platform.js';
 import { enabledCapabilities, settings } from '../lib/policy.js';
+import { gateways, type Gateway } from '../../shared/policy.js';
 
 const extractedFieldsSchema = z.object({
   name: z.string().max(100),
@@ -34,7 +35,7 @@ export default async (req: Request, context: Context) => {
       if (!link?.enabled || !policy.openLinksEnabled || !policy.requestsEnabled) throw new HttpError(404, 'رابط الدفع غير موجود.');
     } else if (body.kind === 'payment') {
       const [document] = await db.select().from(documents).where(eq(documents.id, id));
-      if (!document || document.status !== 'pending' || document.expiresAt.getTime() < Date.now() || !enabledCapabilities(document.merchantId, document.gateway === 'telr' ? 'telr' : 'paytabs', policy)[document.method]) throw new HttpError(404, 'رابط الدفع غير موجود.');
+      if (!document || document.status !== 'pending' || document.expiresAt.getTime() < Date.now() || !enabledCapabilities(document.merchantId, gateways.includes(document.gateway as Gateway) ? document.gateway as Gateway : 'paytabs', policy)[document.method]) throw new HttpError(404, 'رابط الدفع غير موجود.');
       if (document.openLinkId) {
         const [link] = await db.select().from(openLinks).where(eq(openLinks.id, document.openLinkId));
         if (!link?.enabled || !policy.openLinksEnabled) throw new HttpError(404, 'رابط الدفع غير موجود.');

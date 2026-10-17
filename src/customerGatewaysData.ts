@@ -1,3 +1,4 @@
+import { gatewayNames } from '../shared/policy';
 export interface CustomerGatewayConfig {
   gatewayId: string;
   gatewayName: string;
@@ -34,7 +35,7 @@ export const PRESET_CUSTOMERS: CustomerProfileWithGateways[] = [
     activeGateways: [
       {
         gatewayId: 'paytabs',
-        gatewayName: 'بيتابس (PayTabs KSA)',
+        gatewayName: gatewayNames.paytabs,
         status: 'connected',
         integrationType: 'نافذة الدفع الموجهة (Hosted Payment Page)',
         currency: 'SAR',
@@ -86,7 +87,7 @@ export const PRESET_CUSTOMERS: CustomerProfileWithGateways[] = [
       },
       {
         gatewayId: 'paytabs',
-        gatewayName: 'بيتابس (PayTabs KSA)',
+        gatewayName: gatewayNames.paytabs,
         status: 'connected',
         integrationType: 'ربط مباشر عبر واجهات برمجة التطبيقات (Direct API)',
         currency: 'SAR',

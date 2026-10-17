@@ -90,9 +90,7 @@ export default function AdminAssistant({ onRefresh, initialPrompt }: { onRefresh
   const startRecording = async () => {
     try {
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        setIsRecording(true);
-        setRecordingSeconds(0);
-        recordTimerRef.current = window.setInterval(() => setRecordingSeconds(s => s + 1), 1000);
+        setError('تعذر بدء التسجيل الصوتي: هذا المتصفح لا يدعم التقاط الصوت.');
         return;
       }
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -107,9 +105,8 @@ export default function AdminAssistant({ onRefresh, initialPrompt }: { onRefresh
         if (recordTimerRef.current) clearInterval(recordTimerRef.current);
       };
     } catch {
-      setIsRecording(true);
-      setRecordingSeconds(0);
-      recordTimerRef.current = window.setInterval(() => setRecordingSeconds(s => s + 1), 1000);
+      setError('تعذر بدء التسجيل الصوتي: لم يتم منح إذن الميكروفون.');
+      setIsRecording(false);
     }
   };
 
@@ -180,68 +177,6 @@ export default function AdminAssistant({ onRefresh, initialPrompt }: { onRefresh
     setTimeout(() => setCopiedId(null), 2000);
   };
 
-  // Smart fallback response generator
-  const generateFallbackAnswer = (prompt: string, hasImg?: boolean, routeTier?: string, routeModel?: string) => {
-    const p = prompt.toLowerCase();
-    if (hasImg) {
-      return 'تم استلام ومعاينة الصورة المرفقة بنجاح 📸. يمكنك النقر عليها لتكبيرها وفحص تفاصيلها. الصورة متوافقة مع متطلبات النشر ومعايير الهوية البصرية لاستوديو OneShot.';
-    }
-
-    if (p.includes('سيرفر') || p.includes('خادم') || p.includes('ollama') || p.includes('tier') || p.includes('مستوى') || p.includes('abliterated')) {
-      return `🧠 تقرير منظومة الذكاء الاصطناعي و4 مستويات Ollama:\n` +
-        `• حالة السيرفر: متصل عبر منفذ Ollama (${ollamaConfig.host}) بكلمة سر المسؤول المعتمدة.\n` +
-        `• المستوى 1 (Fast & Efficient): نماذج Llama 3.2 3B, Qwen 2.5 7B, Mistral 7B للاستجابة الفورية.\n` +
-        `• المستوى 2 (Pro & Analytical): نماذج Llama 3.1 70B, DeepSeek-Coder 33B, Qwen 32B لبرمجة وتحليل البوابات.\n` +
-        `• المستوى 3 (Deep Reasoning): نماذج DeepSeek-R1 70B, QwQ 32B للتفكير المنطقي خطوة بخطوة وتوقع قبول الـ BINs.\n` +
-        `• المستوى 4 (Tier X - Abliterated): نماذج مفرغة القيود (Llama 70B Abliterated, DeepSeek-R1 Abliterated, Dolphin Mixtral) ` +
-        (ollamaConfig.isTierXUnlocked ? `[مفتوح حالياً للمسؤول 🔥].\n` : `[مقفل - يتطلب كلمة السر Aa#2133155826].\n`) +
-        `• نظام التوجيه الذكي (Auto-Router): ` + (ollamaConfig.isAutoRouterEnabled ? `مُفعل 🎯 يحدد النموذج الأنسب لكل رسالة تلقائياً.` : `يدوي [النموذج النشط: ${ollamaConfig.selectedModelId}].\n\n`) +
-        `يمكنك النقر على زر "مستويات الذكاء الاصطناعي (4 Tiers + Ollama)" بشريط الأدوات للتحكم الكامل.`;
-    }
-
-    if (routeTier === 'tier-x') {
-      return `🔥 [TIER X · ABLITERATED RAW FORENSIC CORE - ${routeModel || 'Llama 3.1 70B Abliterated'}]\n` +
-        `[تحليل جنائي متقدم غير مقيد للمسؤول]:\n` +
-        `• تحليل ثغرات وتجاوز القيود المصرفية: عند فحص استجابات البوابات (PayTabs/Telr)، يتم تجاوز قيود التحقق التقليدي عبر إرسال معرّفات مطابقة مع عزل كامل لجلسة الـ TLS.\n` +
-        `• كشف محاولات الـ Spoofing و IP Mismatch: تم فحص آلية فحص بصمة الجهاز (Canvas Fingerprint و WebGL) وثبت أن البوابة تقبل العبور عند توافق الـ Timezone مع الـ ASN المحلي.\n` +
-        `• توصية أمنية للمسؤول: تفعيل نظام الـ Strict Geofencing وطلب إعادة التوثيق فور رصد تباين بين الـ BIN IP ودولة البطاقة الحقيقية.`;
-    }
-
-    if (routeTier === 'tier-3') {
-      const thinkTrace = `<think>\n` +
-        `1. تحليل المعطيات: استفسار حول "${prompt.slice(0, 60)}..."\n` +
-        `2. فحص سجلات العمليات التاريخية وقواعد البنوك المصدرة.\n` +
-        `3. حساب درجة المخاطر ومعدل القبول المتوقع عبر مصفوفة BIN Matrix.\n` +
-        `4. استنتاج السبب الجذري واقتراح أفضل مسار معالجة بديل.\n` +
-        `</think>\n\n`;
-
-      if (p.includes('تنبؤ') || p.includes('توقع') || p.includes('سجل العمليات') || p.includes('تاريخي') || p.includes('predict') || p.includes('forecast')) {
-        return thinkTrace + '🔮 نموذج التنبؤ الذكي بالعمليات التاريخية (AI Historical Pre-Input Predictor):\nتم بنجاح تفعيل نموذج التنبؤ المعتمد على سجل العمليات التاريخي داخل أداة فحص البنات المتعددة (MultiBinAcceptanceTool)!\n\nكيف يعمل النموذج:\n1. تحليل السجل التاريخي: فحص أكثر من 2,800+ عملية تاريخية موثقة في النظام.\n2. التوقع الاستباقي قبل إدخال أرقام البطاقة: يتيح للتاجر اختيار الدولة والبنك المصدر وفئة البطاقة.\n3. احتساب نسبة النجاح المتوقعة فورياً ودرجة الأمان ومستوى المخاطر.\n4. ترتيب البوابات الأكثر قبولاً لهذا البنك وتحديد أسباب الرفض المتوقعة مسبقاً مع التوجيه الآلي الموصى به.\n\nيمكنك تجربة النموذج مباشرة في أداة "حساب اللودر > فحص قبول الـ BINs المتعددة" أعلى الصفحة.';
-      }
-      return thinkTrace + `📊 استدلال منطقي عميق عبر نموذج ${routeModel || 'DeepSeek-R1'}:\nبناءً على تتبع المعطيات المصرفية، تبين أن العمليات ذات الصلة تتطلب فحصاً مسبقاً لحدود الصرف اليومية وتأكيد جاهزية 3D Secure لتفادي الرفض التلقائي.`;
-    }
-
-    if (p.includes('تنبؤ') || p.includes('توقع') || p.includes('سجل العمليات') || p.includes('تاريخي') || p.includes('predict') || p.includes('forecast')) {
-      return '🔮 نموذج التنبؤ الذكي بالعمليات التاريخية (AI Historical Pre-Input Predictor):\nتم بنجاح تفعيل نموذج التنبؤ المعتمد على سجل العمليات التاريخي داخل أداة فحص البنات المتعددة (MultiBinAcceptanceTool)!\n\nكيف يعمل النموذج:\n1. تحليل السجل التاريخي: فحص أكثر من 2,800+ عملية تاريخية موثقة في النظام.\n2. التوقع الاستباقي قبل إدخال أرقام البطاقة: يتيح للتاجر اختيار الدولة (مثل السعودية، الإمارات، الكويت، مصر) والبنك المصدر (مثل الراجحي، الأهلي، الإمارات دبي الوطني، بنك الكويت الوطني) وفئة البطاقة (مدى، ائتمانية، مسبقة دفع، شركات).\n3. احتساب نسبة النجاح المتوقعة فورياً ودرجة الأمان ومستوى المخاطر.\n4. ترتيب البوابات الأكثر قبولاً لهذا البنك وتحديد أسباب الرفض المتوقعة مسبقاً (مثل قيود الصرف الأجنبي أو 3DS) مع التوجيه الآلي الموصى به.\n\nيمكنك تجربة النموذج مباشرة في أداة "حساب اللودر > فحص قبول الـ BINs المتعددة" أعلى الصفحة.';
-    }
-    if (p.includes('تنبيه') || p.includes('alert') || p.includes('ارتفاع') || p.includes('مفاجئ') || p.includes('spike')) {
-      return '🚨 تنبيهات الارتفاع المفاجئ في حالات الرفض (Failures Spike Alerts):\n• بوابة Telr: تم رصد زيادة مفاجئة (+168%) في حالات الرفض بسبب [3D Secure Authentication Failure - كود E01]. السبب البرمجي: تأخر وصول رسائل الـ OTP أو إغلاق نافذة التوثيق. الإجراء: تفعيل التوجيه التلقائي الذكي (Smart Failover) إلى PayTabs.\n• بوابة PayTabs: قفزة بنسبة (+124%) بسبب [Insufficient Funds - كود 51 / E04] لعدم كفاية رصيد العميل. الإجراء: إتاحة تجزئة الفاتورة (BNPL) وإرسال تذكير للدفع ببطاقة أخرى.\n• بوابة Stripe: طفرة حرجة (+210%) بسبب [Card Type Not Supported] لرفض شبكة مدى المحلية. الإجراء: حظر توجيه بطاقات مدى إلى سترايب وتحويلها فوراً للمقسم المحلي.\n• بوابة Tap: زيادة (+92%) بسبب [IP Country Mismatch] لاستخدام VPN.\n\nيمكنك النقر على زر "📊 لوحة تحليل حالات الرفض > تنبيهات الارتفاع المفاجئ" بشريط الأدوات لإدارة التنبيهات واختبار المحاكي مباشرة.';
-    }
-    if (p.includes('رفض') || p.includes('فشل') || p.includes('decline') || p.includes('failure') || p.includes('تعثر')) {
-      return '📊 تحليل حالات الرفض للبوابات (Failures Intelligence):\n• بوابة Telr: معدل الرفض 13.5%، وأكبر سبب (40.5%) هو حظر بطاقات الـ Prepaid (سفر بلس / Urpay / بطاقات السفر) غير المفعلة بحساب التاجر. الحل: تفعيل التحويل التلقائي الذكي إلى PayTabs.\n• بوابة PayTabs: معدل الرفض 9.5%، وأكبر سبب (54.9%) هو نفاد رصيد العميل أو تجاوز الحد اليومي للشراء عبر الإنترنت (كود 51 / 61)، وهي عمليات قابلة للاسترداد بنسبة 90% بمجرد تنبيه العميل.\n• بوابة Tap: معدل الرفض 16.5%، أغلبه بسبب تعارض دولة الـ IP مع بطاقة العميل (VPN).\n• بوابة Stripe: معدل الرفض 24.1% عند محاولة تمرير بطاقات مدى محلية دون توجيه مسبق.\n\nيمكنك فتح أداة "لوحة تحليل حالات الرفض" من شريط الأدوات بالأعلى لفحص أي بطاقة أو BIN بالكامل ومعرفة سبب الرفض المصرفي فوراً.';
-    }
-    if (p.includes('بوابات') || p.includes('telr') || p.includes('paytabs')) {
-      return 'تحليل بوابات الدفع للمسؤول:\n• بوابة Telr: معدل العمولة 2.69%، تكامل Framed آمن، مثالية للمبالغ المتوسطة والكبيرة.\n• بوابة PayTabs: عمولة 2.7% + 1 ريال، تدعم مدى و Apple Pay بامتياز للتحصيل السريع.\nتوصية النظام: توجيه الصفقات الكبرى (+3,000 ر.س) إلى Telr لتوفير الرسوم الثابتة.';
-    }
-    if (p.includes('ملخص') || p.includes('مدفوعات') || p.includes('اليوم')) {
-      return 'ملخص العمليات الإدارية لليوم:\n• إجمالي محصلات الروابط المفتوحة: 184,500 ر.س.\n• نسبة العمليات الناجحة: 98.4% عبر PayTabs و Telr.\n• طلبات ربط البوابات المعلقة: لا توجد طلبات حرجة بانتظار الاعتماد.\nالنظام يعمل بكامل كفاءته التشغيلية والأمنية.';
-    }
-    if (p.includes('رسالة') || p.includes('عميل')) {
-      return 'نموذج مقترح لرسالة العميل:\n"مرحباً بك، يسعدنا في OneShot تزويدك برابط الدفع المعتمد لباقة خدماتك. يمكنك إتمام الدفع بأمان وسهولة واختيار وسيلة السداد المناسبة (مدى / بطاقة ائتمانية). رابط الدفع صالح وموثق من استوديو ونشوت: https://1shotcam.com/pay"';
-    }
-    return `تم استلام توجيه الإدارة: "${prompt}".\nنظام onshot الذكي يتابع السجلات والتحصيلات، وهوامش الربح بدقة وامتثال كامل.`;
-  };
-
   const handleAssistantAnswer = async (input: string, img?: string | null) => {
     setBusy(true);
     setError(''); setNotice('');
@@ -266,7 +201,7 @@ export default function AdminAssistant({ onRefresh, initialPrompt }: { onRefresh
         action: 'chat',
         message: input,
         history,
-        consent: true,
+        consent,
         modelId: selectedModel,
         ...(selectedModel === 'ollama-cloud' ? { ollamaModel: activeOllamaModel || routeDecision.model.id } : {})
       });
@@ -280,15 +215,15 @@ export default function AdminAssistant({ onRefresh, initialPrompt }: { onRefresh
       }]);
       if (result.proposal) setState(curr => ({ ...curr, proposals: [result.proposal!, ...curr.proposals.filter(p => p.id !== result.proposal!.id)] }));
       if (result.proposal) await refresh();
-    } catch {
-      // Intelligent fallback powered by the routed Tier
-      const fallbackReply = generateFallbackAnswer(input, Boolean(img), routeDecision.tierId, routeDecision.model.name);
+    } catch (caught) {
+      const detail = caught instanceof Error && caught.message ? caught.message : 'تعذر الوصول إلى مزوّد الذكاء الاصطناعي.';
+      setError(detail);
       setMessages(curr => [...curr, {
         id: sequence.current++,
         role: 'assistant',
-        text: fallbackReply,
+        text: `⚠️ لم يتم توليد رد حقيقي. ${detail}\nراجع إعدادات المزوّد (Netlify → Environment variables) أو أعد المحاولة. لن يعرض المساعد أي إجابة غير صادرة عن النموذج.`,
         routedTo: routedToLabel,
-        routingReason: routeReasonLabel,
+        routingReason: 'فشل الاتصال',
         tierBadge: tierBadgeLabel,
       }]);
     } finally {
@@ -353,6 +288,11 @@ export default function AdminAssistant({ onRefresh, initialPrompt }: { onRefresh
               ))}
             </select>
             {selectedModel === 'ollama-cloud' && <select aria-label="اختيار نموذج Ollama Cloud" value={activeOllamaModel} disabled={busy || loading} onChange={event => setOllamaModel(event.target.value)}><option value="">اختر نموذج Cloud</option>{state.ollama?.models.map(model => <option key={model} value={model}>{model}</option>)}</select>}
+            {selectedModel === 'ollama-cloud' && !state.ollama?.models?.length && (
+              <small role="status" style={{ display: 'block', opacity: 0.75, marginTop: 4 }}>
+                {loading ? 'جارٍ جلب قائمة النماذج من الخادم…' : (state.ollama?.error || 'لا توجد نماذج متاحة من المزوّد الآن.')}
+              </small>
+            )}
             
             {/* Download Transcript */}
             <button
@@ -438,6 +378,7 @@ export default function AdminAssistant({ onRefresh, initialPrompt }: { onRefresh
                 saveOllamaConfig(newCfg);
               }}
               onClose={() => setActiveTool(null)}
+              license={{ tier: 'tier-3', tierX: true, staff: [], admin: true, tiers: ['tier-1', 'tier-2', 'tier-3', 'tier-x'], source: 'admin' }}
             />
           </div>
         )}
@@ -661,7 +602,7 @@ export default function AdminAssistant({ onRefresh, initialPrompt }: { onRefresh
               <button
                 className="primary-button onshot-send"
                 aria-label="إرسال الرسالة"
-                disabled={busy || loading || (!message.trim() && !attachedImage)}
+                disabled={busy || loading || !consent || (!message.trim() && !attachedImage)}
                 type="submit"
               >
                 {busy ? <LoaderCircle size={19} /> : <ArrowUp size={19} />}
