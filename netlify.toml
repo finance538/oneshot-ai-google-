@@ -16,6 +16,12 @@ path = "/oneshot-hub.apk"
 function = "oneshot-hub-apk"
 
 [[redirects]]
+  from = "/api/*"
+  to = "http://187.7.65.45:8080/api/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
 from = "/*"
 to = "/index.html"
 status = 200
