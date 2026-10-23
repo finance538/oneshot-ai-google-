@@ -1,5 +1,8 @@
 import { GoogleGenAI, type Content, type GenerateContentConfig } from '@google/genai';
 import { failure, HttpError, jsonBody, owner, reply, sameOrigin, throttle } from '../lib/platform.js';
+import { localOllamaModelIds } from '../../shared/admin-assistant.js';
+import type { ChatTurn } from '../../shared/assistant-chat.js';
+import { chatWithLocalOllama } from '../lib/ollama.js';
 
 const systemPersonas: Record<string, string> = {
   coo_operations: 'أنت مدير التشغيل وضمان سلاسل التسليم (COO) لمنصة OneShot. مهمتك متابعة مسارات تسليم الخدمات، مراقبة مؤشرات جودة المخرجات SLA، وضمان رضا عملاء ونشوت.',
@@ -69,7 +72,8 @@ export default async (req: Request): Promise<Response> => {
       throw new HttpError(400, 'الرسالة مطلوبة ويجب ألا تتجاوز 12000 حرف.');
     }
     const selectedModel = body.model ?? 'gemini-3.8-flash';
-    if (typeof selectedModel !== 'string' || !Object.hasOwn(modelMapping, selectedModel) || selectedModel === 'gemini-3.5-transcribe') {
+    const isLocalModel = typeof selectedModel === 'string' && localOllamaModelIds.includes(selectedModel);
+    if (typeof selectedModel !== 'string' || (!isLocalModel && (!Object.hasOwn(modelMapping, selectedModel) || selectedModel === 'gemini-3.5-transcribe'))) {
       throw new HttpError(400, 'النموذج المحدد غير مدعوم.');
     }
     const persona = body.persona ?? 'studio_director';
@@ -78,11 +82,13 @@ export default async (req: Request): Promise<Response> => {
     }
     if (body.history !== undefined && !Array.isArray(body.history)) throw new HttpError(400, 'سجل المحادثة غير صالح.');
     const contents: Content[] = [];
+    const chatTurns: ChatTurn[] = [];
     for (const turn of (Array.isArray(body.history) ? body.history.slice(-8) : [])) {
       if (!turn || (turn.role !== 'user' && turn.role !== 'model') || typeof turn.content !== 'string' || turn.content.length > 12000) {
         throw new HttpError(400, 'سجل المحادثة غير صالح.');
       }
       contents.push({ role: turn.role, parts: [{ text: turn.content }] });
+      chatTurns.push({ role: turn.role === 'model' ? 'assistant' : 'user', content: turn.content });
     }
     const current: Content = { role: 'user', parts: [{ text: body.message.trim() }] };
     if (body.image !== undefined) {
@@ -92,6 +98,11 @@ export default async (req: Request): Promise<Response> => {
       current.parts!.push({ inlineData: inlineData(match[2], match[1], 'image') });
     }
     contents.push(current);
+    const localSystemPrompt = systemPersonas[persona] + '\nلا تدّع تنفيذ دفعات أو تغيير أرصدة أو إكمال مهام فعلية. قدّم المشورة فقط، ولا تختلق مؤشرات غير متاحة.';
+    if (isLocalModel) {
+      const { answer, routedTo } = await chatWithLocalOllama(selectedModel, chatTurns, body.message.trim(), localSystemPrompt);
+      return reply({ answer, modelUsed: routedTo, groundingSources: [] });
+    }
     const config: GenerateContentConfig = {
       systemInstruction: systemPersonas[persona] + '\nلا تدّع تنفيذ دفعات أو تغيير أرصدة أو إكمال مهام فعلية. قدّم المشورة فقط، ولا تختلق مؤشرات غير متاحة.',
       maxOutputTokens: 4096,

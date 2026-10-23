@@ -10,7 +10,7 @@ import { failure, HttpError, identifier, isAdmin, jsonBody, owner, reply, sameOr
 import { readOperations } from '../lib/operations.js';
 import { settings } from '../lib/policy.js';
 import { anthropicGatewayBaseURL, parseChatHistory, type ChatTurn } from '../../shared/assistant-chat.js';
-import { chatWithOllama, readOllamaCloud } from '../lib/ollama.js';
+import { chatWithLocalOllama, chatWithOllama, readLocalOllama, readOllamaCloud } from '../lib/ollama.js';
 
 function getVpsAgentStatus(): VpsAgentStatus {
   const vpsUrl = process.env.ONESHOT_VPS_AGENT_URL;
@@ -95,6 +95,7 @@ export default async (req: Request) => {
         aiEnabled: policy.aiEnabled,
         cloudAvailable: Boolean(process.env.ANTHROPIC_API_KEY),
         ollama,
+        localOllama: readLocalOllama(),
       });
     }
     sameOrigin(req);
@@ -116,6 +117,8 @@ export default async (req: Request) => {
 
     const selectedModelId = typeof body.modelId === 'string' && assistantModels.some(m => m.id === body.modelId) ? body.modelId : 'claude-haiku-4-5';
     if (selectedModelId === 'ollama-cloud') return reply(await chatWithOllama(body.ollamaModel, history, prompt));
+
+    if (selectedModelId === 'ollama-local') return reply(await chatWithLocalOllama(body.ollamaModel, history, prompt));
 
     if (selectedModelId === 'hermes-3-vps') {
       if (!vpsStatus.connected || !process.env.ONESHOT_VPS_AGENT_URL) throw new HttpError(503, 'نموذج VPS غير متصل. اختر أحد نماذج Claude.');

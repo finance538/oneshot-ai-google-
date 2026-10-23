@@ -5,7 +5,7 @@ import {
   Copy, Calculator, Maximize2, Paperclip, Wrench, BarChart3,
   BrainCircuit, Flame, Compass, Zap, Cpu
 } from 'lucide-react';
-import { assistantActionDescription, assistantModels, assertAssistantText, type AssistantAction, type AssistantModelId, type AssistantProposal, type VpsAgentStatus } from '../shared/admin-assistant';
+import { assistantActionDescription, assistantModels, localOllamaModels, assertAssistantText, type AssistantAction, type AssistantModelId, type AssistantProposal, type VpsAgentStatus } from '../shared/admin-assistant';
 import { api, date } from './platform';
 import type { OllamaCloudState } from '../shared/assistant-chat';
 import PaymentFailuresDashboard from './PaymentFailuresDashboard';
@@ -20,7 +20,7 @@ import {
 import './AdminAssistant.css';
 
 interface AuditEntry { id: string; action: AssistantAction; status: string; createdAt: string }
-interface AssistantState { proposals: AssistantProposal[]; audit: AuditEntry[]; vpsStatus?: VpsAgentStatus; aiEnabled?: boolean; cloudAvailable?: boolean; ollama?: OllamaCloudState }
+interface AssistantState { proposals: AssistantProposal[]; audit: AuditEntry[]; vpsStatus?: VpsAgentStatus; aiEnabled?: boolean; cloudAvailable?: boolean; ollama?: OllamaCloudState; localOllama?: OllamaCloudState }
 interface Message {
   id: number;
   role: 'user' | 'assistant';
@@ -39,6 +39,7 @@ export default function AdminAssistant({ onRefresh, initialPrompt }: { onRefresh
   const [message, setMessage] = useState('');
   const [selectedModel, setSelectedModel] = useState<AssistantModelId>('ollama-cloud');
   const [ollamaModel, setOllamaModel] = useState('');
+  const [localOllamaModel, setLocalOllamaModel] = useState('');
   const [ollamaConfig, setOllamaConfig] = useState<OllamaServerConfig>(getSavedOllamaConfig);
   const [messages, setMessages] = useState<Message[]>([]);
   const [state, setState] = useState<AssistantState>({ proposals: [], audit: [] });
@@ -68,6 +69,7 @@ export default function AdminAssistant({ onRefresh, initialPrompt }: { onRefresh
   const composer = useRef<HTMLTextAreaElement>(null);
 
   const activeOllamaModel = ollamaModel || state.ollama?.defaultModel || '';
+  const activeLocalOllamaModel = localOllamaModel || state.localOllama?.defaultModel || '';
   const providerAvailable = selectedModel === 'ollama-cloud' ? Boolean(state.ollama?.configured && state.ollama.models.includes(activeOllamaModel)) : selectedModel === 'hermes-3-vps' ? Boolean(state.vpsStatus?.connected) : state.cloudAvailable === true;
   const available = state.aiEnabled !== false;
 
@@ -203,7 +205,8 @@ export default function AdminAssistant({ onRefresh, initialPrompt }: { onRefresh
         history,
         consent,
         modelId: selectedModel,
-        ...(selectedModel === 'ollama-cloud' ? { ollamaModel: activeOllamaModel || routeDecision.model.id } : {})
+        ...(selectedModel === 'ollama-cloud' ? { ollamaModel: activeOllamaModel || routeDecision.model.id } : {}),
+        ...(selectedModel === 'ollama-local' ? { ollamaModel: activeLocalOllamaModel } : {})
       });
       setMessages(curr => [...curr, {
         id: sequence.current++,
@@ -288,6 +291,7 @@ export default function AdminAssistant({ onRefresh, initialPrompt }: { onRefresh
               ))}
             </select>
             {selectedModel === 'ollama-cloud' && <select aria-label="اختيار نموذج Ollama Cloud" value={activeOllamaModel} disabled={busy || loading} onChange={event => setOllamaModel(event.target.value)}><option value="">اختر نموذج Cloud</option>{state.ollama?.models.map(model => <option key={model} value={model}>{model}</option>)}</select>}
+            {selectedModel === 'ollama-local' && <select aria-label="اختيار نموذج Ollama المحلي" value={activeLocalOllamaModel} disabled={busy || loading} onChange={event => setLocalOllamaModel(event.target.value)}>{localOllamaModels.map(model => <option key={model.id} value={model.id}>{model.name}</option>)}</select>}
             {selectedModel === 'ollama-cloud' && !state.ollama?.models?.length && (
               <small role="status" style={{ display: 'block', opacity: 0.75, marginTop: 4 }}>
                 {loading ? 'جارٍ جلب قائمة النماذج من الخادم…' : (state.ollama?.error || 'لا توجد نماذج متاحة من المزوّد الآن.')}

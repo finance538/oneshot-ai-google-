@@ -1,4 +1,4 @@
-import { assertAssistantText } from '../../shared/admin-assistant.js';
+import { assertAssistantText, localOllamaModelIds } from '../../shared/admin-assistant.js';
 import type { ChatTurn, OllamaCloudState } from '../../shared/assistant-chat.js';
 import { HttpError } from './platform.js';
 
@@ -63,4 +63,58 @@ export async function chatWithOllama(model: unknown, history: ChatTurn[], prompt
   try { assertAssistantText(answer); }
   catch { throw new HttpError(502, 'تم حجب إجابة قد تحتوي على بيانات حساسة.'); }
   return { answer, routedTo: `Ollama · ${selectedModel}` };
+}
+
+// ---------------------------------------------------------------------------
+// Ollama المحلي (OpenAI-compatible endpoint) — يُستدعى server-side فقط.
+// سيرفر Ollama المحلي لا يوفّر CORS ولا مصادقة، لذا لا يُستدعى من المتصفح أبداً.
+// ---------------------------------------------------------------------------
+
+const LOCAL_OLLAMA_BASE_URL = (process.env.LOCAL_OLLAMA_BASE_URL || 'http://187.7.65.45:32768/v1').replace(/\/+$/, '');
+
+export function readLocalOllama(): OllamaCloudState {
+  return {
+    configured: true,
+    models: [...localOllamaModelIds],
+    defaultModel: localOllamaModelIds[0] || '',
+  };
+}
+
+export async function chatWithLocalOllama(model: unknown, history: ChatTurn[], prompt: string, system: string = defaultOllamaSystemPrompt) {
+  const selectedModel = typeof model === 'string' && localOllamaModelIds.includes(model)
+    ? model
+    : localOllamaModelIds[0];
+  if (!selectedModel) throw new HttpError(503, 'لا توجد نماذج Ollama محلية مفعّلة.');
+  let response: Response;
+  try {
+    response = await fetch(`${LOCAL_OLLAMA_BASE_URL}/chat/completions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: selectedModel,
+        stream: false,
+        messages: [
+          { role: 'system', content: system },
+          ...history.map(turn => ({ role: turn.role, content: turn.content })),
+          { role: 'user', content: prompt },
+        ],
+        max_tokens: 1500,
+      }),
+      signal: AbortSignal.timeout(60000),
+      redirect: 'error',
+    });
+  } catch {
+    throw new HttpError(504, 'تأخر رد Ollama المحلي أو تعذر الاتصال. أعد المحاولة أو اختر نموذجاً آخر.');
+  }
+  if (response.status === 404) throw new HttpError(502, 'نموذج Ollama المحلي غير متاح على السيرفر. اختر نموذجاً آخر.');
+  if (!response.ok) throw new HttpError(502, `تعذر الحصول على رد من Ollama المحلي (${response.status}).`);
+  let data: { choices?: { message?: { role?: unknown; content?: unknown } }[] };
+  try { data = await response.json(); }
+  catch { throw new HttpError(502, 'وصل رد غير صالح من Ollama المحلي. أعد المحاولة.'); }
+  const content = data?.choices?.[0]?.message?.content;
+  if (typeof content !== 'string' || !content.trim()) throw new HttpError(502, 'لم يُرجع Ollama المحلي نصاً للإجابة. أعد المحاولة أو اختر نموذجاً آخر.');
+  const answer = content.slice(0, 6000);
+  try { assertAssistantText(answer); }
+  catch { throw new HttpError(502, 'تم حجب إجابة قد تحتوي على بيانات حساسة.'); }
+  return { answer, routedTo: `Ollama محلي · ${selectedModel}` };
 }

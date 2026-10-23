@@ -3,12 +3,24 @@ export type AssistantPolicyTarget = typeof assistantPolicyTargets[number];
 
 export const assistantModels = [
   { id: 'ollama-cloud', name: 'Ollama Cloud', provider: 'ollama', type: 'cloud' },
+  { id: 'ollama-local', name: 'Ollama محلي (VPS · OpenAI-compatible)', provider: 'ollama', type: 'local' },
   { id: 'claude-haiku-4-5', name: 'Claude 4.5 Haiku (سريع واقتصادي)', provider: 'anthropic', type: 'cloud' },
   { id: 'claude-sonnet-4-5', name: 'Claude 4.5 Sonnet (تفكير وتحليل عميق)', provider: 'anthropic', type: 'cloud' },
   { id: 'hermes-3-vps', name: 'Hermes 3 / Open Autonomous Agent (مستقل - VPS)', provider: 'vps-core', type: 'vps' },
 ] as const;
 
 export type AssistantModelId = typeof assistantModels[number]['id'];
+
+// النماذج المحلية المثبّتة على سيرفر Ollama المحلي (OpenAI-compatible endpoint).
+// تُستدعى server-side فقط لأن سيرفر Ollama لا يوفّر CORS ولا مصادقة.
+export const localOllamaModels = [
+  { id: 'command-r7b-arabic-128k', name: 'Command R7B Arabic (128K)', provider: 'ollama', type: 'local' },
+  { id: 'dolphin3:8b', name: 'Dolphin 3 (8B)', provider: 'ollama', type: 'local' },
+  { id: 'huihui_ai/qwen3-abliterated:8b', name: 'Qwen 3 Abliterated (8B)', provider: 'ollama', type: 'local' },
+] as const;
+
+export type LocalOllamaModelId = typeof localOllamaModels[number]['id'];
+export const localOllamaModelIds: string[] = localOllamaModels.map(model => model.id);
 
 export interface VpsAgentStatus {
   connected: boolean;

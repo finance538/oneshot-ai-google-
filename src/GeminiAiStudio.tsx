@@ -36,7 +36,7 @@ interface Message {
   createdAt: string;
 }
 
-type ModelTier = 'gemini-3.8-flash' | 'gemini-3.1-flash-lite' | 'gemini-4-argon';
+type ModelTier = 'gemini-3.8-flash' | 'gemini-3.1-flash-lite' | 'gemini-4-argon' | 'command-r7b-arabic-128k' | 'dolphin3:8b' | 'huihui_ai/qwen3-abliterated:8b';
 type PersonaKey = 'studio_director' | 'gateway_architect' | 'campaign_strategist' | 'coo_operations';
 
 interface GeminiAiStudioProps {
@@ -285,6 +285,33 @@ export default function GeminiAiStudio({ isAdmin = false, accountRole = 'merchan
               title={!isAdmin && !permissions.allowedModels.includes('gemini-4-argon') ? 'يتطلب تفعيل من حساب الأدمن' : ''}
             >
               Argon (تفكير معمّق) {!isAdmin && !permissions.allowedModels.includes('gemini-4-argon') && <Lock size={12} />}
+            </button>
+            <button
+              type="button"
+              disabled={!isAdmin}
+              className={`segmented-btn ${selectedModel === 'command-r7b-arabic-128k' ? 'active' : ''}`}
+              onClick={() => setSelectedModel('command-r7b-arabic-128k')}
+              title={!isAdmin ? 'نماذج Ollama المحلية متاحة لحساب الأدمن فقط' : ''}
+            >
+              Ollama · Command R7B {!isAdmin && <Lock size={12} />}
+            </button>
+            <button
+              type="button"
+              disabled={!isAdmin}
+              className={`segmented-btn ${selectedModel === 'dolphin3:8b' ? 'active' : ''}`}
+              onClick={() => setSelectedModel('dolphin3:8b')}
+              title={!isAdmin ? 'نماذج Ollama المحلية متاحة لحساب الأدمن فقط' : ''}
+            >
+              Ollama · Dolphin 3 {!isAdmin && <Lock size={12} />}
+            </button>
+            <button
+              type="button"
+              disabled={!isAdmin}
+              className={`segmented-btn ${selectedModel === 'huihui_ai/qwen3-abliterated:8b' ? 'active' : ''}`}
+              onClick={() => setSelectedModel('huihui_ai/qwen3-abliterated:8b')}
+              title={!isAdmin ? 'نماذج Ollama المحلية متاحة لحساب الأدمن فقط' : ''}
+            >
+              Ollama · Qwen 3 Ablit. {!isAdmin && <Lock size={12} />}
             </button>
           </div>
         </div>
