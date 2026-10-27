@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 export const merchantViews = ['overview', 'ceo', 'staff', 'gemini_studio', 'links', 'invoices', 'subscriptions', 'integrations', 'security', 'loader', 'settings', 'wallet'];
-export const adminViews = ['admin', 'assistant', 'gemini_studio', 'staff', 'ceo', 'overview', 'links', 'invoices', 'subscriptions', 'integrations', 'security', 'loader', 'settings', 'wallet'];
+export const adminViews = ['admin', 'assistant', 'super-admin', 'gemini_studio', 'staff', 'ceo', 'overview', 'links', 'invoices', 'subscriptions', 'integrations', 'security', 'loader', 'settings', 'wallet'];
 
 export function canUseTestingTools(account: { isAdmin?: boolean; accountRole?: string; registrationStatus?: string }) {
   return account.isAdmin === true || (account.registrationStatus === 'approved' && ['loader', 'merchant'].includes(account.accountRole ?? ''));

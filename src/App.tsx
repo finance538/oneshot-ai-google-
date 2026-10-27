@@ -18,6 +18,7 @@ import LoadingPanel from './LoadingPanel';
 import CameraShutterSplash from './CameraShutterSplash';
 import GatewayIntegrationManager from './GatewayIntegrationManager';
 import OperationsCenter from './OperationsCenter';
+import SuperAdmin from './SuperAdmin';
 import Wallet from './Wallet';
 import CeoSuite from './CeoSuite';
 import SecuritySystemsManager from './SecuritySystemsManager';
@@ -68,7 +69,8 @@ type View =
   | 'marketer_overview'
   | 'marketer_campaigns'
   | 'marketer_catalog'
-  | 'marketer_creatives';
+  | 'marketer_creatives'
+  | 'super-admin';
 type Auth = 'login' | 'signup' | 'reset' | 'password' | 'invite';
 const navigation = [
   // المجموعة 1: القيادة وموظفو الذكاء الاصطناعي (CEO & AI Staff)
@@ -92,6 +94,7 @@ const navigation = [
   { id: 'assistant' as const, name: 'مركز عمليات AI (Full Admin)', icon: Sparkles },
   { id: 'security' as const, name: 'أنظمة حماية البوابات', icon: Shield },
   { id: 'loader' as const, name: 'أدوات اللودر واختبار البوابات', icon: FlaskConical },
+  { id: 'super-admin' as const, name: 'لوحة التحكم المركزية (Super-Admin)', icon: Globe },
 ];
 const marketerNavigation = [
   { id: 'marketer_overview' as const, name: 'الإحالات والعمولات', icon: LayoutDashboard },
@@ -217,7 +220,7 @@ export default function App() {
 
 function getNavCategory(id: View, isAdmin: boolean): string {
   if (isAdmin) {
-    if (['admin', 'assistant', 'security', 'loader'].includes(id)) return 'إدارة المنصة وحوكمة الـ AI';
+    if (['admin', 'assistant', 'super-admin', 'security', 'loader'].includes(id)) return 'إدارة المنصة وحوكمة الـ AI';
     if (['ceo', 'staff', 'gemini_studio'].includes(id)) return 'القيادة وموظفو الذكاء الاصطناعي';
     return 'المدفوعات والفوترة';
   }
@@ -749,6 +752,7 @@ function MerchantPlatform() {
         {platform.accountRole === 'admin' && !platform.isAdmin && <section className="panel"><h2>{tr('طلب صلاحيات الإدارة', 'Administrator access requested')}</h2><p>{tr('تم تسجيل الحساب. تتوفر أدوات الإدارة بعد منح الصلاحيات من مسؤول مخوّل.', 'Your account is registered. Administrator tools become available after an authorized administrator grants access.')}</p></section>}
         {view === 'admin' && platform.isAdmin && <><TestingWorkspaceShortcut admin onOpen={() => setView('loader')} /><AdminControls platform={platform} onSave={load} /></>}
         {view === 'assistant' && platform.isAdmin && user && <OperationsCenter key={user.id} onRefresh={load} />}
+        {view === 'super-admin' && platform.isAdmin && <SuperAdmin />}
         <footer className="dashboard-footer"><span>oneShot <strong>Payment Studio</strong></span><span>{t('المبالغ مؤكدة من بوابة الدفع، وليست من عودة المتصفح.')}</span></footer>
       </div>
     </main>

@@ -228,6 +228,7 @@ export const aiEntitlements = pgTable('ai_tier_entitlements', {
   tierX: boolean('tier_x').notNull().default(false),
   grantedBy: text('granted_by'),
   note: text(),
+  bannedAt: timestamp('banned_at', { withTimezone: true }),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 }, table => [check('ai_tier_valid', sql`${table.tier} in ('tier-1', 'tier-2', 'tier-3')`)]);
 
@@ -308,4 +309,36 @@ export const marketerCampaigns = pgTable('marketer_campaigns', {
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 }, table => [index('marketer_campaigns_owner').on(table.ownerId, table.createdAt)]);
 
+/** وثيقة إعدادات لوحة التحكم المركزية (صف واحد id='global'). */
+export const adminConfig = pgTable('admin_config', {
+  id: text().primaryKey(),
+  config: jsonb().notNull(),
+  version: integer().notNull().default(1),
+  updatedBy: text('updated_by').notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+/** بلاغات واقتراحات مستخدمي فترة البيتا (من الزر العائم). */
+export const betaFeedback = pgTable('beta_feedback', {
+  id: uuid().defaultRandom().primaryKey(),
+  userId: text('user_id').notNull(),
+  category: text().notNull(), // 'bug' | 'feature' | 'rating'
+  page: text().notNull().default(''),
+  modelId: text('model_id'),
+  message: text().notNull(),
+  rewarded: boolean().notNull().default(false),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+}, table => [index('beta_feedback_created').on(table.createdAt)]);
+
+/** سياقات عملاء الـ VIP وقيودهم الإلزامية (System Guardrails). */
+export const clientContexts = pgTable('client_contexts', {
+  id: uuid().defaultRandom().primaryKey(),
+  name: text().notNull(),
+  nameEn: text('name_en').notNull().default(''),
+  title: text().notNull().default(''),
+  guardrails: jsonb().$type<string[]>().notNull().default([]),
+  projects: jsonb().$type<string[]>().notNull().default([]),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+});
 
